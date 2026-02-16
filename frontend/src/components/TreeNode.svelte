@@ -10,11 +10,14 @@
         expanded,
         toggleDir,
         selectFile,
+        selectFolder,
+        selectedFolder,
+        selectedFile,
         level = 0,
-        selectedPath,
     } = $props();
 
     function handleDirectoryClick() {
+        selectFolder(item.path); // Select the folder
         toggleDir(item.path);
     }
 
@@ -31,7 +34,7 @@
             role="listitem"
             class="directory"
             class:indented={level > 0}
-            class:selected={item.path === selectedPath}
+            class:selected={item.path === selectedFolder}
             style="--level: {level}"
             onclick={handleDirectoryClick}
         >
@@ -83,8 +86,10 @@
                         {expanded}
                         {toggleDir}
                         {selectFile}
+                        {selectFolder}
+                        {selectedFolder}
+                        {selectedFile}
                         level={level + 1}
-                        {selectedPath}
                     />
                 {/each}
             </ul>
@@ -98,7 +103,7 @@
             role="listitem"
             class="file"
             class:indented={level > 0}
-            class:selected={item.path === selectedPath}
+            class:selected={item.path === selectedFile}
             style="--level: {level}"
             onclick={handleFileClick}
         >
