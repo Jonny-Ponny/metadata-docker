@@ -4,6 +4,7 @@
   
   import { 
     theme, 
+    toast,
     toggleTheme,
   } from "./utils/index.js";
   
