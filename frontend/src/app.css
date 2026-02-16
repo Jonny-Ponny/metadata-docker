@@ -1,6 +1,7 @@
 /* src/app.css - Add these new styles to your existing file */
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   width: 100%;
@@ -213,11 +214,12 @@ body.dark .status {
 
 
 /* ========== THEME TOGGLE BUTTON ========== */
+/* Theme toggle button - update colors */
 .theme-toggle {
   position: fixed;
   bottom: 20px;
   left: 20px;
-  background: #fd7d05;
+  background: #fd7d05; /* Light mode color - matches panel border */
   color: white;
   border: none;
   padding: 8px 16px;
@@ -237,4 +239,150 @@ body.dark .status {
   background: #ff5e00;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Header actions */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #fd7d05;
+}
+
+.refresh-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.refresh-btn:hover {
+  background: #f0f0f0;
+  color: #fd7d05;
+}
+
+/* File tree panel */
+.file-tree-panel {
+  padding: 0 !important;
+  overflow-y: auto;
+}
+
+.file-tree-container {
+  height: 100%;
+}
+
+.file-tree {
+  list-style: none;
+  padding: 8px 0;
+  margin: 0;
+}
+
+/* Error state */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  gap: 12px;
+  color: #d32f2f;
+  text-align: center;
+  padding: 20px;
+}
+
+.error-details {
+  font-size: 12px;
+  color: #999;
+  max-width: 300px;
+  word-break: break-word;
+}
+
+.retry-btn {
+  background: #fd7d05;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.retry-btn:hover {
+  background: #ff5e00;
+}
+
+/* Metadata placeholder */
+.metadata-placeholder {
+  padding: 20px;
+}
+
+.selected-file-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  color: #555;
+}
+
+.selected-file-full {
+  font-size: 13px;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.coming-soon {
+  color: #999;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Dark mode overrides */
+body.dark .refresh-btn {
+  background: transparent !important; /* Force transparent */
+  color: #b0b0b0;
+}
+
+body.dark .refresh-btn:hover {
+  background: transparent !important; /* Keep transparent on hover */
+  color: #ff9f4b;
+}
+
+body.dark .selected-file-header {
+  background: #3d3d3d;
+  color: #e0e0e0;
+}
+
+body.dark .error-state {
+  color: #ff9999;
+}
+
+body.dark .error-details {
+  color: #808080;
+}
+
+body.dark .theme-toggle {
+  background: #fd7d05; /* Changed from #ea9348 to match panel hover border */
+  color: #1e1e1e;
+}
+
+body.dark .theme-toggle:hover {
+  background: #ff9f4b; /* Keep same or slightly lighter; current hover uses #ff9f4b already */
 }
