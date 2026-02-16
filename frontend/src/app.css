@@ -1,0 +1,240 @@
+/* src/app.css - Add these new styles to your existing file */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.container {
+  padding: 20px;
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Split container styles */
+.split-container {
+  display: flex;
+  width: 100%;
+  position: relative;
+  background: transparent;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  user-select: none;
+  height: 100%;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg, #ffffff);
+  border: 2px solid #e0e0e0;
+  overflow: hidden;
+  transition: border-color 0.2s;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.panel:hover {
+  border-color: #fd7d05;
+}
+
+.panel-header {
+  padding: 15px;
+  border-bottom: 2px solid #ddd;
+  background-color: #f0f0f0;
+  flex-shrink: 0;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+
+.panel-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.filename-badge {
+  font-size: 12px;
+  color: #666;
+  background: rgba(253, 125, 5, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+  background: inherit;
+  min-height: 0;
+  height: calc(100% - 60px);
+  box-sizing: border-box;
+}
+
+/* Resizer styles */
+.resizer {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.2s;
+  position: relative;
+  z-index: 10;
+}
+
+.resizer:hover,
+.resizer.resizing {
+  background: #fd7d05;
+}
+
+.resizer::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  cursor: col-resize;
+}
+
+/* Prevent text selection during resize */
+.resizing * {
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Empty state enhancements */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  gap: 16px;
+  color: #999;
+  text-align: center;
+}
+
+.empty-state svg {
+  stroke: currentColor;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Dark mode overrides */
+body.dark {
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+}
+
+body.dark .panel {
+  background: #2d2d2d;
+  border-color: #444;
+}
+
+body.dark .panel:hover {
+  border-color: #ff9f4b;
+}
+
+body.dark .panel-header {
+  background-color: #3d3d3d;
+  border-bottom-color: #444;
+}
+
+body.dark .panel-header h3 {
+  color: #e0e0e0;
+}
+
+body.dark .filename-badge {
+  color: #b0b0b0;
+  background: rgba(255, 159, 75, 0.1);
+}
+
+body.dark .empty-state {
+  color: #808080;
+}
+
+/* Keep existing file-label button style */
+.file-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background-color: #fd7d05;
+  color: white;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  text-align: center;
+}
+
+.file-label:hover {
+  background: #ff5e00;
+  transform: translateY(-2px);
+}
+
+.status {
+  font-size: 12px;
+  color: #666;
+}
+
+body.dark .status {
+  color: #b0b0b0;
+}
+
+
+/* ========== THEME TOGGLE BUTTON ========== */
+.theme-toggle {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: #fd7d05;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 1001;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.theme-toggle:hover {
+  background: #ff5e00;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}

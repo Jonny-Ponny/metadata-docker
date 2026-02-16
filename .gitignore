@@ -1,0 +1,86 @@
+# Backend - Python/Flask
+backend/__pycache__/
+backend/*.pyc
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/instance/
+backend/.env
+backend/.flaskenv
+backend/venv/
+backend/env/
+backend/ENV/
+backend/.venv
+backend/*.log
+backend/.Python
+backend/pip-log.txt
+backend/pip-delete-this-directory.txt
+backend/.cache/
+backend/.python-version
+
+# Backend - IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Frontend - Svelte/Vite
+frontend/node_modules/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/dist/
+frontend/build/
+frontend/.svelte-kit/
+frontend/.vite/
+frontend/.vercel/
+frontend/.netlify/
+
+# Frontend - Logs and debug
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
+
+# Frontend - Editor directories and files
+frontend/.idea/
+frontend/.vscode/
+frontend/*.suo
+frontend/*.ntvs*
+frontend/*.njsproj
+frontend/*.sln
+frontend/*.sw?
+
+# Frontend - OS generated files
+frontend/.DS_Store
+frontend/Thumbs.db
+
+# General
+.DS_Store
+.env
+.env.local
+.env.*.local
+*.log
+*.sqlite3
+*.sqlite
+*.db
+*.pyc
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Virtual Environment
+venv/
+env/
+.venv/
+ENV/
