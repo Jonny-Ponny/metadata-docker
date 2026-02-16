@@ -28,7 +28,7 @@
     isLoading = true;
     error = "";
     try {
-      const api_url = "http://localhost:5000/api/files" // development
+      const api_url = "http://localhost:5000/api/files"; // development
       // const api_url = "/api/files" // build
 
       const res = await fetch(api_url);
@@ -134,25 +134,55 @@
   <!-- Main split layout -->
   <div class="split-container">
     <!-- Left Panel - Folder Navigation / File Selection -->
-    <!-- Left Panel - File Tree (always visible) -->
     <div class="panel left-panel" style="width: {leftPanelWidth}%;">
       <div class="panel-header">
         <h3>File Browser</h3>
         <div class="header-actions">
           {#if isLoading}
             <div class="status loading-spinner">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32">
-                  <animate attributeName="stroke-dashoffset" values="32;0" dur="1s" repeatCount="indefinite" />
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke-dasharray="32"
+                  stroke-dashoffset="32"
+                >
+                  <animate
+                    attributeName="stroke-dashoffset"
+                    values="32;0"
+                    dur="1s"
+                    repeatCount="indefinite"
+                  />
                 </circle>
               </svg>
               Loading...
             </div>
           {/if}
-          <button class="refresh-btn" onclick={loadFileTree} title="Refresh file tree">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button
+            class="refresh-btn"
+            onclick={loadFileTree}
+            title="Refresh file tree"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M23 4v6h-6M1 20v-6h6" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              <path
+                d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+              />
             </svg>
           </button>
         </div>
@@ -161,7 +191,14 @@
       <div class="panel-content file-tree-panel">
         {#if isLoading && treeData.length === 0}
           <div class="empty-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
               <circle cx="12" cy="12" r="10" />
               <path d="M12 6v6l4 2" />
             </svg>
@@ -169,7 +206,14 @@
           </div>
         {:else if error}
           <div class="error-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
               <circle cx="12" cy="12" r="10" />
               <line x1="12" y1="8" x2="12" y2="12" />
               <circle cx="12" cy="16" r="0.5" fill="currentColor" />
@@ -182,8 +226,17 @@
           <div class="file-tree-container">
             {#if treeData.length === 0}
               <div class="empty-state">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                <svg
+                  width="48"
+                  height="48"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <path
+                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                  />
                 </svg>
                 <p>No music files found</p>
               </div>
@@ -195,6 +248,7 @@
                     expanded={expandedDirs}
                     {toggleDir}
                     {selectFile}
+                    selectedPath={selectedFile}
                   />
                 {/each}
               </ul>
@@ -202,25 +256,6 @@
           </div>
         {/if}
       </div>
-    
-
-      <!-- <div class="panel-content">
-        <div class="empty-state">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
-            <path
-              d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-            />
-          </svg>
-          <p>Select a folder to browse music files</p>
-        </div>
-      </div> -->
     </div>
 
     <!-- Resizer handle -->

@@ -4,7 +4,15 @@
     // @ts-ignore
     import Self from "./TreeNode.svelte";
 
-    let { item, expanded, toggleDir, selectFile, level = 0 } = $props();
+    // let { item, expanded, toggleDir, selectFile, level = 0 } = $props();
+    let {
+        item,
+        expanded,
+        toggleDir,
+        selectFile,
+        level = 0,
+        selectedPath,
+    } = $props();
 
     function handleDirectoryClick() {
         toggleDir(item.path);
@@ -23,6 +31,7 @@
             role="listitem"
             class="directory"
             class:indented={level > 0}
+            class:selected={item.path === selectedPath}
             style="--level: {level}"
             onclick={handleDirectoryClick}
         >
@@ -75,6 +84,7 @@
                         {toggleDir}
                         {selectFile}
                         level={level + 1}
+                        {selectedPath}
                     />
                 {/each}
             </ul>
@@ -88,6 +98,7 @@
             role="listitem"
             class="file"
             class:indented={level > 0}
+            class:selected={item.path === selectedPath}
             style="--level: {level}"
             onclick={handleFileClick}
         >
@@ -136,19 +147,6 @@
         gap: 8px;
     }
 
-    /* Visual indentation lines */
-    /* .directory.indented::before,
-    .file.indented::before {
-        content: "";
-        position: absolute;
-        left: calc(calc(var(--level) * 20px) - 8px);
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background: linear-gradient(to bottom, #ddd, transparent 80%);
-        opacity: 0.5;
-    } */
-
     .directory:hover,
     .file:hover {
         background-color: #f5f5f5;
@@ -183,6 +181,19 @@
         margin-left: 8px;
     }
 
+    /* Highlight for selected node */
+    .file.selected,
+    .directory.selected {
+        background-color: rgba(253, 125, 5, 0.15);
+        border-left: 3px solid #fd7d05;
+    }
+
+    /* Keep hover effect but ensure selected stands out */
+    .file.selected:hover,
+    .directory.selected:hover {
+        background-color: rgba(253, 125, 5, 0.25);
+    }
+
     /* Dark mode overrides */
     :global(body.dark) .directory .name,
     :global(body.dark) .file .name {
@@ -206,9 +217,15 @@
         color: #aaa;
     }
 
-    /* Dark mode indentation lines */
-    /* :global(body.dark) .directory.indented::before,
-    :global(body.dark) .file.indented::before {
-        background: #555;
-    } */
+    :global(body.dark) .file.selected,
+    :global(body.dark) .directory.selected {
+        background-color: rgba(255, 159, 75, 0.2);
+        border-left-color: #ff9f4b;
+    }
+
+    /* Keep hover effect but ensure selected stands out */
+    :global(body.dark) .file.selected:hover,
+    :global(body.dark) .directory.selected:hover {
+        background-color: rgba(255, 159, 75, 0.3);
+    }
 </style>
