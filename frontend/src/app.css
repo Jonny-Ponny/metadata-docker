@@ -355,14 +355,90 @@ body.dark .status {
   padding: 20px;
 }
 
+/* Drag and drop styles */
+.container.dragging {
+  cursor: copy !important;
+}
+
+/* Blur ALL elements except the left panel and its contents */
+.split-container.blurred .panel:not(.left-panel),
+.player-wrapper.blurred,
+.theme-toggle.blurred {
+  filter: blur(4px);
+  opacity: 0.6;
+  transition: filter 0.2s, opacity 0.2s;
+  pointer-events: none;
+}
+
+/* Ensure the left panel and its children remain unblurred */
+.left-panel,
+.left-panel * {
+  filter: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Upload progress indicator */
+/* Upload progress indicator */
+.upload-progress {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  min-width: 300px;
+  border: 2px solid #fd7d05;
+}
+
+.progress-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filename {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #fd7d05;
+  transition: width 0.2s;
+}
+
+/* Drag target highlight for folders */
+.drag-target {
+  outline: 2px solid #fd7d05 !important;
+  /* outline-offset: 2px; */
+  /* background-color: rgba(253, 125, 5, 0.1) !important; */
+}
+
 /* Dark mode overrides */
 body.dark .refresh-btn {
-  background: transparent !important; /* Force transparent */
+  background: transparent !important;
+  /* Force transparent */
   color: #b0b0b0;
 }
 
 body.dark .refresh-btn:hover {
-  background: transparent !important; /* Keep transparent on hover */
+  background: transparent !important;
+  /* Keep transparent on hover */
   color: #ff9f4b;
 }
 
@@ -380,10 +456,30 @@ body.dark .error-details {
 }
 
 body.dark .theme-toggle {
-  background: #fd7d05; /* Changed from #ea9348 to match panel hover border */
+  background: #fd7d05;
+  /* Changed from #ea9348 to match panel hover border */
   color: #1e1e1e;
 }
 
 body.dark .theme-toggle:hover {
-  background: #ff9f4b; /* Keep same or slightly lighter; current hover uses #ff9f4b already */
+  background: #ff9f4b;
+  /* Keep same or slightly lighter; current hover uses #ff9f4b already */
+}
+
+body.dark .drag-target {
+  outline: 2px solid #ff9f4b !important;
+}
+
+/* Dark mode overrides */
+body.dark .upload-progress {
+  background: #2d2d2d;
+  border-color: #ff9f4b;
+}
+
+body.dark .filename {
+  color: #e0e0e0;
+}
+
+body.dark .progress-bar {
+  background: #3d3d3d;
 }

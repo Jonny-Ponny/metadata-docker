@@ -37,6 +37,7 @@
             class:selected={item.path === selectedFolder}
             style="--level: {level}"
             onclick={handleDirectoryClick}
+            data-folder-path={item.path}
         >
             <span class="toggle">
                 {#if expanded.has(item.path)}
@@ -127,6 +128,8 @@
             class:selected={item.path === selectedFile}
             style="--level: {level}"
             onclick={handleFileClick}
+            data-file-path={item.path}
+            data-folder-path={item.path.substring(0, item.path.lastIndexOf('/'))}
         >
             <span class="file-icon">
                 <!-- File icon -->
@@ -161,7 +164,7 @@
 <style>
     li {
         list-style: none;
-        margin: 2px 0;
+        margin: 2px 2px;
     }
 
     .directory,

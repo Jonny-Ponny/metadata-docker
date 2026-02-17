@@ -107,6 +107,91 @@ def serve_audio():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    """Handle file and folder uploads via drag and drop, preserving structure"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    target_path = request.form.get('targetPath', '')
+    original_filename = request.form.get('originalFilename', file.filename)
+    
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    # Determine target directory
+    if target_path:
+        # Handle nested paths (for folders)
+        target_dir = os.path.join(MUSIC_FOLDER, target_path)
+    else:
+        target_dir = MUSIC_FOLDER
+    
+    # Ensure target directory exists
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # Check if this is a directory upload (multiple files with same base path)
+    if hasattr(file, 'webkitRelativePath') and file.webkitRelativePath:
+        # This is from a folder upload, preserve the full relative path
+        rel_path = file.webkitRelativePath
+        path_parts = rel_path.split('/')
+        
+        # Remove filename from path
+        path_parts.pop()
+        
+        if path_parts:
+            # Create subdirectories
+            subdir = os.path.join(*path_parts)
+            target_dir = os.path.join(target_dir, subdir)
+            os.makedirs(target_dir, exist_ok=True)
+    
+    # Regular file upload - PRESERVE ORIGINAL FILENAME
+    # Don't use secure_filename if you want to preserve special characters
+    # Instead, sanitize only path separators and null bytes
+    filename = original_filename.replace('/', '_').replace('\\', '_').replace('\0', '')
+    
+    # Build the full file path
+    file_path = os.path.join(target_dir, filename)
+    
+    # Handle duplicate filenames
+    counter = 1
+    original_path = file_path
+    while os.path.exists(file_path):
+        name, ext = os.path.splitext(original_path)
+        file_path = f"{name} ({counter}){ext}"
+        counter += 1
+    
+    try:
+        file.save(file_path)
+        
+        # Get relative path for response
+        rel_path = os.path.relpath(file_path, MUSIC_FOLDER)
+        
+        return jsonify({
+            'success': True,
+            'path': rel_path.replace('\\', '/'),  # Normalize path separators
+            'filename': os.path.basename(file_path),
+            'original_filename': original_filename
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Optional: Add endpoint to create directories
+@app.route('/api/mkdir', methods=['POST'])
+def create_directory():
+    """Create a new directory"""
+    data = request.get_json()
+    dir_path = data.get('path', '')
+    
+    if not dir_path:
+        return jsonify({'error': 'No path provided'}), 400
+    
+    try:
+        full_path = safe_path(dir_path)
+        os.makedirs(full_path, exist_ok=True)
+        return jsonify({'success': True, 'path': dir_path})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG)

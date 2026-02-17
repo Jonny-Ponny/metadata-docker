@@ -30,6 +30,284 @@
   let currentTime = $state(0);
   let playerComponent; // Player component reference (not reactive)
 
+  // ========== DRAG AND DROP STATE ==========
+  let isDragging = $state(false);
+  let dragCounter = $state(0); // To handle drag enter/leave on child elements
+  let uploadProgress = $state(null); // { current: 0, total: 0, filename: string }
+  let dragOverElement = $state(null); // Track which element is being hovered
+
+  // ========== DRAG AND DROP HANDLERS ==========
+  function handleDragEnter(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    dragCounter++;
+    if (dragCounter === 1) {
+      isDragging = true;
+    }
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+
+    // Find the closest draggable element (folder or file)
+    const target = e.target.closest("[data-folder-path], [data-file-path]");
+
+    // Remove drag-target class from previous element
+    if (dragOverElement) {
+      dragOverElement.classList.remove("drag-target");
+    }
+
+    // Add drag-target class to new element
+    if (target) {
+      target.classList.add("drag-target");
+      dragOverElement = target;
+    } else {
+      dragOverElement = null;
+    }
+  }
+
+  function handleDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Remove drag-target class when leaving
+    if (dragOverElement) {
+      dragOverElement.classList.remove("drag-target");
+      dragOverElement = null;
+    }
+
+    dragCounter--;
+    if (dragCounter === 0) {
+      isDragging = false;
+    }
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Remove drag-target class
+    if (dragOverElement) {
+      dragOverElement.classList.remove("drag-target");
+      dragOverElement = null;
+    }
+
+    // Reset drag state
+    dragCounter = 0;
+    isDragging = false;
+
+    const items = e.dataTransfer.items;
+    const files = e.dataTransfer.files;
+
+    if (items.length === 0 && files.length === 0) return;
+
+    // Determine target folder path
+    let targetPath = "";
+
+    // Check if dropped on a folder element
+    const dropTarget = e.target.closest("[data-folder-path]");
+    if (dropTarget) {
+      targetPath = dropTarget.dataset.folderPath;
+    } else {
+      // Check if dropped on a file element (use its parent folder)
+      const fileTarget = e.target.closest("[data-file-path]");
+      if (fileTarget) {
+        targetPath = fileTarget.dataset.folderPath;
+      }
+    }
+
+    // Handle dropped items
+    handleDroppedItems(items, files, targetPath);
+  }
+
+  async function handleDroppedItems(items, files, targetPath) {
+    const uploads = [];
+
+    // Use File System API for proper directory handling
+    if (items.length > 0) {
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry
+          ? items[i].webkitGetAsEntry()
+          : null;
+
+        if (entry) {
+          if (entry.isDirectory) {
+            // Handle directory upload preserving structure
+            uploads.push(uploadDirectory(entry, targetPath));
+          } else {
+            uploads.push(uploadFileEntry(entry, targetPath));
+          }
+        }
+      }
+    }
+    // Fallback for browsers without File System API
+    else if (files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        // For directories in fallback mode, we'll need to use webkitRelativePath
+        if (file.webkitRelativePath) {
+          // This is a file from a dropped folder
+          const relativePath = file.webkitRelativePath;
+          const pathParts = relativePath.split("/");
+          const fileName = pathParts.pop();
+          const folderPath = pathParts.join("/");
+
+          // Construct the full target path preserving folder structure
+          const fullTargetPath = targetPath
+            ? `${targetPath}/${folderPath}`
+            : folderPath;
+
+          uploads.push(uploadFile(file, fullTargetPath, fileName));
+        } else {
+          uploads.push(uploadFile(file, targetPath, file.name));
+        }
+      }
+    }
+
+    try {
+      const results = (await Promise.all(uploads)).flat(); // Wait for all, then flatten
+      const successCount = results.filter((r) => r && r.success).length;
+      const failCount = results.filter((r) => r && !r.success).length;
+
+      if (failCount === 0) {
+        toast.success(`Successfully uploaded ${successCount} file(s)`);
+      } else {
+        toast.warning(`Uploaded ${successCount} file(s), ${failCount} failed`);
+      }
+
+      // Refresh the file tree
+      await loadFileTree();
+    } catch (error) {
+      toast.error(`Upload failed: ${error.message}`);
+      console.error("Upload error:", error);
+    } finally {
+      uploadProgress = null;
+    }
+  }
+
+  async function uploadDirectory(entry, parentPath) {
+    const dirPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+
+    // Create the directory on the server (skip if dirPath is empty)
+    if (dirPath) {
+      console.log("Creating directory:", dirPath);
+      await createDirectory(dirPath);
+    }
+
+    return new Promise((resolve) => {
+      const reader = entry.createReader();
+      const uploadPromises = [];
+
+      function readEntries() {
+        reader.readEntries(async (entries) => {
+          if (entries.length === 0) {
+            // All entries processed – wait for all pending uploads
+            const results = await Promise.all(uploadPromises);
+            resolve(results.flat()); // Flatten nested arrays
+          } else {
+            for (const childEntry of entries) {
+              if (childEntry.isDirectory) {
+                uploadPromises.push(uploadDirectory(childEntry, dirPath));
+              } else {
+                uploadPromises.push(uploadFileEntry(childEntry, dirPath));
+              }
+            }
+            // Continue reading next batch (required by FileSystem API)
+            readEntries();
+          }
+        });
+      }
+
+      readEntries();
+    });
+  }
+
+  async function uploadFileEntry(entry, targetPath) {
+    // Convert entry.file() callback to a Promise
+    const file = await new Promise((resolve, reject) => {
+      entry.file(resolve, reject);
+    });
+    // Upload the file with the correct target path and original filename
+    console.log("uploadFileEntry:", entry.name, "to", targetPath);
+    return uploadFile(file, targetPath, file.name);
+  }
+
+  async function uploadFile(file, targetPath, originalFilename) {
+    console.log("uploadFile:", file.name, "to", targetPath);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("targetPath", targetPath || "");
+    formData.append("originalFilename", originalFilename || file.name);
+
+    uploadProgress = {
+      current: 0,
+      total: 1,
+      filename: originalFilename || file.name,
+    };
+
+    try {
+      console.log("Sending fetch for", originalFilename);
+      const api_url = "http://localhost:5000/api/upload" // development
+      // const api_url = "/api/upload" // build
+      const response = await fetch(api_url, {
+        method: "POST",
+        body: formData,
+      });
+      console.log("Received response", response.status, response.statusText);
+
+      const contentType = response.headers.get("content-type");
+      let result;
+      if (contentType && contentType.includes("application/json")) {
+        result = await response.json();
+      } else {
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        throw new Error(
+          `Server returned ${response.status}: ${text.slice(0, 100)}`,
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(result.error || "Upload failed");
+      }
+
+      console.log("Upload success:", originalFilename, result);
+      return {
+        success: true,
+        file: originalFilename || file.name,
+        path: result.path,
+      };
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error(
+        `Failed to upload ${originalFilename || file.name}: ${error.message}`,
+      );
+      return {
+        success: false,
+        file: originalFilename || file.name,
+        error: error.message,
+      };
+    }
+  }
+
+  async function createDirectory(path) {
+    const api_url = 'http://localhost:5000/api/mkdir'; // development
+    // const api_url = '/api/mkdir'; // build
+    const response = await fetch(api_url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to create directory ${path}: ${error}`);
+    }
+    return response.json();
+  }
+
   // ========== LOAD FILE TREE ==========
   async function loadFileTree() {
     isLoading = true;
@@ -189,9 +467,17 @@
   });
 </script>
 
-<div class="container">
+<div
+  role="region"
+  class="container"
+  ondragenter={handleDragEnter}
+  ondragover={handleDragOver}
+  ondragleave={handleDragLeave}
+  ondrop={handleDrop}
+  class:dragging={isDragging}
+>
   <!-- Theme switch toggle -->
-  <button class="theme-toggle" onclick={toggleTheme}>
+  <button class="theme-toggle" class:blurred={isDragging} onclick={toggleTheme}>
     {#if $theme === "light"}
       <span>Light</span>
     {:else}
@@ -199,11 +485,27 @@
     {/if}
   </button>
 
+  <!-- Upload progress indicator -->
+  {#if uploadProgress}
+    <div class="upload-progress">
+      <div class="progress-content">
+        <span class="filename">Uploading: {uploadProgress.filename}</span>
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            style="width: {(uploadProgress.current / uploadProgress.total) *
+              100}%"
+          ></div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Toast notifications -->
   <ToastContainer />
 
   <!-- Main split layout -->
-  <div class="split-container">
+  <div class="split-container" class:blurred={isDragging}>
     <!-- Left Panel - Folder Navigation / File Selection -->
     <div class="panel left-panel" style="width: {leftPanelWidth}%;">
       <div class="panel-header">
@@ -312,6 +614,7 @@
                 <p>No music files found</p>
               </div>
             {:else}
+              <!-- Update TreeNode usage to pass folder path data attributes -->
               <ul class="file-tree">
                 {#each treeData as item (item.path)}
                   <TreeNode
@@ -377,8 +680,10 @@
 </div>
 
 <!-- Player component -->
-<Player
-  {audioFile}
-  ontimeupdate={handleTimeUpdate}
-  bind:this={playerComponent}
-/>
+<div class="player-wrapper" class:blurred={isDragging}>
+  <Player
+    {audioFile}
+    ontimeupdate={handleTimeUpdate}
+    bind:this={playerComponent}
+  />
+</div>
