@@ -33,7 +33,11 @@
   // ========== DRAG AND DROP STATE ==========
   let isDragging = $state(false);
   let dragCounter = $state(0); // To handle drag enter/leave on child elements
-  let uploadProgress = $state(null); // { current: 0, total: 0, filename: string }
+  let uploadOverallProgress = $state({
+    total: 0,
+    completed: 0,
+    isActive: false,
+  });
   let dragOverElement = $state(null); // Track which element is being hovered
 
   // ========== DRAG AND DROP HANDLERS ==========
@@ -124,42 +128,48 @@
   }
 
   async function handleDroppedItems(items, files, targetPath) {
-    const uploads = [];
-
-    // Use File System API for proper directory handling
+    // --- Count total files first ---
+    let totalFiles = 0;
     if (items.length > 0) {
       for (let i = 0; i < items.length; i++) {
-        const entry = items[i].webkitGetAsEntry
-          ? items[i].webkitGetAsEntry()
-          : null;
+        const entry = items[i].webkitGetAsEntry?.();
+        if (entry) {
+          totalFiles += await countFilesInEntry(entry);
+        }
+      }
+    } else if (files.length > 0) {
+      // Fallback: count all files (including those with webkitRelativePath)
+      totalFiles = files.length;
+    }
 
+    // Activate overall progress bar
+    uploadOverallProgress = { total: totalFiles, completed: 0, isActive: true };
+
+    // --- Proceed with uploads ---
+    const uploads = [];
+
+    if (items.length > 0) {
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry?.();
         if (entry) {
           if (entry.isDirectory) {
-            // Handle directory upload preserving structure
             uploads.push(uploadDirectory(entry, targetPath));
           } else {
             uploads.push(uploadFileEntry(entry, targetPath));
           }
         }
       }
-    }
-    // Fallback for browsers without File System API
-    else if (files.length > 0) {
+    } else if (files.length > 0) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        // For directories in fallback mode, we'll need to use webkitRelativePath
         if (file.webkitRelativePath) {
-          // This is a file from a dropped folder
           const relativePath = file.webkitRelativePath;
           const pathParts = relativePath.split("/");
           const fileName = pathParts.pop();
           const folderPath = pathParts.join("/");
-
-          // Construct the full target path preserving folder structure
           const fullTargetPath = targetPath
             ? `${targetPath}/${folderPath}`
             : folderPath;
-
           uploads.push(uploadFile(file, fullTargetPath, fileName));
         } else {
           uploads.push(uploadFile(file, targetPath, file.name));
@@ -168,7 +178,7 @@
     }
 
     try {
-      const results = (await Promise.all(uploads)).flat(); // Wait for all, then flatten
+      const results = (await Promise.all(uploads)).flat();
       const successCount = results.filter((r) => r && r.success).length;
       const failCount = results.filter((r) => r && !r.success).length;
 
@@ -178,13 +188,13 @@
         toast.warning(`Uploaded ${successCount} file(s), ${failCount} failed`);
       }
 
-      // Refresh the file tree
       await loadFileTree();
     } catch (error) {
       toast.error(`Upload failed: ${error.message}`);
       console.error("Upload error:", error);
     } finally {
-      uploadProgress = null;
+      // Deactivate progress bar
+      uploadOverallProgress.isActive = false;
     }
   }
 
@@ -242,16 +252,10 @@
     formData.append("targetPath", targetPath || "");
     formData.append("originalFilename", originalFilename || file.name);
 
-    uploadProgress = {
-      current: 0,
-      total: 1,
-      filename: originalFilename || file.name,
-    };
-
     try {
       console.log("Sending fetch for", originalFilename);
-      const api_url = "http://localhost:5000/api/upload" // development
-      // const api_url = "/api/upload" // build
+      const api_url = "http://localhost:5000/api/upload"; // development
+      // const api_url = "/api/upload"; // build
       const response = await fetch(api_url, {
         method: "POST",
         body: formData,
@@ -290,11 +294,14 @@
         file: originalFilename || file.name,
         error: error.message,
       };
+    } finally {
+      // Increment overall progress (success or fail)
+      uploadOverallProgress.completed += 1;
     }
   }
 
   async function createDirectory(path) {
-    const api_url = 'http://localhost:5000/api/mkdir'; // development
+    const api_url = "http://localhost:5000/api/mkdir"; // development
     // const api_url = '/api/mkdir'; // build
     const response = await fetch(api_url, {
       method: "POST",
@@ -306,6 +313,21 @@
       throw new Error(`Failed to create directory ${path}: ${error}`);
     }
     return response.json();
+  }
+
+  // Count total files in a dropped entry (file or directory)
+  async function countFilesInEntry(entry) {
+    if (entry.isFile) return 1;
+    // Directory: recursively count children
+    let count = 0;
+    const reader = entry.createReader();
+    const entries = await new Promise((resolve) => {
+      reader.readEntries(resolve);
+    });
+    for (const child of entries) {
+      count += await countFilesInEntry(child);
+    }
+    return count;
   }
 
   // ========== LOAD FILE TREE ==========
@@ -485,20 +507,14 @@
     {/if}
   </button>
 
-  <!-- Upload progress indicator -->
-  {#if uploadProgress}
-    <div class="upload-progress">
-      <div class="progress-content">
-        <span class="filename">Uploading: {uploadProgress.filename}</span>
-        <div class="progress-bar">
-          <div
-            class="progress-fill"
-            style="width: {(uploadProgress.current / uploadProgress.total) *
-              100}%"
-          ></div>
-        </div>
-      </div>
-    </div>
+  <!-- Overall upload progress bar -->
+  {#if uploadOverallProgress.isActive}
+    <div
+      class="upload-progress-bar"
+      style="width: {uploadOverallProgress.total > 0
+        ? (uploadOverallProgress.completed / uploadOverallProgress.total) * 100
+        : 0}%;"
+    ></div>
   {/if}
 
   <!-- Toast notifications -->
