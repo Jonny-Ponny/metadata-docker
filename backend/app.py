@@ -48,6 +48,14 @@ def list_files():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# GET /api/metadata?path=<file_path>
+# Fetch all metadata for a specific file.
+
+# POST /api/metadata/file
+# Update a single metadata field for one file
+
+# POST /api/metadata/folder
+# Update a single metadata field for all files in a folder
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG)
