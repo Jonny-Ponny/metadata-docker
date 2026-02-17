@@ -3,6 +3,7 @@
   import ToastContainer from "./components/ToastContainer.svelte";
   import TreeNode from "./components/TreeNode.svelte";
   import MetadataEditor from "./components/MetadataEditor.svelte";
+  import Player from "./components/Player.svelte";
 
   import { theme, toast, toggleTheme } from "./utils/index.js";
 
@@ -23,6 +24,11 @@
   // UI states
   let leftPanelWidth = $state(50); // percentage
   let isResizing = $state(false);
+
+  // Player-related state variables
+  let audioFile = $state(null);
+  let currentTime = $state(0);
+  let playerComponent; // Player component reference (not reactive)
 
   // ========== LOAD FILE TREE ==========
   async function loadFileTree() {
@@ -75,12 +81,66 @@
   function selectFile(path) {
     selectedFile = path;
     selectedFolder = null; // Clear folder selection
+
+    loadAudioFile(path);
+  }
+
+  async function loadAudioFile(filePath) {
+    try {
+      // Clean up previous blob URL if any
+      if (audioFile?.url?.startsWith("blob:")) {
+        URL.revokeObjectURL(audioFile.url);
+      }
+
+      const url = `http://localhost:5000/api/audio?path=${encodeURIComponent(filePath)}`; // development
+      // const url = `/api/audio?path=${encodeURIComponent(filePath)}`; // build
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Server returned ${response.status}: ${errorText.slice(0, 100)}`,
+        );
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.startsWith("audio/")) {
+        const text = await response.text();
+        console.error(
+          "Unexpected content type:",
+          contentType,
+          "Response preview:",
+          text.slice(0, 200),
+        );
+        throw new Error(
+          `Expected audio file but got ${contentType || "unknown"}`,
+        );
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      audioFile = {
+        url: blobUrl,
+        name: filePath.split(/[\\/]/).pop() || filePath,
+        originalName: filePath,
+        type: blob.type,
+      };
+    } catch (err) {
+      toast.error(`Failed to load audio file: ${err.message}`);
+      console.error("loadAudioFile error:", err);
+    }
   }
 
   // Function to handle folder selection
   function selectFolder(path) {
     selectedFolder = path;
     selectedFile = null; // Clear file selection
+  }
+
+  function handleTimeUpdate(time) {
+    currentTime = time;
+    // You can add additional logic here if needed
   }
 
   // ========== RESIZE HANDLERS ==========
@@ -121,6 +181,10 @@
       document.body.classList.remove("resizing");
       document.removeEventListener("mousemove", handleResize);
       document.removeEventListener("mouseup", stopResize);
+
+      if (audioFile?.url?.startsWith("blob:")) {
+        URL.revokeObjectURL(audioFile.url);
+      }
     };
   });
 </script>
@@ -313,4 +377,8 @@
 </div>
 
 <!-- Player component -->
-<!-- <Player {audioFile} ontimeupdate={handleTimeUpdate} bind:this={playerComponent} /> -->
+<Player
+  {audioFile}
+  ontimeupdate={handleTimeUpdate}
+  bind:this={playerComponent}
+/>

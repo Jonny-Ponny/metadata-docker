@@ -25,6 +25,7 @@ body {
 
 /* Split container styles */
 .split-container {
+  margin-bottom: 60px;
   display: flex;
   width: 100%;
   position: relative;
@@ -217,13 +218,13 @@ body.dark .status {
 /* Theme toggle button - update colors */
 .theme-toggle {
   position: fixed;
-  bottom: 20px;
-  left: 20px;
-  background: #fd7d05; /* Light mode color - matches panel border */
+  bottom: 73px;
+  left: 10px;
+  background: #fd7d05;
   color: white;
   border: none;
   padding: 8px 16px;
-  border-radius: 20px;
+  border-radius: 5px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;

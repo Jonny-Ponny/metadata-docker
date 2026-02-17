@@ -1,6 +1,6 @@
 import os
 from metadata_extractor import *
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file, abort
 
 # MUSIC_FOLDER = '/music'
 MUSIC_FOLDER = 'D:\\Music' # Development
@@ -87,6 +87,26 @@ def get_metadata():
 
 # POST /api/metadata/folder
 # Update a single metadata field for all files in a folder
+
+@app.route('/api/audio')
+def serve_audio():
+    file_path = request.args.get('path')
+    if not file_path:
+        return jsonify({'error': 'Missing path parameter'}), 400
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+        print(f"Serving audio: {full_path}")
+        # Set correct MIME type based on file extension
+        mimetype = 'audio/mpeg' if full_path.lower().endswith('.mp3') else 'audio/flac'
+        return send_file(full_path, mimetype=mimetype, conditional=True)
+    
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG)
