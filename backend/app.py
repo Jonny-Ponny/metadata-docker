@@ -1,4 +1,5 @@
 import os
+import shutil
 from metadata_extractor import *
 from flask import Flask, jsonify, request, send_file, abort
 
@@ -176,7 +177,7 @@ def upload_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Optional: Add endpoint to create directories
+# Endpoint to create directories
 @app.route('/api/mkdir', methods=['POST'])
 def create_directory():
     """Create a new directory"""
@@ -190,6 +191,62 @@ def create_directory():
         full_path = safe_path(dir_path)
         os.makedirs(full_path, exist_ok=True)
         return jsonify({'success': True, 'path': dir_path})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+# Endpoint to rename files/folders
+@app.route('/api/rename', methods=['POST'])
+def rename_item():
+    """Rename a file or folder."""
+    data = request.get_json()
+    old_path = data.get('oldPath')
+    new_name = data.get('newName')   # only the new base name, not full path
+
+    if not old_path or not new_name:
+        return jsonify({'error': 'Missing oldPath or newName'}), 400
+
+    try:
+        full_old = safe_path(old_path)
+        if not os.path.exists(full_old):
+            return jsonify({'error': 'Path not found'}), 404
+
+        # Build new full path: same parent directory + new name
+        parent = os.path.dirname(full_old)
+        full_new = os.path.join(parent, new_name)
+
+        # Prevent directory traversal in the new name
+        if not full_new.startswith(MUSIC_FOLDER):
+            return jsonify({'error': 'Invalid new name'}), 400
+
+        os.rename(full_old, full_new)
+
+        # Return the new relative path
+        new_rel = os.path.relpath(full_new, MUSIC_FOLDER).replace('\\', '/')
+        return jsonify({'success': True, 'newPath': new_rel})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to delete files/folders
+@app.route('/api/delete', methods=['POST'])
+def delete_item():
+    """Delete a file or folder."""
+    data = request.get_json()
+    path = data.get('path')
+
+    if not path:
+        return jsonify({'error': 'Missing path'}), 400
+
+    try:
+        full_path = safe_path(path)
+        if not os.path.exists(full_path):
+            return jsonify({'error': 'Path not found'}), 404
+
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+        else:
+            shutil.rmtree(full_path)
+
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

@@ -541,6 +541,72 @@
       }
     };
   });
+
+  // ========== RENAME & DELETE HANDLERS ==========
+  async function handleRename(oldPath, newName) {
+    try {
+      const api_url = "http://localhost:5000/api/rename"; // development
+      // const api_url = "api/rename" // build
+      const res = await fetch(api_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldPath, newName }),
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error);
+      }
+      const data = await res.json();
+
+      // Update expanded directories if the renamed item was expanded
+      if (expandedDirs.has(oldPath)) {
+        expandedDirs.delete(oldPath);
+        expandedDirs.add(data.newPath);
+        expandedDirs = new Set(expandedDirs);
+      }
+
+      // Update selected item if it was renamed
+      if (selectedFolder === oldPath) selectedFolder = data.newPath;
+      if (selectedFile === oldPath) selectedFile = data.newPath;
+
+      // Reload tree to reflect changes (simple but loses child expansions)
+      await loadFileTree();
+      toast.success("Renamed successfully");
+    } catch (e) {
+      toast.error(`Rename failed: ${e.message}`);
+    }
+  }
+
+  async function handleDelete(path) {
+    try {
+      const api_url = "http://localhost:5000/api/delete"; // development
+      // const api_url = "/api/delete" // build
+      const res = await fetch(api_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error);
+      }
+
+      // Clear selection if the deleted item was selected
+      if (selectedFolder === path) selectedFolder = null;
+      if (selectedFile === path) selectedFile = null;
+
+      // Remove from expanded set if it was a directory
+      if (expandedDirs.has(path)) {
+        expandedDirs.delete(path);
+        expandedDirs = new Set(expandedDirs);
+      }
+
+      await loadFileTree();
+      toast.success("Deleted successfully");
+    } catch (e) {
+      toast.error(`Delete failed: ${e.message}`);
+    }
+  }
 </script>
 
 <div
@@ -695,6 +761,8 @@
                     {selectFolder}
                     {selectedFolder}
                     {selectedFile}
+                    onRename={handleRename}
+                    onDelete={handleDelete}
                   />
                 {/each}
               </ul>

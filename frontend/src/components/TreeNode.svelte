@@ -4,7 +4,8 @@
     // @ts-ignore
     import Self from "./TreeNode.svelte";
 
-    // let { item, expanded, toggleDir, selectFile, level = 0 } = $props();
+    import { contextMenu, renamingPath } from "../utils/index.js";
+
     let {
         item,
         expanded,
@@ -14,7 +15,13 @@
         selectedFolder,
         selectedFile,
         level = 0,
+        onRename,
+        onDelete,
     } = $props();
+
+    // Input state
+    let inputRef = $state(null);
+    let newName = $derived(item.name);
 
     function handleDirectoryClick() {
         selectFolder(item.path); // Select the folder
@@ -24,6 +31,76 @@
     function handleFileClick() {
         selectFile(item.path);
     }
+
+    // Context menu handlers
+    function handleContextMenu(e) {
+        e.preventDefault();
+        renamingPath.set(null); // close any ongoing rename
+        contextMenu.set({
+            // open this item's menu
+            isOpen: true,
+            path: item.path,
+            x: e.clientX,
+            y: e.clientY,
+            type: item.type,
+        });
+    }
+
+    // Close menu when clicking outside or pressing Escape
+    function handleClickOutside(e) {
+        const menuId = `context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`;
+        const menuEl = document.getElementById(menuId);
+        if (menuEl && !menuEl.contains(e.target)) {
+            contextMenu.update((c) => ({ ...c, isOpen: false }));
+        }
+    }
+
+    function handleKeyDown(e) {
+        if (e.key === "Escape") {
+            contextMenu.update((c) => ({ ...c, isOpen: false }));
+        }
+    }
+
+    $effect(() => {
+        if ($contextMenu.isOpen && $contextMenu.path === item.path) {
+            window.addEventListener("click", handleClickOutside);
+            window.addEventListener("keydown", handleKeyDown);
+            return () => {
+                window.removeEventListener("click", handleClickOutside);
+                window.removeEventListener("keydown", handleKeyDown);
+            };
+        }
+    });
+
+    // Rename actions
+    function startRename() {
+        renamingPath.set(item.path);
+        contextMenu.update((curr) => ({ ...curr, isOpen: false }));
+    }
+
+    async function submitRename() {
+        if (!newName || newName.trim() === "") return;
+        try {
+            await onRename(item.path, newName.trim());
+        } finally {
+            renamingPath.set(null);
+        }
+    }
+
+    function cancelRename() {
+        renamingPath.set(null);
+    }
+
+    // Reset newName when entering rename mode for this item
+    $effect(() => {
+        if ($renamingPath === item.path) {
+            newName = item.name;
+            if (inputRef) {
+                inputRef.focus();
+                inputRef.select();
+            }
+        }
+    });
 </script>
 
 {#if item.type === "directory"}
@@ -37,6 +114,10 @@
             class:selected={item.path === selectedFolder}
             style="--level: {level}"
             onclick={handleDirectoryClick}
+            oncontextmenu={(e) => {
+                e.preventDefault();
+                handleContextMenu(e);
+            }}
             data-folder-path={item.path}
         >
             <span class="toggle">
@@ -77,7 +158,27 @@
                     </svg>
                 {/if}
             </span>
-            <span class="name">{item.name}</span>
+            {#if $renamingPath === item.path}
+                <input
+                    bind:this={inputRef}
+                    bind:value={newName}
+                    onkeydown={(e) => {
+                        if (e.key === "Enter") submitRename();
+                        else if (e.key === "Escape") cancelRename();
+                    }}
+                    onblur={submitRename}
+                    onclick={(e) => {
+                        e.stopPropagation();
+                    }}
+                    oncontextmenu={(e) => {
+                        e.preventDefault();
+                    }}
+                    class="rename-input"
+                    type="text"
+                />
+            {:else}
+                <span class="name">{item.name}</span>
+            {/if}
         </div>
         {#if expanded.has(item.path) && item.children?.length}
             <ul>
@@ -91,9 +192,38 @@
                         {selectedFolder}
                         {selectedFile}
                         level={level + 1}
+                        {onRename}
+                        {onDelete}
                     />
                 {/each}
             </ul>
+        {/if}
+        {#if $contextMenu.isOpen && $contextMenu.path === item.path}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+                id={`context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`}
+                class="context-menu"
+                style="left: {$contextMenu.x}px; top: {$contextMenu.y}px;"
+                onclick={(e) => e.stopPropagation()}
+            >
+                <ul>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={startRename}>Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li
+                        onclick={() => {
+                            onDelete(item.path);
+                            contextMenu.update((curr) => ({
+                                ...curr,
+                                isOpen: false,
+                            }));
+                        }}
+                    >
+                        Delete
+                    </li>
+                </ul>
+            </div>
         {/if}
     </li>
 {:else}
@@ -128,8 +258,15 @@
             class:selected={item.path === selectedFile}
             style="--level: {level}"
             onclick={handleFileClick}
+            oncontextmenu={(e) => {
+                e.preventDefault();
+                handleContextMenu(e);
+            }}
             data-file-path={item.path}
-            data-folder-path={item.path.substring(0, item.path.lastIndexOf('/'))}
+            data-folder-path={item.path.substring(
+                0,
+                item.path.lastIndexOf("/"),
+            )}
         >
             <span class="file-icon">
                 <!-- File icon -->
@@ -152,12 +289,64 @@
                     />
                 </svg>
             </span>
-            <span class="name">{filename}</span>
-            <span class="file-info">
-                <span class="format">{format}</span>
-                <span class="size">({(item.size / 1024).toFixed(0)} KB)</span>
-            </span>
+            {#if $renamingPath === item.path}
+                <input
+                    bind:this={inputRef}
+                    bind:value={newName}
+                    onkeydown={(e) => {
+                        if (e.key === "Enter") submitRename();
+                        else if (e.key === "Escape") cancelRename();
+                    }}
+                    onblur={submitRename}
+                    onclick={(e) => {
+                        e.stopPropagation();
+                    }}
+                    oncontextmenu={(e) => {
+                        e.preventDefault();
+                        handleContextMenu(e);
+                    }}
+                    class="rename-input"
+                    type="text"
+                />
+            {:else}
+                <span class="name">{filename}</span>
+                <span class="file-info">
+                    <span class="format">{format}</span>
+                    <span class="size"
+                        >({(item.size / 1024).toFixed(0)} KB)</span
+                    >
+                </span>
+            {/if}
         </div>
+        {#if $contextMenu.isOpen && $contextMenu.path === item.path}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+                id={`context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`}
+                class="context-menu"
+                style="left: {$contextMenu.x}px; top: {$contextMenu.y}px;"
+                onclick={(e) => {
+                    e.stopPropagation();
+                }}
+            >
+                <ul>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={startRename}>Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li
+                        onclick={() => {
+                            onDelete(item.path);
+                            contextMenu.update((curr) => ({
+                                ...curr,
+                                isOpen: false,
+                            }));
+                        }}
+                    >
+                        Delete
+                    </li>
+                </ul>
+            </div>
+        {/if}
     </li>
 {/if}
 
@@ -251,6 +440,44 @@
         background-color: rgba(253, 125, 5, 0.25);
     }
 
+    .context-menu {
+        position: fixed;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        padding: 4px 0;
+        z-index: 1000;
+        min-width: 120px;
+    }
+
+    .context-menu ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .context-menu li {
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .context-menu li:hover {
+        background-color: #f0f0f0;
+    }
+
+    .rename-input {
+        flex: 1;
+        padding: 4px 8px;
+        border: 1px solid #fd7d05;
+        border-radius: 4px;
+        font-size: 14px;
+        outline: none;
+        background: white;
+        color: #333;
+    }
+
     /* Dark mode overrides */
     :global(body.dark) .directory .name,
     :global(body.dark) .file .name {
@@ -289,5 +516,21 @@
     :global(body.dark) .file .format {
         background: rgba(255, 159, 75, 0.15);
         color: #ff9f4b;
+    }
+
+    :global(body.dark) .context-menu {
+        background: #2d2d2d;
+        border-color: #444;
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .context-menu li:hover {
+        background-color: #3d3d3d;
+    }
+
+    :global(body.dark) .rename-input {
+        background: #3d3d3d;
+        color: #e0e0e0;
+        border-color: #ff9f4b;
     }
 </style>
