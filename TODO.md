@@ -8,3 +8,9 @@
 8. Adding new fields for file/folder
 9. Adding/editing embedded picture
 10. Auth
+11. Deleting existing tags/frames
+12. Uploading coverart
+13. Renaming files/folders
+14. Creating new folders
+15. Deleting files/folders
+16. Search/filters for file browser

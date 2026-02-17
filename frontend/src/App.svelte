@@ -40,6 +40,7 @@
   });
   let dragOverElement = $state(null); // Track which element is being hovered
   let isUploading = $state(false);
+  let hoverTimer = null;
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
@@ -57,26 +58,49 @@
     e.stopPropagation();
     e.dataTransfer.dropEffect = "copy";
 
-    // Find the closest draggable element (folder or file)
-    const target = e.target.closest("[data-folder-path], [data-file-path]");
+    const newTarget = e.target.closest("[data-folder-path], [data-file-path]");
 
-    // Remove drag-target class from previous element
-    if (dragOverElement) {
-      dragOverElement.classList.remove("drag-target");
-    }
+    // Only act if the hovered element actually changed
+    if (newTarget !== dragOverElement) {
+      // Remove highlight from previous element
+      if (dragOverElement) {
+        dragOverElement.classList.remove("drag-target");
+      }
 
-    // Add drag-target class to new element
-    if (target) {
-      target.classList.add("drag-target");
-      dragOverElement = target;
-    } else {
-      dragOverElement = null;
+      // Add highlight to new element
+      if (newTarget) {
+        newTarget.classList.add("drag-target");
+      }
+      dragOverElement = newTarget;
+
+      // Reset the expansion timer whenever the target changes
+      if (hoverTimer) {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+      }
+
+      // If the new target is a folder and not already expanded, start a timer
+      if (newTarget && newTarget.hasAttribute("data-folder-path")) {
+        const folderPath = newTarget.dataset.folderPath;
+        if (!expandedDirs.has(folderPath)) {
+          hoverTimer = setTimeout(() => {
+            toggleDir(folderPath); // Expand the folder
+            hoverTimer = null;
+          }, 1000); // 1 second delay
+        }
+      }
     }
   }
 
   function handleDragLeave(e) {
     e.preventDefault();
     e.stopPropagation();
+
+    // Clear the expansion timer
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
 
     // Remove drag-target class when leaving
     if (dragOverElement) {
@@ -93,6 +117,12 @@
   function handleDrop(e) {
     e.preventDefault();
     e.stopPropagation();
+
+    // Clear the expansion timer
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
 
     if (isUploading) {
       toast.warning("Upload in progress. Please wait.");
@@ -503,6 +533,11 @@
 
       if (audioFile?.url?.startsWith("blob:")) {
         URL.revokeObjectURL(audioFile.url);
+      }
+
+      // Clean up hover timer
+      if (hoverTimer) {
+        clearTimeout(hoverTimer);
       }
     };
   });
