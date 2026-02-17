@@ -96,6 +96,27 @@
         {/if}
     </li>
 {:else}
+    <!-- Get filename from path -->
+    {@const filename = item.path.split(/[\\/]/).pop()}
+    <!-- Get format from file extension -->
+    {@const format = (() => {
+        const ext = filename.split(".").pop().toLowerCase();
+        const formatMap = {
+            mp3: "MP3",
+            flac: "FLAC",
+            wav: "WAV",
+            aac: "AAC",
+            ogg: "OGG",
+            m4a: "M4A",
+            wma: "WMA",
+            opus: "OPUS",
+            ape: "APE",
+            dsf: "DSF",
+            dff: "DFF",
+        };
+        return formatMap[ext] || ext.toUpperCase();
+    })()}
+
     <li>
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -128,8 +149,11 @@
                     />
                 </svg>
             </span>
-            <span class="name">{item.name}</span>
-            <span class="size">({(item.size / 1024).toFixed(0)} KB)</span>
+            <span class="name">{filename}</span>
+            <span class="file-info">
+                <span class="format">{format}</span>
+                <span class="size">({(item.size / 1024).toFixed(0)} KB)</span>
+            </span>
         </div>
     </li>
 {/if}
@@ -150,6 +174,8 @@
         transition: background-color 0.15s;
         position: relative;
         gap: 8px;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .directory:hover,
@@ -175,15 +201,38 @@
         color: #333;
     }
 
+    .file .file-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0; /* Prevents the info from shrinking */
+    }
+
+    .file .format {
+        color: #fd7d05;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 6px;
+        background: rgba(253, 125, 5, 0.1);
+        border-radius: 4px;
+        text-transform: uppercase;
+        min-width: 45px; /* Gives a minimum width for consistency */
+        text-align: center; /* Centers the text within the badge */
+    }
+
     .file .name {
-        flex: 1;
+        flex: 1; /* This makes the filename take all available space, pushing the info to the right */
         color: #555;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis; /* Adds ellipsis for very long filenames */
     }
 
     .file .size {
         color: #888;
         font-size: 12px;
-        margin-left: 8px;
+        min-width: 60px; /* Gives a minimum width for file sizes */
+        text-align: right; /* Right-aligns the file size */
     }
 
     /* Highlight for selected node */
@@ -232,5 +281,10 @@
     :global(body.dark) .file.selected:hover,
     :global(body.dark) .directory.selected:hover {
         background-color: rgba(255, 159, 75, 0.3);
+    }
+
+    :global(body.dark) .file .format {
+        background: rgba(255, 159, 75, 0.15);
+        color: #ff9f4b;
     }
 </style>

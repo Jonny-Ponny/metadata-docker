@@ -75,15 +75,12 @@
   function selectFile(path) {
     selectedFile = path;
     selectedFolder = null; // Clear folder selection
-    toast.success(`Selected: ${path}`);
   }
 
   // Function to handle folder selection
   function selectFolder(path) {
     selectedFolder = path;
     selectedFile = null; // Clear file selection
-    // Show a toast
-    toast.success(`Selected folder: ${path}`);
   }
 
   // ========== RESIZE HANDLERS ==========

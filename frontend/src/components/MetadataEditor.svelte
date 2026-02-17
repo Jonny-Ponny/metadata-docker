@@ -22,6 +22,7 @@
             composer: "Some Composer",
             publisher: "Example Records",
         },
+        picture: null,
     });
 
     // UI state
@@ -46,6 +47,7 @@
         "year",
         "genre",
     ];
+
     const textareaFields = ["comment", "description"];
 
     function startEditing(fieldName) {
@@ -79,34 +81,138 @@
         toast.success(`Updated ${field} for all files in folder`);
     }
 
-    // TODO: API fetch:
-    // $effect(() => { if (filePath) fetchMetadata(filePath); });
+    async function fetchMetadata(path) {
+        if (!path) return;
+
+        try {
+            const URL = `http://localhost:5000/api/metadata?path=${encodeURIComponent(path)}`; // development
+            // const URL = `/api/metadata?path=${encodeURIComponent(path)}`; // build
+            const response = await fetch(URL);
+
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to fetch metadata: ${response.statusText}`,
+                );
+            }
+
+            const data = await response.json();
+
+            // Fields that have dedicated top‑level properties in the component
+            const mainFields = [
+                "title",
+                "album",
+                "artist",
+                "track",
+                "disk",
+                "year",
+                "genre",
+            ];
+            const specialFields = [
+                "comment",
+                "description",
+                "lyrics",
+                "unsyncedLyrics",
+            ];
+            const excludeFields = [
+                ...mainFields,
+                ...specialFields,
+                "picture",
+                "customFields",
+                "otherFields",
+            ];
+
+            // Start with an empty otherFields object
+            let other = {};
+
+            // Add any top‑level fields that are not in excludeFields (e.g. composer, publisher)
+            for (let key in data) {
+                if (
+                    !excludeFields.includes(key) &&
+                    data[key] &&
+                    typeof data[key] === "string"
+                ) {
+                    other[key] = data[key];
+                }
+            }
+
+            // Add all entries from data.customFields (unknown tags)
+            if (data.customFields && Array.isArray(data.customFields)) {
+                for (let field of data.customFields) {
+                    other[field.name] = field.value;
+                }
+            }
+
+            // Merge any existing data.otherFields (for future compatibility)
+            if (data.otherFields) {
+                other = { ...other, ...data.otherFields };
+            }
+
+            // Update the main metadata object
+            metadata = {
+                title: data.title || "",
+                album: data.album || "",
+                artist: data.artist || "",
+                track: data.track?.toString() || "",
+                disk: data.disk?.toString() || "",
+                year: data.year?.toString() || "",
+                genre: data.genre || "",
+                comment: data.comment || "",
+                description: data.description || "",
+                lyrics: data.lyrics || "",
+                unsyncedLyrics: data.unsyncedLyrics || "",
+                // @ts-ignore
+                otherFields: other,
+                picture: data.picture || null,
+            };
+
+            customFields = [];
+
+            // toast.success("Metadata loaded successfully", 3000);
+        } catch (error) {
+            console.error("Error fetching metadata:", error);
+            toast.error(`Failed to load metadata: ${error.message}`);
+        }
+    }
+
+    $effect(() => {
+        if (filePath) {
+            fetchMetadata(filePath);
+        }
+    });
 </script>
 
 <div class="metadata-editor">
     <!-- Filename badge -->
     <div class="filename-badge">{filename}</div>
 
-    <!-- Cover art placeholder -->
     <div class="cover-art">
-        <svg
-            width="100%"
-            height="100%"
-            viewBox="0 0 200 200"
-            preserveAspectRatio="none"
-        >
-            <rect width="200" height="200" fill="#e0e0e0" />
-            <text
-                x="50%"
-                y="50%"
-                dominant-baseline="middle"
-                text-anchor="middle"
-                fill="#999"
-                font-size="14"
+        {#if metadata.picture}
+            <img
+                src={metadata.picture}
+                alt="Cover Art"
+                style="width:100%; height:100%; object-fit: cover;"
+            />
+        {:else}
+            <!-- Cover art placeholder -->
+            <svg
+                width="100%"
+                height="100%"
+                viewBox="0 0 200 200"
+                preserveAspectRatio="none"
             >
-                Album Art
-            </text>
-        </svg>
+                <rect width="200" height="200" fill="#e0e0e0" />
+                <text
+                    x="50%"
+                    y="50%"
+                    dominant-baseline="middle"
+                    text-anchor="middle"
+                    fill="#999"
+                    font-size="14"
+                >
+                    Album Art
+                </text>
+            </svg>
+        {/if}
     </div>
 
     <!-- Main fields (all text inputs) -->
@@ -324,6 +430,22 @@
                         </div>
                     </div>
                 {/each}
+
+                <!-- Lyrics action buttons -->
+                <div class="lyrics-actions">
+                    <button
+                        class="action-btn"
+                        onclick={() => console.log("Edit lyrics")}
+                    >
+                        Edit lyrics
+                    </button>
+                    <button
+                        class="action-btn"
+                        onclick={() => console.log("Edit unsynced lyrics")}
+                    >
+                        Edit unsynced lyrics
+                    </button>
+                </div>
             </div>
         {/if}
     </div>
@@ -442,7 +564,10 @@
         color: #888;
         margin-bottom: 16px;
         text-align: center;
+        max-width: 100%;
         word-break: break-all;
+        white-space: normal; /* Allow wrapping */
+        overflow: visible; /* Don't truncate */
         background: rgba(0, 0, 0, 0.03);
         padding: 4px 8px;
         border-radius: 4px;
@@ -609,6 +734,27 @@
         min-width: 0;
     }
 
+    .lyrics-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+    }
+
+    .action-btn {
+        background: transparent;
+        border: 1px solid #fd7d05;
+        color: #fd7d05;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        flex: 1;
+    }
+
+    .action-btn:hover {
+        background: rgba(253, 125, 5, 0.1);
+    }
+
     /* Dark mode adjustments */
     :global(body.dark) .filename-badge {
         background: rgba(255, 255, 255, 0.1);
@@ -642,5 +788,14 @@
 
     :global(body.dark) .other-section {
         border-color: #444;
+    }
+
+    :global(body.dark) .action-btn {
+        border-color: #ff9f4b;
+        color: #ff9f4b;
+    }
+
+    :global(body.dark) .action-btn:hover {
+        background: rgba(255, 159, 75, 0.1);
     }
 </style>

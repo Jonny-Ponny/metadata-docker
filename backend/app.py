@@ -1,10 +1,12 @@
 import os
+from metadata_extractor import *
+from flask import Flask, jsonify, request
 
-from flask import Flask, jsonify
+# MUSIC_FOLDER = '/music'
+MUSIC_FOLDER = 'D:\\Music' # Development
 
-MUSIC_FOLDER = '/music'
 PORT = int(os.getenv('PORT', 5000))
-DEBUG = os.getenv('DEBUG', 'false').lower() in ('true', '1', 'yes', 'on')
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes', 'on')
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
@@ -36,7 +38,14 @@ def build_tree(current_path, relative_path):
 
     return items
 
-
+def safe_path(file_path):
+    """Resolve and validate path against BASE_DIR if configured."""
+    if MUSIC_FOLDER:
+        full_path = os.path.abspath(os.path.join(MUSIC_FOLDER, file_path.lstrip('/')))
+        if not full_path.startswith(MUSIC_FOLDER):
+            raise PermissionError("Access denied: path outside base directory")
+        return full_path
+    return file_path
 
 # -------------------------API ENDPOINTS------------------------- #
 
@@ -50,6 +59,28 @@ def list_files():
 
 # GET /api/metadata?path=<file_path>
 # Fetch all metadata for a specific file.
+
+@app.route('/api/metadata')
+def get_metadata():
+    file_path = request.args.get('path')
+    if not file_path:
+        return jsonify({'error': 'Missing path parameter'}), 400
+
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+
+        metadata = extract_metadata(full_path)
+        if metadata is None:
+            return jsonify({'error': 'Could not read metadata (unsupported format?)'}), 500
+
+        return jsonify(metadata)
+
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # POST /api/metadata/file
 # Update a single metadata field for one file
