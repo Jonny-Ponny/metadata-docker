@@ -39,6 +39,7 @@
     isActive: false,
   });
   let dragOverElement = $state(null); // Track which element is being hovered
+  let isUploading = $state(false);
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
@@ -93,6 +94,11 @@
     e.preventDefault();
     e.stopPropagation();
 
+    if (isUploading) {
+      toast.warning("Upload in progress. Please wait.");
+      return;
+    }
+
     // Remove drag-target class
     if (dragOverElement) {
       dragOverElement.classList.remove("drag-target");
@@ -128,72 +134,85 @@
   }
 
   async function handleDroppedItems(items, files, targetPath) {
-    // --- Count total files first ---
-    let totalFiles = 0;
-    if (items.length > 0) {
-      for (let i = 0; i < items.length; i++) {
-        const entry = items[i].webkitGetAsEntry?.();
-        if (entry) {
-          totalFiles += await countFilesInEntry(entry);
+    if (isUploading) return; // double-check
+    isUploading = true;
+    try {
+      // --- Count total files first ---
+      let totalFiles = 0;
+      if (items.length > 0) {
+        for (let i = 0; i < items.length; i++) {
+          const entry = items[i].webkitGetAsEntry?.();
+          if (entry) {
+            totalFiles += await countFilesInEntry(entry);
+          }
         }
+      } else if (files.length > 0) {
+        // Fallback: count all files (including those with webkitRelativePath)
+        totalFiles = files.length;
       }
-    } else if (files.length > 0) {
-      // Fallback: count all files (including those with webkitRelativePath)
-      totalFiles = files.length;
-    }
 
-    // Activate overall progress bar
-    uploadOverallProgress = { total: totalFiles, completed: 0, isActive: true };
+      // Activate overall progress bar
+      uploadOverallProgress = {
+        total: totalFiles,
+        completed: 0,
+        isActive: true,
+      };
 
-    // --- Proceed with uploads ---
-    const uploads = [];
+      // --- Proceed with uploads ---
+      const uploads = [];
 
-    if (items.length > 0) {
-      for (let i = 0; i < items.length; i++) {
-        const entry = items[i].webkitGetAsEntry?.();
-        if (entry) {
-          if (entry.isDirectory) {
-            uploads.push(uploadDirectory(entry, targetPath));
+      if (items.length > 0) {
+        for (let i = 0; i < items.length; i++) {
+          const entry = items[i].webkitGetAsEntry?.();
+          if (entry) {
+            if (entry.isDirectory) {
+              uploads.push(uploadDirectory(entry, targetPath));
+            } else {
+              uploads.push(uploadFileEntry(entry, targetPath));
+            }
+          }
+        }
+      } else if (files.length > 0) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (file.webkitRelativePath) {
+            const relativePath = file.webkitRelativePath;
+            const pathParts = relativePath.split("/");
+            const fileName = pathParts.pop();
+            const folderPath = pathParts.join("/");
+            const fullTargetPath = targetPath
+              ? `${targetPath}/${folderPath}`
+              : folderPath;
+            uploads.push(uploadFile(file, fullTargetPath, fileName));
           } else {
-            uploads.push(uploadFileEntry(entry, targetPath));
+            uploads.push(uploadFile(file, targetPath, file.name));
           }
         }
       }
-    } else if (files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (file.webkitRelativePath) {
-          const relativePath = file.webkitRelativePath;
-          const pathParts = relativePath.split("/");
-          const fileName = pathParts.pop();
-          const folderPath = pathParts.join("/");
-          const fullTargetPath = targetPath
-            ? `${targetPath}/${folderPath}`
-            : folderPath;
-          uploads.push(uploadFile(file, fullTargetPath, fileName));
+
+      try {
+        const results = (await Promise.all(uploads)).flat();
+        const successCount = results.filter((r) => r && r.success).length;
+        const failCount = results.filter((r) => r && !r.success).length;
+
+        if (failCount === 0) {
+          toast.success(`Successfully uploaded ${successCount} file(s)`);
         } else {
-          uploads.push(uploadFile(file, targetPath, file.name));
+          toast.warning(
+            `Uploaded ${successCount} file(s), ${failCount} failed`,
+          );
         }
+
+        await loadFileTree();
+      } catch (error) {
+        toast.error(`Upload failed: ${error.message}`);
+        console.error("Upload error:", error);
+      } finally {
+        // Deactivate progress bar
+        uploadOverallProgress.isActive = false;
       }
-    }
-
-    try {
-      const results = (await Promise.all(uploads)).flat();
-      const successCount = results.filter((r) => r && r.success).length;
-      const failCount = results.filter((r) => r && !r.success).length;
-
-      if (failCount === 0) {
-        toast.success(`Successfully uploaded ${successCount} file(s)`);
-      } else {
-        toast.warning(`Uploaded ${successCount} file(s), ${failCount} failed`);
-      }
-
-      await loadFileTree();
-    } catch (error) {
-      toast.error(`Upload failed: ${error.message}`);
-      console.error("Upload error:", error);
     } finally {
-      // Deactivate progress bar
+      isUploading = false;
       uploadOverallProgress.isActive = false;
     }
   }
