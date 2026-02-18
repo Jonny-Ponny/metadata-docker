@@ -350,6 +350,87 @@
 
         pictureFileInput.click();
     }
+
+    async function deleteField(field) {
+        if (!filePath || !field) return;
+
+        try {
+            const URL = `http://localhost:5000/api/metadata/field/delete`; // development
+            // const URL = `/api/metadata/field/delete`; // build
+
+            const response = await fetch(URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    path: filePath,
+                    field: field,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Failed to delete field");
+            }
+
+            toast.success(`Deleted ${field} from file`);
+
+            // Refresh metadata to reflect changes
+            await fetchMetadata(filePath);
+
+            // Clear editing state
+            if (editingFields.has(field)) {
+                editingFields.delete(field);
+                editingFields = new Set(editingFields);
+            }
+        } catch (error) {
+            console.error("Error deleting field:", error);
+            toast.error(`Failed to delete: ${error.message}`);
+        }
+    }
+
+    async function deleteCoverArt() {
+        if (!filePath) return;
+
+        if (
+            !confirm(
+                "Are you sure you want to delete the cover art from this file?",
+            )
+        ) {
+            return;
+        }
+
+        try {
+            const URL = `http://localhost:5000/api/metadata/picture/delete`; // development
+            // const URL = `/api/metadata/picture/delete`; // build
+
+            const response = await fetch(URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    path: filePath,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Failed to delete cover art");
+            }
+
+            toast.success("Deleted cover art from file");
+
+            // Refresh metadata to reflect changes
+            await fetchMetadata(filePath);
+        } catch (error) {
+            console.error("Error deleting cover art:", error);
+            toast.error(`Failed to delete cover art: ${error.message}`);
+        }
+    }
 </script>
 
 <div class="metadata-editor">
@@ -451,6 +532,30 @@
                                 />
                             </svg>
                         </button>
+                        {#if metadata.picture}
+                            <button
+                                class="icon-btn delete-btn"
+                                title="Delete cover art from this file"
+                                onclick={deleteCoverArt}
+                                disabled={isUploadingPicture}
+                            >
+                                <!-- Trash can icon -->
+                                <svg
+                                    width="14"
+                                    height="16"
+                                    viewBox="0 0 14 16"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path
+                                        d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                                        stroke="currentColor"
+                                        stroke-width="1.5"
+                                        stroke-linecap="round"
+                                    />
+                                </svg>
+                            </button>
+                        {/if}
                     </div>
                 {:else if isUploadingPicture}
                     <div class="uploading-indicator">
@@ -466,9 +571,9 @@
         {#each mainFields as field}
             {@const value = metadata[field]}
             <div class="field" class:editing={editingFields.has(field)}>
-                <label for={field}
-                    >{field.charAt(0).toUpperCase() + field.slice(1)}</label
-                >
+                <label for={field}>
+                    {field.charAt(0).toUpperCase() + field.slice(1)}
+                </label>
                 <div class="input-wrapper">
                     <input
                         type="text"
@@ -480,12 +585,37 @@
                     />
                     {#if editingFields.has(field)}
                         <div class="field-actions">
+                            <!-- Delete button -->
+                            {#if metadata[field]}
+                                <button
+                                    class="icon-btn delete-btn"
+                                    title="Delete this field from file"
+                                    onclick={() => deleteField(field)}
+                                >
+                                    <!-- Trash can icon -->
+                                    <svg
+                                        width="14"
+                                        height="16"
+                                        viewBox="0 0 14 16"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                                            stroke="currentColor"
+                                            stroke-width="1.5"
+                                            stroke-linecap="round"
+                                        />
+                                    </svg>
+                                </button>
+                            {/if}
+                            <!-- File button -->
                             <button
                                 class="icon-btn"
                                 title="Apply to this file only"
                                 onclick={() => applyToFile(field, value)}
                             >
-                                <!-- File icon -->
+                                <!-- File icon SVG -->
                                 <svg
                                     width="14"
                                     height="16"
@@ -505,14 +635,15 @@
                                     />
                                 </svg>
                             </button>
+                            <!-- Folder button -->
                             <button
                                 class="icon-btn"
                                 title={applyToSubfolders
-                                    ? "Apply to all files in folder(including subfolders)"
-                                    : "Apply to all files in folder(same level only)"}
+                                    ? "Apply to all files in folder (including subfolders)"
+                                    : "Apply to all files in folder (same level only)"}
                                 onclick={() => applyToFolder(field, value)}
                             >
-                                <!-- Folder icon -->
+                                <!-- Folder icon SVG -->
                                 <svg
                                     width="16"
                                     height="16"
@@ -549,10 +680,9 @@
                 {#each textareaFields as field}
                     {@const value = metadata[field]}
                     <div class="field" class:editing={editingFields.has(field)}>
-                        <label for={field}
-                            >{field.charAt(0).toUpperCase() +
-                                field.slice(1)}</label
-                        >
+                        <label for={field}>
+                            {field.charAt(0).toUpperCase() + field.slice(1)}
+                        </label>
                         <div class="input-wrapper">
                             <textarea
                                 id={field}
@@ -564,12 +694,37 @@
                             ></textarea>
                             {#if editingFields.has(field)}
                                 <div class="field-actions textarea-actions">
+                                    <!-- Delete button - new -->
+                                    {#if metadata[field]}
+                                        <button
+                                            class="icon-btn delete-btn"
+                                            title="Delete this field from file"
+                                            onclick={() => deleteField(field)}
+                                        >
+                                            <!-- Trash can icon -->
+                                            <svg
+                                                width="14"
+                                                height="16"
+                                                viewBox="0 0 14 16"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                                <path
+                                                    d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                                                    stroke="currentColor"
+                                                    stroke-width="1.5"
+                                                    stroke-linecap="round"
+                                                />
+                                            </svg>
+                                        </button>
+                                    {/if}
+                                    <!-- File button -->
                                     <button
-                                        aria-label="File"
                                         class="icon-btn"
                                         onclick={() =>
                                             applyToFile(field, value)}
                                     >
+                                        <!-- File icon SVG -->
                                         <svg
                                             width="14"
                                             height="16"
@@ -589,12 +744,13 @@
                                             />
                                         </svg>
                                     </button>
+                                    <!-- Folder button -->
                                     <button
-                                        aria-label="Folder"
                                         class="icon-btn"
                                         onclick={() =>
                                             applyToFolder(field, value)}
                                     >
+                                        <!-- Folder icon SVG -->
                                         <svg
                                             width="16"
                                             height="16"
@@ -629,11 +785,36 @@
                             />
                             {#if editingFields.has(key)}
                                 <div class="field-actions">
+                                    <!-- Delete button -->
+                                    {#if value}
+                                        <button
+                                            class="icon-btn delete-btn"
+                                            title="Delete this field from file"
+                                            onclick={() => deleteField(key)}
+                                        >
+                                            <!-- Trash can icon -->
+                                            <svg
+                                                width="14"
+                                                height="16"
+                                                viewBox="0 0 14 16"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                                <path
+                                                    d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                                                    stroke="currentColor"
+                                                    stroke-width="1.5"
+                                                    stroke-linecap="round"
+                                                />
+                                            </svg>
+                                        </button>
+                                    {/if}
+                                    <!-- File button -->
                                     <button
-                                        aria-label="File"
                                         class="icon-btn"
                                         onclick={() => applyToFile(key, value)}
                                     >
+                                        <!-- File icon SVG -->
                                         <svg
                                             width="14"
                                             height="16"
@@ -653,12 +834,13 @@
                                             />
                                         </svg>
                                     </button>
+                                    <!-- Folder button -->
                                     <button
-                                        aria-label="Folder"
                                         class="icon-btn"
                                         onclick={() =>
                                             applyToFolder(key, value)}
                                     >
+                                        <!-- Folder icon SVG -->
                                         <svg
                                             width="16"
                                             height="16"
@@ -703,14 +885,13 @@
         + Add new field
     </button>
 
-    <!-- Custom fields added by user (now outside Other section) -->
+    <!-- Custom fields added by user -->
     {#each customFields, index (index)}
         <div
             class="field custom"
             class:editing={customFieldEditing[index]}
             onfocusin={() => (customFieldEditing[index] = true)}
             onfocusout={(e) => {
-                // If focus moves to an element outside this container, stop editing
                 // @ts-ignore
                 if (!e.currentTarget.contains(e.relatedTarget)) {
                     customFieldEditing[index] = false;
@@ -732,17 +913,21 @@
                     bind:value={customFields[index].value}
                 />
                 {#if customFieldEditing[index]}
-                    <div class="field-actions">
+                    <div
+                        class="field-actions"
+                        style="position: static; transform: none;"
+                    >
+                        <!-- File button -->
                         <button
-                            aria-label="File"
                             class="icon-btn"
+                            title="Apply to this file only"
                             onclick={() =>
                                 applyToFile(
                                     customFields[index].name,
                                     customFields[index].value,
                                 )}
                         >
-                            <!-- file icon svg -->
+                            <!-- File icon SVG -->
                             <svg
                                 width="14"
                                 height="16"
@@ -762,16 +947,16 @@
                                 />
                             </svg>
                         </button>
+                        <!-- Folder button -->
                         <button
-                            aria-label="Folder"
                             class="icon-btn"
+                            title="Apply to folder"
                             onclick={() =>
                                 applyToFolder(
                                     customFields[index].name,
                                     customFields[index].value,
                                 )}
                         >
-                            <!-- folder icon svg -->
                             <svg
                                 width="16"
                                 height="16"
@@ -835,6 +1020,7 @@
         gap: 4px;
         width: 100%;
         position: relative;
+        padding: 2px 0; /* Add small padding for hover area */
     }
 
     .field label {
@@ -849,6 +1035,8 @@
         position: relative;
         display: flex;
         align-items: center;
+        flex: 1; /* Take remaining space */
+        min-width: 0; /* Prevent overflow */
         width: 100%;
     }
 
@@ -876,11 +1064,23 @@
         min-height: 60px;
     }
 
-    /* Icon container */
+    /* Adjust padding when editing to make room for action buttons */
+    .field.editing .input-wrapper input,
+    .field.editing .input-wrapper textarea {
+        padding-right: 70px;
+    }
+
     .field-actions {
+        position: absolute;
+        right: 4px;
+        top: 50%;
+        transform: translateY(-50%);
         display: flex;
-        gap: 4px;
-        flex-shrink: 0;
+        gap: 2px;
+        background: white;
+        padding: 2px;
+        border-radius: 4px;
+        z-index: 10; /* Ensure it's above the input */
     }
 
     /* For textareas, align icons to the top */
@@ -1104,6 +1304,28 @@
         accent-color: #ff9f4b;
     }
 
+    /* Adjust padding for 3 icons */
+    .field.editing input,
+    .field.editing textarea {
+        padding-right: 100px; /* Slightly larger for 3 icons */
+    }
+
+    /* Make space for the delete button on the left */
+    .input-wrapper input,
+    .input-wrapper textarea {
+        width: 100%;
+        padding-left: 10px; /* Normal padding */
+    }
+
+    .delete-btn {
+        color: #ff4444; /* Red color for delete */
+    }
+
+    .delete-btn:hover {
+        color: #ff4444;
+        background: rgba(255, 68, 68, 0.1);
+    }
+
     /* Dark mode adjustments */
     :global(body.dark) .filename-badge {
         background: rgba(255, 255, 255, 0.1);
@@ -1161,5 +1383,17 @@
     /* Dark mode adjustments */
     :global(body.dark) .folder-scope-toggle label {
         color: #aaa;
+    }
+
+    :global(body.dark) .delete-btn {
+        color: #ff6b6b;
+    }
+
+    :global(body.dark) .delete-btn:hover {
+        background: rgba(255, 107, 107, 0.2);
+    }
+
+    :global(body.dark) .field-actions {
+        background: #3d3d3d;
     }
 </style>

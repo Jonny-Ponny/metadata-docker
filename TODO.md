@@ -8,7 +8,7 @@
 8. ~~Adding new fields for file/folder~~
 9. ~~Adding/editing embedded picture~~
 10. Auth
-11. Deleting existing tags/frames
+11. ~~Deleting existing tags/frames~~
 12. Search in filebrowser
 13. ~~Renaming files/folders~~
 14. ~~Creating new folders~~

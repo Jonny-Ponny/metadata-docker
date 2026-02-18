@@ -298,3 +298,118 @@ def update_folder_pictures_only_current(folder_path, image_data, mime_type=None)
                 results['failed_files'].append(file_path)
     
     return results
+
+def delete_metadata_field(file_path, field):
+    """Delete a specific metadata field from a file."""
+    try:
+        file_ext = os.path.splitext(file_path)[1].lower().replace('.', '')
+        
+        if file_ext == 'mp3':
+            return delete_mp3_field(file_path, field)
+        elif file_ext == 'flac':
+            return delete_flac_field(file_path, field)
+        else:
+            return False
+            
+    except Exception as e:
+        print(f"Error deleting field from {file_path}: {e}")
+        return False
+
+def delete_mp3_field(file_path, field):
+    """Delete a specific ID3 tag from MP3 file."""
+    try:
+        tags = ID3(file_path)
+        
+        # Map field to frame ID
+        if field == 'comment':
+            tags.delall('COMM')
+        elif field == 'unsyncedLyrics' or field == 'lyrics':
+            tags.delall('USLT')
+        elif field in FIELD_MAPPING['mp3']:
+            frame_id = FIELD_MAPPING['mp3'][field]
+            tags.delall(frame_id)
+        else:
+            # For custom fields, try to delete as is
+            tags.delall(field)
+        
+        # If no frames left, remove the entire tag structure
+        if not tags:
+            tags.delete()
+        
+        tags.save(file_path)
+        return True
+        
+    except Exception as e:
+        print(f"Error deleting MP3 field: {e}")
+        return False
+
+def delete_flac_field(file_path, field):
+    """Delete a specific Vorbis comment from FLAC file."""
+    try:
+        audio = FLAC(file_path)
+        
+        # Map field to tag name
+        if field == 'comment':
+            audio.pop('DESCRIPTION', None)
+        elif field == 'lyrics':
+            audio.pop('LYRICS', None)
+        elif field == 'unsyncedLyrics':
+            audio.pop('UNSYNCEDLYRICS', None)
+        elif field in FIELD_MAPPING['flac']:
+            tag_name = FIELD_MAPPING['flac'][field]
+            audio.pop(tag_name, None)
+        else:
+            # For custom fields, use the field name as tag
+            audio.pop(field, None)
+        
+        audio.save()
+        return True
+        
+    except Exception as e:
+        print(f"Error deleting FLAC field: {e}")
+        return False
+
+def delete_cover_art(file_path):
+    """Delete cover art from a file."""
+    try:
+        file_ext = os.path.splitext(file_path)[1].lower().replace('.', '')
+        
+        if file_ext == 'mp3':
+            return delete_mp3_cover_art(file_path)
+        elif file_ext == 'flac':
+            return delete_flac_cover_art(file_path)
+        else:
+            return False
+            
+    except Exception as e:
+        print(f"Error deleting cover art from {file_path}: {e}")
+        return False
+
+def delete_mp3_cover_art(file_path):
+    """Delete APIC frames from MP3 file."""
+    try:
+        tags = ID3(file_path)
+        tags.delall('APIC')
+        
+        if not tags:
+            tags.delete()
+        else:
+            tags.save(file_path)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error deleting MP3 cover art: {e}")
+        return False
+
+def delete_flac_cover_art(file_path):
+    """Delete pictures from FLAC file."""
+    try:
+        audio = FLAC(file_path)
+        audio.clear_pictures()
+        audio.save()
+        return True
+        
+    except Exception as e:
+        print(f"Error deleting FLAC cover art: {e}")
+        return False

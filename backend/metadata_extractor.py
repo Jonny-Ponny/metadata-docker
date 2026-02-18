@@ -69,7 +69,7 @@ def extract_metadata(filepath):
         'comment': ['COMM', 'COMMENT'],
         'description': ['DESCRIPTION'],
         'lyrics': ['SYLT', 'LYRICS'],
-        'unsyncedLyrics': ['USLT', 'LYRICS'],
+        'unsyncedLyrics': ['USLT', 'UNSYNCEDLYRICS'],
         'composer': ['TCOM', 'COMPOSER'],
         'publisher': ['TPUB', 'PUBLISHER']
     }

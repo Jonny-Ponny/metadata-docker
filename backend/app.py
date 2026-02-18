@@ -577,5 +577,78 @@ def update_folder_pictures_current_only_endpoint():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Endpoint to delete specific field
+@app.route('/api/metadata/field/delete', methods=['POST'])
+def delete_metadata_field():
+    """Delete a specific metadata field from a file."""
+    data = request.get_json()
+    file_path = data.get('path')
+    field = data.get('field')
+    
+    if not file_path or not field:
+        return jsonify({'error': 'Missing path or field'}), 400
+    
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Only process mp3 and flac files
+        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+            return jsonify({'error': 'Unsupported file format'}), 400
+        
+        from metadata_writer import delete_metadata_field as delete_field
+        success = delete_field(full_path, field)
+        
+        if success:
+            return jsonify({'success': True, 'message': f'Deleted {field} from {os.path.basename(file_path)}'})
+        else:
+            return jsonify({'error': 'Failed to delete field'}), 500
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to delete cover art
+@app.route('/api/metadata/picture/delete', methods=['POST'])
+def delete_cover_art():
+    """Delete cover art from a file."""
+    data = request.get_json()
+    file_path = data.get('path')
+    
+    if not file_path:
+        return jsonify({'error': 'Missing path'}), 400
+    
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Only process mp3 and flac files
+        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+            return jsonify({'error': 'Unsupported file format'}), 400
+        
+        from metadata_writer import delete_cover_art as delete_picture
+        success = delete_picture(full_path)
+        
+        if success:
+            # Get updated metadata to confirm deletion
+            from metadata_extractor import extract_metadata
+            metadata = extract_metadata(full_path)
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Deleted cover art from {os.path.basename(file_path)}',
+                'picture': metadata.get('picture')
+            })
+        else:
+            return jsonify({'error': 'Failed to delete cover art'}), 500
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG)
