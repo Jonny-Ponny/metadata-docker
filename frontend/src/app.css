@@ -411,6 +411,56 @@ body.dark .status {
   background-color: #f5f5f5;
 }
 
+
+/* Search input styles */
+.search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  padding: 6px 12px;
+  padding-right: 30px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 180px;
+  transition: all 0.2s;
+  background: white;
+  color: #333;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #fd7d05;
+  box-shadow: 0 0 0 2px rgba(253, 125, 5, 0.1);
+}
+
+.search-input::placeholder {
+  color: #999;
+}
+
+.search-clear {
+  position: absolute;
+  right: 4px;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.search-clear:hover {
+  color: #fd7d05;
+  background: rgba(253, 125, 5, 0.1);
+}
+
 /* Dark mode overrides */
 body.dark .refresh-btn {
   background: transparent !important;
@@ -464,4 +514,43 @@ body.dark .context-menu button {
 
 body.dark .context-menu button:hover {
   background-color: #3d3d3d;
+}
+
+body.dark .search-input {
+  background: #3d3d3d;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+body.dark .search-input:focus {
+  border-color: #ff9f4b;
+  box-shadow: 0 0 0 2px rgba(255, 159, 75, 0.2);
+}
+
+body.dark .search-input::placeholder {
+  color: #808080;
+}
+
+body.dark .search-clear {
+  color: #808080;
+}
+
+body.dark .search-clear:hover {
+  color: #ff9f4b;
+  background: rgba(255, 159, 75, 0.2);
+}
+
+/* Optional: Add a search results count badge */
+.search-results-count {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #fd7d05;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
 }

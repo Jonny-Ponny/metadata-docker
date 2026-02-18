@@ -53,15 +53,24 @@
   let isUploading = $state(false);
   let hoverTimer = null;
 
-  // Derived store for sorted tree data
-  let sortedTreeData = $derived(
-    sortItems(treeData, $sortConfig.by, $sortConfig.direction),
-  );
-
   // Ref for the file tree container
   let fileTreeContainer = $state(null);
 
-  // let selectedImage = $state(null);
+  // ========== SEARCH STATE ==========
+  let searchQuery = $state("");
+  let searchResults = $state(null); // null means show all, otherwise filtered results
+
+  // First apply search filter, then sort
+  let filteredTreeData = $derived(
+    searchQuery && searchQuery.trim() !== ""
+      ? filterTreeBySearch(treeData, searchQuery)
+      : treeData,
+  );
+
+  // Derived store for sorted tree data
+  let sortedTreeData = $derived(
+    sortItems(filteredTreeData || [], $sortConfig.by, $sortConfig.direction),
+  );
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
@@ -838,14 +847,42 @@
     selectedFolder = null;
   }
 
+  // ========== SEARCH FUNCTION ==========
+  function filterTreeBySearch(nodes, query) {
+    if (!query || query.trim() === "") return null;
+
+    const lowerQuery = query.toLowerCase().trim();
+
+    function filterNode(node) {
+      // Check if current node matches
+      const nameMatch = node.name.toLowerCase().includes(lowerQuery);
+
+      // For directories, check children
+      if (node.type === "directory" && node.children) {
+        const filteredChildren = node.children
+          .map(filterNode)
+          .filter((child) => child !== null);
+
+        // Include directory if it matches OR has matching children
+        if (nameMatch || filteredChildren.length > 0) {
+          return {
+            ...node,
+            children:
+              filteredChildren.length > 0 ? filteredChildren : node.children,
+          };
+        }
+      }
+
+      // For files or directories without matching children
+      return nameMatch ? node : null;
+    }
+
+    return nodes.map(filterNode).filter((node) => node !== null);
+  }
+
   onMount(() => {
     // Initial scroll if something is selected
     scrollSelectedIntoView();
-
-    // window.addEventListener("selectImage", (e) => {
-    //   // @ts-ignore
-    //   selectImage(e.detail.path);
-    // });
 
     // Add refresh listener
     window.addEventListener("refreshFileTree", loadFileTree);
@@ -928,6 +965,40 @@
               Loading...
             </div>
           {/if}
+
+          <!-- Search input -->
+          <div class="search-container">
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search files..."
+              bind:value={searchQuery}
+              onkeydown={(e) => {
+                if (e.key === "Escape") {
+                  searchQuery = "";
+                }
+              }}
+            />
+            {#if searchQuery}
+              <button
+                class="search-clear"
+                onclick={() => (searchQuery = "")}
+                title="Clear search"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            {/if}
+          </div>
           <SortButton />
           <button
             class="refresh-btn"
