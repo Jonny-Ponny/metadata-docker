@@ -841,10 +841,14 @@
   onMount(() => {
     // Initial scroll if something is selected
     scrollSelectedIntoView();
+
     window.addEventListener("selectImage", (e) => {
       // @ts-ignore
       selectImage(e.detail.path);
     });
+
+    // Add refresh listener
+    window.addEventListener("refreshFileTree", loadFileTree);
 
     scrollSelectedIntoView();
 
@@ -853,6 +857,7 @@
         // @ts-ignore
         selectImage(e.detail.path);
       });
+      window.removeEventListener("refreshFileTree", loadFileTree);
     };
   });
 </script>

@@ -462,8 +462,9 @@
 
             toast.success(result.message);
 
-            // Refresh the file tree to show the new image
-            // You'll need to emit an event or call a callback to refresh
+            // Dispatch event to refresh the file tree
+            const event = new CustomEvent("refreshFileTree");
+            window.dispatchEvent(event);
         } catch (error) {
             console.error("Error saving cover art:", error);
             toast.error(`Failed to save: ${error.message}`);
@@ -619,7 +620,7 @@
                             </button>
                             <button
                                 class="icon-btn"
-                                title="Save as cover.png"
+                                title="Save as cover"
                                 onclick={saveCoverAsFile}
                                 disabled={isUploadingPicture ||
                                     !metadata.picture}
