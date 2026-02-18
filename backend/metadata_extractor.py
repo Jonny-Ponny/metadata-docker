@@ -64,7 +64,7 @@ def extract_metadata(filepath):
         'albumArtist': ['TPE2', 'ALBUMARTIST'],
         'track': ['TRCK', 'TRACKNUMBER'],
         'disk': ['TPOS', 'DISCNUMBER'],
-        'year': ['TYER', 'ORIGINALYEAR'],
+        'year': ['TYER', 'DATE'],
         'genre': ['TCON', 'GENRE'],
         'comment': ['COMM', 'COMMENT'],
         'description': ['DESCRIPTION'],

@@ -26,7 +26,7 @@ FIELD_MAPPING = {
         'albumArtist': 'ALBUMARTIST',
         'track': 'TRACKNUMBER',
         'disk': 'DISCNUMBER',
-        'year': 'ORIGINALYEAR',
+        'year': 'DATE',
         'genre': 'GENRE',
         'comment': 'DESCRIPTION',
         'composer': 'COMPOSER',
