@@ -741,6 +741,31 @@
       toast.error(`Create folder failed: ${e.message}`);
     }
   }
+
+  async function handleCopyItem(path) {
+    try {
+      const api_url = "http://localhost:5000/api/copy"; // development
+      // const api_url = "/api/copy" // build
+      const res = await fetch(api_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error);
+      }
+
+      // Clear selection if the item was selected
+      if (selectedFolder === path) selectedFolder = null;
+      if (selectedFile === path) selectedFile = null;
+
+      await loadFileTree();
+      toast.success("Copied successfully");
+    } catch (e) {
+      toast.error(`Copy failed: ${e.message}`);
+    }
+  }
 </script>
 
 <div
@@ -898,6 +923,7 @@
                     onRename={handleRename}
                     onDelete={handleDelete}
                     onCreateFolder={handleCreateFolder}
+                    onCopy={handleCopyItem}
                   />
                 {/each}
               </ul>

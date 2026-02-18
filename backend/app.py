@@ -45,7 +45,7 @@ def safe_path(file_path):
     if MUSIC_FOLDER:
         full_path = os.path.abspath(os.path.join(MUSIC_FOLDER, file_path.lstrip('/')))
         if not full_path.startswith(MUSIC_FOLDER):
-            raise PermissionError("Access denied: path outside base directory")
+            raise PermissionError('Access denied: path outside base directory')
         return full_path
     return file_path
 
@@ -99,7 +99,7 @@ def serve_audio():
         full_path = safe_path(file_path)
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
-        print(f"Serving audio: {full_path}")
+        print(f'Serving audio: {full_path}')
         # Set correct MIME type based on file extension
         mimetype = 'audio/mpeg' if full_path.lower().endswith('.mp3') else 'audio/flac'
         return send_file(full_path, mimetype=mimetype, conditional=True)
@@ -160,7 +160,7 @@ def upload_file():
     original_path = file_path
     while os.path.exists(file_path):
         name, ext = os.path.splitext(original_path)
-        file_path = f"{name} ({counter}){ext}"
+        file_path = f'{name} ({counter}){ext}'
         counter += 1
     
     try:
@@ -194,7 +194,7 @@ def create_directory():
             base = full_path
             counter = 1
             while os.path.exists(full_path):
-                full_path = f"{base} ({counter})"
+                full_path = f'{base} ({counter})'
                 counter += 1
 
         os.makedirs(full_path, exist_ok=False)  # now it definitely doesn't exist
@@ -311,6 +311,49 @@ def move_item():
 
     except PermissionError as e:
         return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+# Endpoint to copy files/folders
+@app.route('/api/copy', methods=['POST'])
+def copy_item():
+    """Delete a file or folder."""
+    data = request.get_json()
+    path = data.get('path')
+
+    if not path:
+        return jsonify({'error': 'Missing path'}), 400
+
+    try:
+        full_path = safe_path(path)
+        if not os.path.exists(full_path):
+            return jsonify({'error': 'Path not found'}), 404
+
+        # File
+        if os.path.isfile(full_path):
+            filename, file_extension = os.path.splitext(full_path)
+            new_name = filename + ' - Copy' + file_extension
+            if os.path.exists(new_name):
+                base = filename
+                extension = file_extension
+                counter = 1
+                while os.path.exists(new_name):
+                    new_name = f'{base} - Copy({counter}){extension}'
+                    counter += 1
+            shutil.copy2(full_path, new_name)
+            
+        # Directory
+        else:
+            new_name = full_path + ' - Copy'
+            if os.path.exists(new_name):
+                base = new_name
+                counter = 1
+                while os.path.exists(new_name):
+                    new_name = f'{base} ({counter})'
+                    counter += 1
+            shutil.copytree(full_path, new_name)
+
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

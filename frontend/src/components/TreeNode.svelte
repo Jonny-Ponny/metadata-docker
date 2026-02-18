@@ -18,6 +18,7 @@
         onRename,
         onDelete,
         onCreateFolder,
+        onCopy,
     } = $props();
 
     // Input state
@@ -226,6 +227,7 @@
                         {onRename}
                         {onDelete}
                         {onCreateFolder}
+                        {onCopy}
                     />
                 {/each}
             </ul>
@@ -242,6 +244,14 @@
                 <ul>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li
+                        onclick={() => {
+                            onCopy(item.path);
+                        }}
+                    >
+                        Copy
+                    </li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -368,6 +378,14 @@
                 <ul>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li
+                        onclick={() => {
+                            onCopy(item.path);
+                        }}
+                    >
+                        Copy
+                    </li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
