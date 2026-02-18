@@ -11,6 +11,6 @@
 11. Deleting existing tags/frames
 12. Uploading coverart
 13. ~~Renaming files/folders~~
-14. Creating new folders
+14. ~~Creating new folders~~
 15. ~~Deleting files/folders~~
 16. Search/filters for file browser

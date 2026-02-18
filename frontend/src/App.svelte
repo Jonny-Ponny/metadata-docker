@@ -6,6 +6,7 @@
   import Player from "./components/Player.svelte";
 
   import { theme, toast, toggleTheme } from "./utils/index.js";
+  import { renamingPath } from "./utils/index.js";
 
   import "./app.css";
 
@@ -584,9 +585,29 @@
     document.removeEventListener("mouseup", stopResize);
   }
 
+  // Keydown
+  function handleKeyDown(e) {
+    if (e.key === "F2" && selectedFile) {
+      e.preventDefault();
+      renamingPath.set(selectedFile);
+    } else if (e.key === "F2" && selectedFolder) {
+      e.preventDefault();
+      renamingPath.set(selectedFolder);
+    }
+
+    if (e.key === "Delete" && selectedFile) {
+      e.preventDefault();
+      handleDelete(selectedFile);
+    } else if (e.key === "Delete" && selectedFolder) {
+      e.preventDefault();
+      handleDelete(selectedFolder);
+    }
+  }
+
   // ========== CLEANUP ==========
   $effect(() => {
     loadFileTree();
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
       document.body.classList.remove("resizing");
       document.removeEventListener("mousemove", handleResize);
@@ -595,6 +616,8 @@
       if (audioFile?.url?.startsWith("blob:")) {
         URL.revokeObjectURL(audioFile.url);
       }
+
+      window.removeEventListener("keydown", handleKeyDown);
 
       // Clean up hover timer
       if (hoverTimer) {
