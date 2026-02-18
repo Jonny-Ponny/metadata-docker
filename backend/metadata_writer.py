@@ -18,6 +18,8 @@ FIELD_MAPPING = {
         'comment': 'COMM',
         'composer': 'TCOM',
         'publisher': 'TPUB',
+        'unsyncedLyrics': 'USLT',
+        'lyrics': 'SYLT'
     },
     'flac': {
         'title': 'TITLE',
@@ -28,9 +30,12 @@ FIELD_MAPPING = {
         'disk': 'DISCNUMBER',
         'year': 'DATE',
         'genre': 'GENRE',
-        'comment': 'DESCRIPTION',
+        'comment': 'COMMENT',
+        'description': 'DESCRIPTION',
         'composer': 'COMPOSER',
         'publisher': 'PUBLISHER',
+        'unsyncedLyrics': 'UNSYNCEDLYRICS',
+        'lyrics': 'LYRICS',
     }
 }
 
@@ -97,18 +102,21 @@ def update_flac_metadata(file_path, field, value):
         audio = FLAC(file_path)
         
         if field in FIELD_MAPPING['flac']:
-            tag_name = FIELD_MAPPING['flac'][field]
             # Remove existing tag and add new one
+            tag_name = FIELD_MAPPING['flac'][field]
             audio.pop(tag_name, None)  # None is the default if key doesn't exist
             audio[tag_name] = value
         elif field == 'comment':
-            audio.pop(tag_name, None)  # None is the default if key doesn't exist
+            audio.pop('COMMENT', None)  # None is the default if key doesn't exist
+            audio['COMMENT'] = value
+        elif field == 'description':
+            audio.pop('DESCRIPTION', None)  # None is the default if key doesn't exist
             audio['DESCRIPTION'] = value
         elif field == 'lyrics':
-            audio.pop(tag_name, None)  # None is the default if key doesn't exist
+            audio.pop('LYRICS', None)  # None is the default if key doesn't exist
             audio['LYRICS'] = value
-        elif field == 'unsyncedLyrics':
-            audio.pop(tag_name, None)  # None is the default if key doesn't exist
+        elif field == 'unsyncedlyrics':
+            audio.pop('UNSYNCEDLYRICS', None)  # None is the default if key doesn't exist
             audio['UNSYNCEDLYRICS'] = value
         else:
             # For custom fields, use the field name as tag

@@ -331,15 +331,8 @@
             class:selected={item.path === selectedFile}
             style="--level: {level}"
             onclick={() => {
-                if (isImage) {
-                    // Dispatch custom event for image selection
-                    const event = new CustomEvent("selectImage", {
-                        detail: { path: item.path },
-                    });
-                    window.dispatchEvent(event);
-                } else {
-                    selectFile(item.path);
-                }
+                // Call selectFile for both audio AND images
+                selectFile(item.path);
             }}
             oncontextmenu={(e) => {
                 e.preventDefault();
@@ -516,7 +509,7 @@
     .file .size {
         color: #888;
         font-size: 12px;
-        min-width: 60px; /* Gives a minimum width for file sizes */
+        min-width: 100px; /* Gives a minimum width for file sizes */
         text-align: right; /* Right-aligns the file size */
     }
 

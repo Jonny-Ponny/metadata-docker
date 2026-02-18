@@ -61,7 +61,7 @@
   // Ref for the file tree container
   let fileTreeContainer = $state(null);
 
-  let selectedImage = $state(null);
+  // let selectedImage = $state(null);
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
@@ -502,7 +502,7 @@
   function selectFile(path) {
     selectedFile = path;
     selectedFolder = null; // Clear folder selection
-    selectedImage = null;
+    // selectedImage = null;
 
     loadAudioFile(path);
   }
@@ -557,7 +557,7 @@
   function selectFolder(path) {
     selectedFolder = path;
     selectedFile = null;
-    selectedImage = null;
+    // selectedImage = null;
   }
 
   function handleTimeUpdate(time) {
@@ -833,7 +833,7 @@
   });
 
   function selectImage(path) {
-    selectedImage = path;
+    // selectedImage = path;
     selectedFile = null;
     selectedFolder = null;
   }
@@ -842,10 +842,10 @@
     // Initial scroll if something is selected
     scrollSelectedIntoView();
 
-    window.addEventListener("selectImage", (e) => {
-      // @ts-ignore
-      selectImage(e.detail.path);
-    });
+    // window.addEventListener("selectImage", (e) => {
+    //   // @ts-ignore
+    //   selectImage(e.detail.path);
+    // });
 
     // Add refresh listener
     window.addEventListener("refreshFileTree", loadFileTree);
@@ -1040,7 +1040,7 @@
     <div class="panel right-panel" style="width: {100 - leftPanelWidth}%;">
       <div class="panel-header">
         <h3>
-          {#if selectedImage}
+          {#if selectedFile && selectedFile.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)}
             Image Viewer
           {:else if selectedFile}
             Metadata Editor
@@ -1051,8 +1051,8 @@
       </div>
 
       <div class="panel-content">
-        {#if selectedImage}
-          <ImageViewer filePath={selectedImage} />
+        {#if selectedFile && selectedFile.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)}
+          <ImageViewer filePath={selectedFile} />
         {:else if selectedFile}
           <MetadataEditor filePath={selectedFile} />
         {:else}

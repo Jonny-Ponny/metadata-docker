@@ -45,6 +45,11 @@
 
     let showFullImage = $state(false);
 
+    // Lyrics modal state
+    let lyricsModalOpen = $state(false);
+    let lyricsModalType = $state("unsynced"); // 'unsynced' or 'synced'
+    let lyricsModalContent = $state("");
+
     // Field definitions for main and always‑visible other fields
     const mainFields = [
         "title",
@@ -470,6 +475,35 @@
             toast.error(`Failed to save: ${error.message}`);
         }
     }
+
+    function openLyricsModal(type) {
+        lyricsModalType = type;
+        lyricsModalContent =
+            type === "synced" ? metadata.lyrics : metadata.unsyncedLyrics;
+        lyricsModalOpen = true;
+    }
+
+    function closeLyricsModal() {
+        lyricsModalOpen = false;
+    }
+
+    async function saveLyrics() {
+        const field =
+            lyricsModalType === "synced" ? "lyrics" : "unsyncedLyrics";
+
+        // Update local state
+        if (lyricsModalType === "synced") {
+            metadata.lyrics = lyricsModalContent;
+        } else {
+            metadata.unsyncedLyrics = lyricsModalContent;
+        }
+
+        // Save to file using existing function
+        await applyToFile(field, lyricsModalContent);
+
+        // Close modal
+        closeLyricsModal();
+    }
 </script>
 
 <div class="metadata-editor">
@@ -758,6 +792,16 @@
         {/each}
     </div>
 
+    <!-- Lyrics action buttons -->
+    <div class="lyrics-actions">
+        <button class="action-btn" onclick={() => openLyricsModal("synced")}>
+            Edit lyrics
+        </button>
+        <button class="action-btn" onclick={() => openLyricsModal("unsynced")}>
+            Edit unsynced lyrics
+        </button>
+    </div>
+
     <!-- Other section (collapsible) -->
     <div class="other-section">
         <button
@@ -953,22 +997,6 @@
                         </div>
                     </div>
                 {/each}
-
-                <!-- Lyrics action buttons -->
-                <div class="lyrics-actions">
-                    <button
-                        class="action-btn"
-                        onclick={() => console.log("Edit lyrics")}
-                    >
-                        Edit lyrics
-                    </button>
-                    <button
-                        class="action-btn"
-                        onclick={() => console.log("Edit unsynced lyrics")}
-                    >
-                        Edit unsynced lyrics
-                    </button>
-                </div>
             </div>
         {/if}
     </div>
@@ -1069,6 +1097,89 @@
             </div>
         </div>
     {/each}
+
+    <!-- Lyrics Modal -->
+    {#if lyricsModalOpen}
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="lyrics-modal-overlay" onclick={closeLyricsModal}>
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="lyrics-modal" onclick={(e) => e.stopPropagation()}>
+                <div class="lyrics-modal-header">
+                    <h3>
+                        {lyricsModalType === "synced"
+                            ? "Edit Synced Lyrics"
+                            : "Edit Unsynced Lyrics"}
+                    </h3>
+                    <button
+                        title="Close"
+                        class="modal-close-btn"
+                        onclick={closeLyricsModal}
+                    >
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                d="M12 4L4 12M4 4L12 12"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="lyrics-modal-content">
+                    <!-- svelte-ignore a11y_autofocus -->
+                    <textarea
+                        bind:value={lyricsModalContent}
+                        placeholder="Enter lyrics here..."
+                        class="lyrics-textarea"
+                        autofocus
+                    ></textarea>
+                </div>
+
+                <div class="lyrics-modal-footer">
+                    <button class="cancel-btn" onclick={closeLyricsModal}>
+                        Cancel
+                    </button>
+                    <div class="save-actions">
+                        <button
+                            class="save-btn"
+                            onclick={saveLyrics}
+                            title="Save to this file only"
+                        >
+                            <!-- File icon SVG (same as your other file buttons) -->
+                            <svg
+                                width="14"
+                                height="16"
+                                viewBox="0 0 14 16"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                                    fill="currentColor"
+                                    fill-opacity="0.7"
+                                />
+                                <path
+                                    d="M10 1L12 3H10V1Z"
+                                    fill="currentColor"
+                                    fill-opacity="0.7"
+                                />
+                            </svg>
+                            Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {/if}
 
     <!-- Full-size image modal -->
     {#if showFullImage && metadata.picture}
@@ -1578,6 +1689,139 @@
         }
     }
 
+    /* Lyrics Modal */
+    .lyrics-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease;
+    }
+
+    .lyrics-modal {
+        background: white;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        animation: scaleIn 0.2s ease;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .lyrics-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .lyrics-modal-header h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .modal-close-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+        color: #666;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+    }
+
+    .modal-close-btn:hover {
+        background: rgba(0, 0, 0, 0.1);
+        color: #fd7d05;
+    }
+
+    .lyrics-modal-content {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .lyrics-textarea {
+        width: 100%;
+        min-height: 200px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        box-sizing: border-box;
+    }
+
+    .lyrics-textarea:focus {
+        outline: none;
+        border-color: #fd7d05;
+    }
+
+    .lyrics-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 16px 20px;
+        border-top: 1px solid #eee;
+    }
+
+    .cancel-btn {
+        background: transparent;
+        border: 1px solid #ddd;
+        color: #666;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+    }
+
+    .cancel-btn:hover {
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    .save-actions {
+        display: flex;
+        gap: 4px;
+    }
+
+    .save-btn {
+        background: transparent;
+        border: 1px solid #fd7d05;
+        color: #fd7d05;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .save-btn:hover {
+        background: rgba(253, 125, 5, 0.1);
+        color: #fd7d05;
+    }
+
+    .save-btn svg {
+        width: 14px;
+        height: 16px;
+    }
+
     /* Dark mode adjustments */
     :global(body.dark) .filename-badge {
         background: rgba(255, 255, 255, 0.1);
@@ -1661,5 +1905,57 @@
 
     :global(body.dark) .modal-close:hover {
         background: rgba(0, 0, 0, 0.5);
+    }
+
+    /* Dark mode adjustments */
+    :global(body.dark) .lyrics-modal {
+        background: #2d2d2d;
+        border-color: #444;
+    }
+
+    :global(body.dark) .lyrics-modal-header {
+        border-color: #444;
+    }
+
+    :global(body.dark) .lyrics-modal-header h3 {
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .modal-close-btn {
+        color: #aaa;
+    }
+
+    :global(body.dark) .modal-close-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ff9f4b;
+    }
+
+    :global(body.dark) .lyrics-textarea {
+        background: #3d3d3d;
+        border-color: #555;
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .lyrics-modal-footer {
+        border-color: #444;
+    }
+
+    :global(body.dark) .cancel-btn {
+        border-color: #555;
+        color: #aaa;
+    }
+
+    :global(body.dark) .cancel-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    :global(body.dark) .save-btn {
+        border-color: #ff9f4b;
+        color: #ff9f4b;
+    }
+
+    :global(body.dark) .save-btn:hover {
+        background: rgba(255, 159, 75, 0.1);
+        color: #ff9f4b;
     }
 </style>
