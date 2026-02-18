@@ -1,7 +1,7 @@
 import os
 import shutil
 from metadata_extractor import *
-from metadata_writer import update_file_metadata, update_folder_metadata
+from metadata_writer import *
 
 from flask import Flask, jsonify, request, send_file, abort
 
@@ -422,6 +422,158 @@ def copy_item():
             shutil.copytree(full_path, new_name)
 
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/picture/file', methods=['POST'])
+def update_file_picture_endpoint():
+    """Update cover art for a single file."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+    
+    image_file = request.files['file']
+    file_path = request.form.get('path')
+    
+    if not file_path:
+        return jsonify({'error': 'Missing path parameter'}), 400
+    
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Only process mp3 and flac files
+        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+            return jsonify({'error': 'Unsupported file format'}), 400
+        
+        # Read image data
+        image_data = image_file.read()
+        mime_type = image_file.mimetype
+        
+        success = update_file_picture(full_path, image_data, mime_type)
+        
+        if success:
+            # Get updated metadata to return new picture data
+            from metadata_extractor import extract_metadata
+            metadata = extract_metadata(full_path)
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Updated cover art for {os.path.basename(file_path)}',
+                'picture': metadata.get('picture')
+            })
+        else:
+            return jsonify({'error': 'Failed to update cover art'}), 500
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/picture/folder', methods=['POST'])
+def update_folder_pictures_endpoint():
+    """Update cover art for all files in a folder."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+    
+    image_file = request.files['file']
+    folder_path = request.form.get('path')
+    
+    if folder_path is None:  # Allow empty string for root
+        return jsonify({'error': 'Missing path parameter'}), 400
+    
+    try:
+        full_path = safe_path(folder_path) if folder_path else MUSIC_FOLDER
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+        
+        # Read image data
+        image_data = image_file.read()
+        mime_type = image_file.mimetype
+        
+        # Update all files in folder
+        results = update_folder_pictures(full_path, image_data, mime_type)
+        
+        return jsonify({
+            'success': True, 
+            'updated': results['updated'],
+            'failed': results['failed'],
+            'total': results['total'],
+            'message': f"Updated cover art for {results['updated']} of {results['total']} files"
+        })
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+# POST /api/metadata/folder/current
+# Update a single metadata field for all files in a folder (current folder only, no subfolders)
+@app.route('/api/metadata/folder/current', methods=['POST'])
+def update_folder_files_current_only():
+    data = request.get_json()
+    folder_path = data.get('path')
+    field = data.get('field')
+    value = data.get('value')
+    
+    if not folder_path or not field:
+        return jsonify({'error': 'Missing path or field'}), 400
+    
+    try:
+        full_path = safe_path(folder_path)
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+        
+        # Only process files in the current folder (no recursion)
+        results = update_folder_metadata_only_current(full_path, field, value)
+        
+        return jsonify({
+            'success': True, 
+            'updated': results['updated'],
+            'failed': results['failed'],
+            'total': results['total'],
+            'message': f"Updated {results['updated']} of {results['total']} files in current folder"
+        })
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metadata/picture/folder/current', methods=['POST'])
+def update_folder_pictures_current_only_endpoint():
+    """Update cover art for all files in a folder (current folder only, no subfolders)."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+    
+    image_file = request.files['file']
+    folder_path = request.form.get('path')
+    
+    if folder_path is None:  # Allow empty string for root
+        return jsonify({'error': 'Missing path parameter'}), 400
+    
+    try:
+        full_path = safe_path(folder_path) if folder_path else MUSIC_FOLDER
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+        
+        # Read image data
+        image_data = image_file.read()
+        mime_type = image_file.mimetype
+        
+        # Update all files in current folder only (no recursion)
+        results = update_folder_pictures_only_current(full_path, image_data, mime_type)
+        
+        return jsonify({
+            'success': True, 
+            'updated': results['updated'],
+            'failed': results['failed'],
+            'total': results['total'],
+            'message': f"Updated cover art for {results['updated']} of {results['total']} files in current folder"
+        })
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
