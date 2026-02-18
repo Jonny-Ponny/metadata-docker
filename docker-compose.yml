@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${HOST_PORT:-5000}:5000"                  # Host port from env var, default 5000
+    environment:
+      - CONTAINER_PORT=5000                        # Container port
+      - HOST_PORT=${HOST_PORT}                     # Host port
+      - PYTHONUNBUFFERED=1
+      - DEBUG=${DEBUG}
+    volumes:
+      - ~/Media/music:/music                       # Library

@@ -99,16 +99,16 @@ def update_flac_metadata(file_path, field, value):
         if field in FIELD_MAPPING['flac']:
             tag_name = FIELD_MAPPING['flac'][field]
             # Remove existing tag and add new one
-            audio.pop(tag_name)
+            audio.pop(tag_name, None)  # None is the default if key doesn't exist
             audio[tag_name] = value
         elif field == 'comment':
-            audio.pop('DESCRIPTION')
+            audio.pop(tag_name, None)  # None is the default if key doesn't exist
             audio['DESCRIPTION'] = value
         elif field == 'lyrics':
-            audio.pop('LYRICS')
+            audio.pop(tag_name, None)  # None is the default if key doesn't exist
             audio['LYRICS'] = value
         elif field == 'unsyncedLyrics':
-            audio.pop('UNSYNCEDLYRICS')
+            audio.pop(tag_name, None)  # None is the default if key doesn't exist
             audio['UNSYNCEDLYRICS'] = value
         else:
             # For custom fields, use the field name as tag

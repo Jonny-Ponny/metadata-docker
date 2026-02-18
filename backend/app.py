@@ -3,15 +3,22 @@ import shutil
 from metadata_extractor import *
 from metadata_writer import *
 
-from flask import Flask, jsonify, request, send_file, abort
-
-# MUSIC_FOLDER = '/music'
-MUSIC_FOLDER = 'D:\\Music' # Development
-
-PORT = int(os.getenv('PORT', 5000))
-DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes', 'on')
+from flask import Flask, jsonify, request, send_file, abort, send_from_directory
 
 app = Flask(__name__, static_folder='static', static_url_path='')
+
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes', 'on') # Debug
+PORT = int(os.getenv('CONTAINER_PORT', 5000))                            # Container port
+HOST_PORT = os.getenv('HOST_PORT')                                       # Host port, only for info
+MUSIC_FOLDER = '/music'
+
+print('\n')
+print('==============================================================================================')
+print('\n')
+
+print(f'Debug set to {DEBUG}')
+print(f'Host port set to {HOST_PORT}')
+print(f'Container port set to {PORT}')
 
 def build_tree(current_path, relative_path):
     items = []
@@ -649,6 +656,14 @@ def delete_cover_art():
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+# Serve Svelte frontend
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG)

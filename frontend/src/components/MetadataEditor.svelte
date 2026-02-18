@@ -81,8 +81,8 @@
         if (!filePath) return;
 
         try {
-            const URL = `http://localhost:5000/api/metadata/file`; // development
-            // const URL = `/api/metadata/file`; // build
+            // const URL = `http://localhost:5000/api/metadata/file`; // development
+            const URL = `/api/metadata/file`; // build
 
             const response = await fetch(URL, {
                 method: "POST",
@@ -121,8 +121,8 @@
         try {
             // Choose endpoint based on whether to include subfolders
             const endpoint = applyToSubfolders ? "folder" : "folder/current";
-            const URL = `http://localhost:5000/api/metadata/${endpoint}`; // development
-            // const URL = `/api/metadata/${endpoint}`; // build
+            // const URL = `http://localhost:5000/api/metadata/${endpoint}`; // development
+            const URL = `/api/metadata/${endpoint}`; // build
 
             const response = await fetch(URL, {
                 method: "POST",
@@ -156,8 +156,8 @@
         if (!path) return;
 
         try {
-            const URL = `http://localhost:5000/api/metadata?path=${encodeURIComponent(path)}`; // development
-            // const URL = `/api/metadata?path=${encodeURIComponent(path)}`; // build
+            // const URL = `http://localhost:5000/api/metadata?path=${encodeURIComponent(path)}`; // development
+            const URL = `/api/metadata?path=${encodeURIComponent(path)}`; // build
             const response = await fetch(URL);
 
             if (!response.ok) {
@@ -287,8 +287,8 @@
                     : "folder/current"
                 : "file";
 
-            const URL = `http://localhost:5000/api/metadata/picture/${endpoint}`; // development
-            // const URL = `/api/metadata/picture/${endpoint}`; // build
+            // const URL = `http://localhost:5000/api/metadata/picture/${endpoint}`; // development
+            const URL = `/api/metadata/picture/${endpoint}`; // build
 
             const response = await fetch(URL, {
                 method: "POST",
@@ -355,8 +355,8 @@
         if (!filePath || !field) return;
 
         try {
-            const URL = `http://localhost:5000/api/metadata/field/delete`; // development
-            // const URL = `/api/metadata/field/delete`; // build
+            // const URL = `http://localhost:5000/api/metadata/field/delete`; // development
+            const URL = `/api/metadata/field/delete`; // build
 
             const response = await fetch(URL, {
                 method: "POST",
@@ -403,8 +403,8 @@
         }
 
         try {
-            const URL = `http://localhost:5000/api/metadata/picture/delete`; // development
-            // const URL = `/api/metadata/picture/delete`; // build
+            // const URL = `http://localhost:5000/api/metadata/picture/delete`; // development
+            const URL = `/api/metadata/picture/delete`; // build
 
             const response = await fetch(URL, {
                 method: "POST",

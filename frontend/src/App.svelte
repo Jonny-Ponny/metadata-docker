@@ -382,8 +382,8 @@
 
     try {
       console.log("Sending fetch for", originalFilename);
-      const api_url = "http://localhost:5000/api/upload"; // development
-      // const api_url = "/api/upload"; // build
+      // const api_url = "http://localhost:5000/api/upload"; // development
+      const api_url = "/api/upload"; // build
       const response = await fetch(api_url, {
         method: "POST",
         body: formData,
@@ -429,8 +429,8 @@
   }
 
   async function createDirectory(path) {
-    const api_url = "http://localhost:5000/api/mkdir"; // development
-    // const api_url = '/api/mkdir'; // build
+    // const api_url = "http://localhost:5000/api/mkdir"; // development
+    const api_url = '/api/mkdir'; // build
     const response = await fetch(api_url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -463,8 +463,8 @@
     isLoading = true;
     error = "";
     try {
-      const api_url = "http://localhost:5000/api/files"; // development
-      // const api_url = "/api/files"; // build
+      // const api_url = "http://localhost:5000/api/files"; // development
+      const api_url = "/api/files"; // build
       const res = await fetch(api_url);
       if (!res.ok) {
         const text = await res.text();
@@ -513,8 +513,8 @@
         URL.revokeObjectURL(audioFile.url);
       }
 
-      const url = `http://localhost:5000/api/audio?path=${encodeURIComponent(filePath)}`; // development
-      // const url = `/api/audio?path=${encodeURIComponent(filePath)}`; // build
+      // const url = `http://localhost:5000/api/audio?path=${encodeURIComponent(filePath)}`; // development
+      const url = `/api/audio?path=${encodeURIComponent(filePath)}`; // build
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -644,8 +644,8 @@
   // ========== RENAME & DELETE HANDLERS ==========
   async function handleRename(oldPath, newName) {
     try {
-      const api_url = "http://localhost:5000/api/rename"; // development
-      // const api_url = "api/rename" // build
+      // const api_url = "http://localhost:5000/api/rename"; // development
+      const api_url = "/api/rename" // build
       const res = await fetch(api_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -678,8 +678,8 @@
 
   async function handleDelete(path) {
     try {
-      const api_url = "http://localhost:5000/api/delete"; // development
-      // const api_url = "/api/delete" // build
+      // const api_url = "http://localhost:5000/api/delete"; // development
+      const api_url = "/api/delete" // build
       const res = await fetch(api_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -709,8 +709,8 @@
 
   async function handleMove(sourcePath, destFolderPath) {
     try {
-      const api_url = "http://localhost:5000/api/move"; // development
-      // const api_url = "/api/move"; // build
+      // const api_url = "http://localhost:5000/api/move"; // development
+      const api_url = "/api/move"; // build
       const res = await fetch(api_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -735,8 +735,8 @@
   async function handleCreateFolder(parentPath, baseName = "New Folder") {
     try {
       const desiredPath = parentPath ? `${parentPath}/${baseName}` : baseName;
-      const api_url = "http://localhost:5000/api/mkdir"; // development
-      // const api_url = "/api/mkdir";  // build
+      // const api_url = "http://localhost:5000/api/mkdir"; // development
+      const api_url = "/api/mkdir";  // build
 
       const res = await fetch(api_url, {
         method: "POST",
@@ -759,8 +759,8 @@
 
   async function handleCopyItem(path) {
     try {
-      const api_url = "http://localhost:5000/api/copy"; // development
-      // const api_url = "/api/copy" // build
+      // const api_url = "http://localhost:5000/api/copy"; // development
+      const api_url = "/api/copy" // build
       const res = await fetch(api_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
