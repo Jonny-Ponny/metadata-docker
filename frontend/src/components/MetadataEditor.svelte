@@ -71,15 +71,77 @@
         customFieldEditing = [...customFieldEditing, false];
     }
 
-    // Placeholder action handlers
-    function applyToFile(field, value) {
-        console.log(`Apply to file: ${field} = ${value}`);
-        toast.success(`Updated ${field} for this file`);
+    async function applyToFile(field, value) {
+        if (!filePath) return;
+
+        try {
+            const URL = `http://localhost:5000/api/metadata/file`; // development
+            // const URL = `/api/metadata/file`; // build
+
+            const response = await fetch(URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    path: filePath,
+                    field: field,
+                    value: value,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Failed to update metadata");
+            }
+
+            toast.success(`Updated ${field} for this file`);
+
+            // Refresh metadata to show any changes
+            await fetchMetadata(filePath);
+        } catch (error) {
+            console.error("Error updating metadata:", error);
+            toast.error(`Failed to update: ${error.message}`);
+        }
     }
 
-    function applyToFolder(field, value) {
-        console.log(`Apply to folder: ${field} = ${value}`);
-        toast.success(`Updated ${field} for all files in folder`);
+    async function applyToFolder(field, value) {
+        if (!filePath) return;
+
+        // Get the folder path from the file path
+        const folderPath = filePath.split("/").slice(0, -1).join("/");
+
+        try {
+            const URL = `http://localhost:5000/api/metadata/folder`; // development
+            // const URL = `/api/metadata/folder`; // build
+
+            const response = await fetch(URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    path: folderPath || "", // empty string for root
+                    field: field,
+                    value: value,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Failed to update folder");
+            }
+
+            toast.success(result.message || `Updated folder: ${field}`);
+
+            // Refresh current file's metadata in case it was updated
+            await fetchMetadata(filePath);
+        } catch (error) {
+            console.error("Error updating folder:", error);
+            toast.error(`Failed to update folder: ${error.message}`);
+        }
     }
 
     async function fetchMetadata(path) {

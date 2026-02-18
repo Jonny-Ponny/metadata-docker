@@ -1,6 +1,8 @@
 import os
 import shutil
 from metadata_extractor import *
+from metadata_writer import update_file_metadata, update_folder_metadata
+
 from flask import Flask, jsonify, request, send_file, abort
 
 # MUSIC_FOLDER = '/music'
@@ -93,9 +95,68 @@ def get_metadata():
 
 # POST /api/metadata/file
 # Update a single metadata field for one file
+@app.route('/api/metadata/file', methods=['POST'])
+def update_single_file():
+    data = request.get_json()
+    file_path = data.get('path')
+    field = data.get('field')
+    value = data.get('value')
+    
+    if not file_path or not field:
+        return jsonify({'error': 'Missing path or field'}), 400
+    
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Only process mp3 and flac files
+        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+            return jsonify({'error': 'Unsupported file format'}), 400
+        
+        success = update_file_metadata(full_path, field, value)
+        if success:
+            return jsonify({'success': True, 'message': f'Updated {field} for {os.path.basename(file_path)}'})
+        else:
+            return jsonify({'error': 'Failed to update metadata'}), 500
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # POST /api/metadata/folder
 # Update a single metadata field for all files in a folder
+@app.route('/api/metadata/folder', methods=['POST'])
+def update_folder_files():
+    data = request.get_json()
+    folder_path = data.get('path')
+    field = data.get('field')
+    value = data.get('value')
+    
+    if not folder_path or not field:
+        return jsonify({'error': 'Missing path or field'}), 400
+    
+    try:
+        full_path = safe_path(folder_path)
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+        
+        # Only process mp3 and flac files in the folder
+        results = update_folder_metadata(full_path, field, value)
+        
+        return jsonify({
+            'success': True, 
+            'updated': results['updated'],
+            'failed': results['failed'],
+            'total': results['total'],
+            'message': f"Updated {results['updated']} of {results['total']} files"
+        })
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/audio')
 def serve_audio():
