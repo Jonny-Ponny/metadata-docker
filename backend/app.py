@@ -20,21 +20,28 @@ def build_tree(current_path, relative_path):
             rel = os.path.join(relative_path, entry).replace('\\', '/')
             if os.path.isdir(full):
                 children = build_tree(full, rel)
+                # Get directory stats
+                stat = os.stat(full)
                 items.append({
                     'name': entry,
                     'type': 'directory',
                     'path': rel,
-                    'children': children
+                    'children': children,
+                    'created': stat.st_ctime,  # Creation time
+                    'modified': stat.st_mtime,  # Modified time
+                    'size': 0  # Directories size as 0 for sorting
                 })
             elif os.path.isfile(full) and entry.lower().endswith(('.mp3', '.flac')):
+                stat = os.stat(full)
                 items.append({
                     'name': entry,
                     'type': 'file',
                     'path': rel,
-                    'size': os.path.getsize(full)
+                    'size': stat.st_size,
+                    'created': stat.st_ctime,
+                    'modified': stat.st_mtime
                 })
         
-        items.sort(key=lambda x: x['name'].lower())
     except PermissionError:
         pass  # skip folders we can't read
 

@@ -1,12 +1,21 @@
 <!-- src/App.svelte -->
 <script>
+  import { onMount } from "svelte";
+
   import ToastContainer from "./components/ToastContainer.svelte";
   import TreeNode from "./components/TreeNode.svelte";
   import MetadataEditor from "./components/MetadataEditor.svelte";
   import Player from "./components/Player.svelte";
+  import SortButton from "./components/SortButton.svelte";
 
-  import { theme, toast, toggleTheme } from "./utils/index.js";
-  import { renamingPath } from "./utils/index.js";
+  import {
+    sortItems,
+    sortConfig,
+    theme,
+    toast,
+    toggleTheme,
+    renamingPath,
+  } from "./utils/index.js";
 
   import "./app.css";
 
@@ -42,6 +51,14 @@
   let dragOverElement = $state(null); // Track which element is being hovered
   let isUploading = $state(false);
   let hoverTimer = null;
+
+  // Derived store for sorted tree data
+  let sortedTreeData = $derived(
+    sortItems(treeData, $sortConfig.by, $sortConfig.direction),
+  );
+
+  // Ref for the file tree container
+  let fileTreeContainer = $state(null);
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
@@ -447,8 +464,7 @@
     error = "";
     try {
       const api_url = "http://localhost:5000/api/files"; // development
-      // const api_url = "/api/files" // build
-
+      // const api_url = "/api/files"; // build
       const res = await fetch(api_url);
       if (!res.ok) {
         const text = await res.text();
@@ -463,13 +479,7 @@
       }
       treeData = await res.json();
 
-      // Auto-expand root directories (optional)
-      // treeData.forEach(item => {
-      //   if (item.type === 'directory') {
-      //     expandedDirs.add(item.path);
-      //   }
-      // });
-      // expandedDirs = new Set(expandedDirs);
+      // Initial sort will be applied by the TreeNode components via the store
     } catch (e) {
       error = e.message;
       toast.error(`Failed to load files: ${error}`);
@@ -766,6 +776,65 @@
       toast.error(`Copy failed: ${e.message}`);
     }
   }
+
+  // Function to scroll selected item into view
+  function scrollSelectedIntoView() {
+    if (!selectedFile && !selectedFolder) return;
+
+    const selectedPath = selectedFile || selectedFolder;
+
+    // Use a combination of techniques
+    const tryScroll = (attempt = 0) => {
+      if (attempt > 5) return; // Max 5 attempts
+
+      const selector = selectedFile
+        ? `[data-file-path="${selectedPath}"]`
+        : `[data-folder-path="${selectedPath}"]`;
+
+      const element = document.querySelector(selector);
+
+      if (element && fileTreeContainer) {
+        // Force scroll regardless of position
+        element.scrollIntoView({
+          block: "center",
+          inline: "nearest",
+        });
+      } else {
+        // Element not found yet, try again
+        setTimeout(() => tryScroll(attempt + 1), 50 * (attempt + 1));
+      }
+    };
+
+    // Start trying
+    setTimeout(() => tryScroll(), 50);
+  }
+
+  // Watch for sort config changes
+  $effect(() => {
+    if ($sortConfig) {
+      // When sort changes, scroll selected item into view
+      scrollSelectedIntoView();
+    }
+  });
+
+  // Also watch for selection changes
+  $effect(() => {
+    if (selectedFile || selectedFolder) {
+      scrollSelectedIntoView();
+    }
+  });
+
+  // Watch for tree data changes (after refresh, upload, etc.)
+  $effect(() => {
+    if (treeData.length > 0) {
+      scrollSelectedIntoView();
+    }
+  });
+
+  onMount(() => {
+    // Initial scroll if something is selected
+    scrollSelectedIntoView();
+  });
 </script>
 
 <div
@@ -834,6 +903,7 @@
               Loading...
             </div>
           {/if}
+          <SortButton />
           <button
             class="refresh-btn"
             onclick={loadFileTree}
@@ -891,7 +961,7 @@
             <button class="retry-btn" onclick={loadFileTree}>Retry</button>
           </div>
         {:else}
-          <div class="file-tree-container">
+          <div class="file-tree-container" bind:this={fileTreeContainer}>
             {#if treeData.length === 0}
               <div class="empty-state">
                 <svg
@@ -911,7 +981,7 @@
             {:else}
               <!-- Update TreeNode usage to pass folder path data attributes -->
               <ul class="file-tree">
-                {#each treeData as item (item.path)}
+                {#each sortedTreeData as item (item.path)}
                   <TreeNode
                     {item}
                     expanded={expandedDirs}

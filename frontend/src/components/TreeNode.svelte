@@ -4,7 +4,12 @@
     // @ts-ignore
     import Self from "./TreeNode.svelte";
 
-    import { contextMenu, renamingPath } from "../utils/index.js";
+    import {
+        contextMenu,
+        renamingPath,
+        sortItems,
+        sortConfig,
+    } from "../utils/index.js";
 
     let {
         item,
@@ -24,6 +29,13 @@
     // Input state
     let inputRef = $state(null);
     let newName = $derived(item.name);
+
+    // Derived sorted children
+    let sortedChildren = $derived(
+        item.children
+            ? sortItems(item.children, $sortConfig.by, $sortConfig.direction)
+            : [],
+    );
 
     function handleDirectoryClick() {
         selectFolder(item.path); // Select the folder
@@ -214,7 +226,7 @@
         </div>
         {#if expanded.has(item.path) && item.children?.length}
             <ul>
-                {#each item.children as child (child.path)}
+                {#each sortedChildren as child (child.path)}
                     <Self
                         item={child}
                         {expanded}

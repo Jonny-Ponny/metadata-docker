@@ -7,3 +7,4 @@ export * from "../stores/context.store"
 
 // utils
 export * from "./timestamp.utils"
+export * from "./sort.utils"

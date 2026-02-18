@@ -1,3 +1,5 @@
+// src/utils/timestamp.utils.js
+
 /**
  * Format time for display (MM:SS)
  * @param {number} seconds - Time in seconds
