@@ -47,16 +47,25 @@
     e.preventDefault();
     e.stopPropagation();
 
-    dragCounter++;
-    if (dragCounter === 1) {
-      isDragging = true;
+    // Only treat as external if the drag contains files
+    if (e.dataTransfer.types.includes("Files")) {
+      dragCounter++;
+      if (dragCounter === 1) {
+        isDragging = true;
+      }
     }
   }
 
   function handleDragOver(e) {
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = "copy";
+
+    // Determine if this is an internal drag (our custom data type present)
+    const types = e.dataTransfer.types;
+    const isInternal = types.includes("application/x-music-player-item");
+
+    // Set drop effect: move for internal, copy for external uploads
+    e.dataTransfer.dropEffect = isInternal ? "move" : "copy";
 
     const newTarget = e.target.closest("[data-folder-path], [data-file-path]");
 
@@ -96,21 +105,24 @@
     e.preventDefault();
     e.stopPropagation();
 
-    // Clear the expansion timer
+    // Clear expansion timer
     if (hoverTimer) {
       clearTimeout(hoverTimer);
       hoverTimer = null;
     }
 
-    // Remove drag-target class when leaving
+    // Remove drag-target class
     if (dragOverElement) {
       dragOverElement.classList.remove("drag-target");
       dragOverElement = null;
     }
 
-    dragCounter--;
-    if (dragCounter === 0) {
-      isDragging = false;
+    // Only decrement counter for file drags
+    if (e.dataTransfer.types.includes("Files")) {
+      dragCounter--;
+      if (dragCounter === 0) {
+        isDragging = false;
+      }
     }
   }
 
@@ -124,6 +136,55 @@
       hoverTimer = null;
     }
 
+    // Remove drag-target class
+    if (dragOverElement) {
+      dragOverElement.classList.remove("drag-target");
+      dragOverElement = null;
+    }
+
+    // --- Check for internal move first ---
+    const internalData = e.dataTransfer.getData(
+      "application/x-music-player-item",
+    );
+    if (internalData) {
+      try {
+        const { path: sourcePath, type } = JSON.parse(internalData);
+
+        // Determine target folder (same logic as for uploads)
+        let targetFolder = "";
+        const dropTarget = e.target.closest("[data-folder-path]");
+        if (dropTarget) {
+          targetFolder = dropTarget.dataset.folderPath;
+        } else {
+          const fileTarget = e.target.closest("[data-file-path]");
+          if (fileTarget) {
+            targetFolder = fileTarget.dataset.folderPath;
+          }
+          // else targetFolder remains '' (root)
+        }
+
+        // Prevent moving to itself
+        if (targetFolder === sourcePath) {
+          toast.warning("Cannot move an item into itself");
+          return;
+        }
+
+        // Prevent moving a folder into its own subfolder (would create a cycle)
+        if (type === "directory" && targetFolder.startsWith(sourcePath + "/")) {
+          toast.warning("Cannot move a folder into its own subfolder");
+          return;
+        }
+
+        // Perform the move
+        handleMove(sourcePath, targetFolder);
+        return; // Done, exit drop handler
+      } catch (err) {
+        toast.error(`Internal move error: ${err.message}`);
+        return;
+      }
+    }
+
+    // --- Existing external upload logic ---
     if (isUploading) {
       toast.warning("Upload in progress. Please wait.");
       return;
@@ -605,6 +666,31 @@
       toast.success("Deleted successfully");
     } catch (e) {
       toast.error(`Delete failed: ${e.message}`);
+    }
+  }
+
+  async function handleMove(sourcePath, destFolderPath) {
+    try {
+      const api_url = "http://localhost:5000/api/move"; // development
+      // const api_url = "/api/move"; // build
+      const res = await fetch(api_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: sourcePath,
+          destination: destFolderPath,
+        }),
+      });
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error);
+      }
+      const data = await res.json();
+      toast.success("Moved successfully");
+      // Reload tree to reflect changes
+      await loadFileTree();
+    } catch (e) {
+      toast.error(`Move failed: ${e.message}`);
     }
   }
 </script>

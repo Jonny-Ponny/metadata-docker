@@ -250,5 +250,57 @@ def delete_item():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Endpoint to move files/folders    
+@app.route('/api/move', methods=['POST'])
+def move_item():
+    """Move a file or folder to a new destination folder."""
+    data = request.get_json()
+    source = data.get('source')
+    destination = data.get('destination')  # destination folder path (empty = root)
+
+    if not source or destination is None:
+        return jsonify({'error': 'Missing source or destination'}), 400
+
+    try:
+        source_full = safe_path(source)
+        if not os.path.exists(source_full):
+            return jsonify({'error': 'Source not found'}), 404
+
+        # Build destination full path
+        if destination:
+            dest_full = safe_path(destination)
+            if not os.path.isdir(dest_full):
+                return jsonify({'error': 'Destination is not a directory or does not exist'}), 400
+        else:
+            dest_full = MUSIC_FOLDER
+
+        # New full path: destination + basename of source
+        new_full = os.path.join(dest_full, os.path.basename(source_full))
+
+        # Prevent directory traversal
+        if not new_full.startswith(MUSIC_FOLDER):
+            return jsonify({'error': 'Invalid destination'}), 400
+
+        # If source is a directory, ensure destination is not inside source
+        if os.path.isdir(source_full):
+            if new_full.startswith(source_full + os.sep):
+                return jsonify({'error': 'Cannot move a folder into its own subfolder'}), 400
+
+        # Handle name conflict
+        if os.path.exists(new_full):
+            return jsonify({'error': 'An item with that name already exists in the destination'}), 409
+
+        # Perform the move
+        shutil.move(source_full, new_full)
+
+        # Return the new relative path
+        new_rel = os.path.relpath(new_full, MUSIC_FOLDER).replace('\\', '/')
+        return jsonify({'success': True, 'newPath': new_rel})
+
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG)

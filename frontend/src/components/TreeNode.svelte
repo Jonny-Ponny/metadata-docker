@@ -91,6 +91,20 @@
         renamingPath.set(null);
     }
 
+    function handleDragStart(e) {
+        // Store item info for internal move
+        const itemData = {
+            path: item.path,
+            type: item.type,
+            name: item.name,
+        };
+        e.dataTransfer.setData(
+            "application/x-music-player-item",
+            JSON.stringify(itemData),
+        );
+        e.dataTransfer.effectAllowed = "move";
+    }
+
     // Reset newName when entering rename mode for this item
     $effect(() => {
         if ($renamingPath === item.path) {
@@ -119,6 +133,8 @@
                 handleContextMenu(e);
             }}
             data-folder-path={item.path}
+            draggable="true"
+            ondragstart={handleDragStart}
         >
             <span class="toggle">
                 {#if expanded.has(item.path)}
@@ -199,8 +215,8 @@
             </ul>
         {/if}
         {#if $contextMenu.isOpen && $contextMenu.path === item.path}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
                 id={`context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`}
                 class="context-menu"
@@ -267,6 +283,8 @@
                 0,
                 item.path.lastIndexOf("/"),
             )}
+            draggable="true"
+            ondragstart={handleDragStart}
         >
             <span class="file-icon">
                 <!-- File icon -->

@@ -63,7 +63,7 @@ def extract_metadata(filepath):
         'artist': ['TPE1', 'ARTIST'],
         'track': ['TRCK', 'TRACKNUMBER'],
         'disk': ['TPOS', 'DISCNUMBER'],
-        'year': ['TDRC', 'TDRL', 'TYER', 'DATE', 'YEAR'],
+        'year': ['TDRC', 'TDRL', 'TYER', 'DATE', 'ORIGINALYEAR'],
         'genre': ['TCON', 'GENRE'],
         'comment': ['COMM', 'COMMENT'],
         'description': ['DESCRIPTION'],
