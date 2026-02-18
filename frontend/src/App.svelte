@@ -597,6 +597,11 @@
 
   // Keydown
   function handleKeyDown(e) {
+    if ($renamingPath) {
+      // Let the rename input handle the keys
+      return;
+    }
+
     if (e.key === "F2" && selectedFile) {
       e.preventDefault();
       renamingPath.set(selectedFile);
