@@ -693,6 +693,31 @@
       toast.error(`Move failed: ${e.message}`);
     }
   }
+
+  async function handleCreateFolder(parentPath, baseName = "New Folder") {
+    try {
+      const desiredPath = parentPath ? `${parentPath}/${baseName}` : baseName;
+      const api_url = "http://localhost:5000/api/mkdir"; // development
+      // const api_url = "/api/mkdir";  // build
+
+      const res = await fetch(api_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: desiredPath }),
+      });
+
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error);
+      }
+
+      const data = await res.json();
+      toast.success(`Folder created: ${data.path}`);
+      await loadFileTree(); // refresh the tree to show the new folder
+    } catch (e) {
+      toast.error(`Create folder failed: ${e.message}`);
+    }
+  }
 </script>
 
 <div
@@ -849,6 +874,7 @@
                     {selectedFile}
                     onRename={handleRename}
                     onDelete={handleDelete}
+                    onCreateFolder={handleCreateFolder}
                   />
                 {/each}
               </ul>

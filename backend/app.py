@@ -16,7 +16,8 @@ def build_tree(current_path, relative_path):
     try:
         for entry in os.listdir(current_path):
             full = os.path.join(current_path, entry)
-            rel = os.path.join(relative_path, entry) if relative_path else entry
+            # Normalize to forward slashes
+            rel = os.path.join(relative_path, entry).replace('\\', '/')
             if os.path.isdir(full):
                 children = build_tree(full, rel)
                 items.append({
@@ -180,17 +181,28 @@ def upload_file():
 # Endpoint to create directories
 @app.route('/api/mkdir', methods=['POST'])
 def create_directory():
-    """Create a new directory"""
+    """Create a new directory. If the path already exists, generate a unique name."""
     data = request.get_json()
-    dir_path = data.get('path', '')
-    
-    if not dir_path:
+    desired_path = data.get('path', '')
+    if not desired_path:
         return jsonify({'error': 'No path provided'}), 400
-    
+
     try:
-        full_path = safe_path(dir_path)
-        os.makedirs(full_path, exist_ok=True)
-        return jsonify({'success': True, 'path': dir_path})
+        full_path = safe_path(desired_path)
+        # If it exists, append a number in parentheses until a free name is found
+        if os.path.exists(full_path):
+            base = full_path
+            counter = 1
+            while os.path.exists(full_path):
+                full_path = f"{base} ({counter})"
+                counter += 1
+
+        os.makedirs(full_path, exist_ok=False)  # now it definitely doesn't exist
+        rel_path = os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/')
+        return jsonify({'success': True, 'path': rel_path})
+
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     

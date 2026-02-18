@@ -17,6 +17,7 @@
         level = 0,
         onRename,
         onDelete,
+        onCreateFolder,
     } = $props();
 
     // Input state
@@ -115,6 +116,20 @@
             }
         }
     });
+
+    function handleCreateFolder() {
+        let parentPath;
+        if (item.type === "directory") {
+            parentPath = item.path; // create inside this folder
+        } else {
+            // file – use its parent directory
+            parentPath = item.path.substring(0, item.path.lastIndexOf("/"));
+            // if no slash, parentPath becomes '' (root)
+        }
+        onCreateFolder(parentPath);
+        // close the context menu
+        contextMenu.update((curr) => ({ ...curr, isOpen: false }));
+    }
 </script>
 
 {#if item.type === "directory"}
@@ -210,6 +225,7 @@
                         level={level + 1}
                         {onRename}
                         {onDelete}
+                        {onCreateFolder}
                     />
                 {/each}
             </ul>
@@ -226,6 +242,8 @@
                 <ul>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={handleCreateFolder}>Create folder</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li
                         onclick={() => {
@@ -350,6 +368,8 @@
                 <ul>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={handleCreateFolder}>Create folder</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li
                         onclick={() => {
