@@ -286,22 +286,39 @@
     <!-- Get filename from path -->
     {@const filename = item.path.split(/[\\/]/).pop()}
     <!-- Get format from file extension -->
+    {@const fileExt = filename.split(".").pop().toLowerCase()}
+    {@const isImage =
+        item.file_type === "image" ||
+        [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"].includes(
+            "." + fileExt,
+        )}
     {@const format = (() => {
-        const ext = filename.split(".").pop().toLowerCase();
-        const formatMap = {
-            mp3: "MP3",
-            flac: "FLAC",
-            wav: "WAV",
-            aac: "AAC",
-            ogg: "OGG",
-            m4a: "M4A",
-            wma: "WMA",
-            opus: "OPUS",
-            ape: "APE",
-            dsf: "DSF",
-            dff: "DFF",
-        };
-        return formatMap[ext] || ext.toUpperCase();
+        if (isImage) {
+            const imageFormatMap = {
+                jpg: "JPG",
+                jpeg: "JPEG",
+                png: "PNG",
+                gif: "GIF",
+                bmp: "BMP",
+                webp: "WEBP",
+            };
+            return imageFormatMap[fileExt] || fileExt.toUpperCase();
+        } else {
+            const audioFormatMap = {
+                mp3: "MP3",
+                flac: "FLAC",
+                wav: "WAV",
+                aac: "AAC",
+                ogg: "OGG",
+                m4a: "M4A",
+                wma: "WMA",
+                opus: "OPUS",
+                ape: "APE",
+                dsf: "DSF",
+                dff: "DFF",
+            };
+            return audioFormatMap[fileExt] || fileExt.toUpperCase();
+        }
     })()}
 
     <li>
@@ -313,7 +330,17 @@
             class:indented={level > 0}
             class:selected={item.path === selectedFile}
             style="--level: {level}"
-            onclick={handleFileClick}
+            onclick={() => {
+                if (isImage) {
+                    // Dispatch custom event for image selection
+                    const event = new CustomEvent("selectImage", {
+                        detail: { path: item.path },
+                    });
+                    window.dispatchEvent(event);
+                } else {
+                    selectFile(item.path);
+                }
+            }}
             oncontextmenu={(e) => {
                 e.preventDefault();
                 handleContextMenu(e);
@@ -327,7 +354,7 @@
             ondragstart={handleDragStart}
         >
             <span class="file-icon">
-                <!-- File icon -->
+                <!-- File icon - same for both, just different color maybe -->
                 <svg
                     width="14"
                     height="16"
@@ -369,13 +396,17 @@
             {:else}
                 <span class="name">{filename}</span>
                 <span class="file-info">
-                    <span class="format">{format}</span>
+                    <span class="format" class:image-format={isImage}
+                        >{format}</span
+                    >
                     <span class="size"
                         >({(item.size / 1024).toFixed(0)} KB)</span
                     >
                 </span>
             {/if}
         </div>
+
+        <!-- Context menu -->
         {#if $contextMenu.isOpen && $contextMenu.path === item.path}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -391,13 +422,7 @@
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                    <li
-                        onclick={() => {
-                            onCopy(item.path);
-                        }}
-                    >
-                        Copy
-                    </li>
+                    <li onclick={() => onCopy(item.path)}>Copy</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -476,7 +501,7 @@
         background: rgba(253, 125, 5, 0.1);
         border-radius: 4px;
         text-transform: uppercase;
-        min-width: 45px; /* Gives a minimum width for consistency */
+        min-width: 50px; /* Gives a minimum width for consistency */
         text-align: center; /* Centers the text within the badge */
     }
 
@@ -546,6 +571,12 @@
         color: #333;
     }
 
+    .file .format.image-format {
+        background: rgba(100, 100, 255, 0.15);
+        min-width: 50px;
+        color: #6666ff;
+    }
+
     /* Dark mode overrides */
     :global(body.dark) .directory .name,
     :global(body.dark) .file .name {
@@ -600,5 +631,11 @@
         background: #3d3d3d;
         color: #e0e0e0;
         border-color: #ff9f4b;
+    }
+
+    /* Dark mode override */
+    :global(body.dark) .file .format.image-format {
+        background: rgba(100, 100, 255, 0.2);
+        color: #8888ff;
     }
 </style>

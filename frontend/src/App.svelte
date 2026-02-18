@@ -7,6 +7,7 @@
   import MetadataEditor from "./components/MetadataEditor.svelte";
   import Player from "./components/Player.svelte";
   import SortButton from "./components/SortButton.svelte";
+  import ImageViewer from "./components/ImageViewer.svelte";
 
   import {
     sortItems,
@@ -59,6 +60,8 @@
 
   // Ref for the file tree container
   let fileTreeContainer = $state(null);
+
+  let selectedImage = $state(null);
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
@@ -428,7 +431,7 @@
   }
 
   async function createDirectory(path) {
-    const api_url = '/api/mkdir'; // build
+    const api_url = "/api/mkdir"; // build
     const response = await fetch(api_url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -499,6 +502,7 @@
   function selectFile(path) {
     selectedFile = path;
     selectedFolder = null; // Clear folder selection
+    selectedImage = null;
 
     loadAudioFile(path);
   }
@@ -552,7 +556,8 @@
   // Function to handle folder selection
   function selectFolder(path) {
     selectedFolder = path;
-    selectedFile = null; // Clear file selection
+    selectedFile = null;
+    selectedImage = null;
   }
 
   function handleTimeUpdate(time) {
@@ -640,7 +645,7 @@
   // ========== RENAME & DELETE HANDLERS ==========
   async function handleRename(oldPath, newName) {
     try {
-      const api_url = "/api/rename" // build
+      const api_url = "/api/rename"; // build
       const res = await fetch(api_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -673,7 +678,7 @@
 
   async function handleDelete(path) {
     try {
-      const api_url = "/api/delete" // build
+      const api_url = "/api/delete"; // build
       const res = await fetch(api_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -728,7 +733,7 @@
   async function handleCreateFolder(parentPath, baseName = "New Folder") {
     try {
       const desiredPath = parentPath ? `${parentPath}/${baseName}` : baseName;
-      const api_url = "/api/mkdir";  // build
+      const api_url = "/api/mkdir"; // build
 
       const res = await fetch(api_url, {
         method: "POST",
@@ -751,8 +756,7 @@
 
   async function handleCopyItem(path) {
     try {
-
-      const api_url = "/api/copy" // build
+      const api_url = "/api/copy"; // build
       const res = await fetch(api_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -828,9 +832,28 @@
     }
   });
 
+  function selectImage(path) {
+    selectedImage = path;
+    selectedFile = null;
+    selectedFolder = null;
+  }
+
   onMount(() => {
     // Initial scroll if something is selected
     scrollSelectedIntoView();
+    window.addEventListener("selectImage", (e) => {
+      // @ts-ignore
+      selectImage(e.detail.path);
+    });
+
+    scrollSelectedIntoView();
+
+    return () => {
+      window.removeEventListener("selectImage", (e) => {
+        // @ts-ignore
+        selectImage(e.detail.path);
+      });
+    };
   });
 </script>
 
@@ -1011,13 +1034,21 @@
     <!-- Right Panel - Metadata Editing -->
     <div class="panel right-panel" style="width: {100 - leftPanelWidth}%;">
       <div class="panel-header">
-        <h3>Metadata Editor</h3>
+        <h3>
+          {#if selectedImage}
+            Image Viewer
+          {:else if selectedFile}
+            Metadata Editor
+          {:else}
+            File Viewer
+          {/if}
+        </h3>
       </div>
 
       <div class="panel-content">
-        <!-- TODO: Add metadata editing components -->
-
-        {#if selectedFile}
+        {#if selectedImage}
+          <ImageViewer filePath={selectedImage} />
+        {:else if selectedFile}
           <MetadataEditor filePath={selectedFile} />
         {:else}
           <div class="empty-state">
@@ -1037,7 +1068,7 @@
               <line x1="16" y1="17" x2="8" y2="17" />
               <polyline points="10 9 9 9 8 9" />
             </svg>
-            <p>Select a file to edit metadata</p>
+            <p>Select a file to view or edit</p>
           </div>
         {/if}
       </div>

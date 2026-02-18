@@ -1,5 +1,6 @@
 import os
 import shutil
+import re
 from metadata_extractor import *
 from metadata_writer import *
 
@@ -25,34 +26,47 @@ def build_tree(current_path, relative_path):
     try:
         for entry in os.listdir(current_path):
             full = os.path.join(current_path, entry)
-            # Normalize to forward slashes
             rel = os.path.join(relative_path, entry).replace('\\', '/')
             if os.path.isdir(full):
                 children = build_tree(full, rel)
-                # Get directory stats
                 stat = os.stat(full)
                 items.append({
                     'name': entry,
                     'type': 'directory',
                     'path': rel,
                     'children': children,
-                    'created': stat.st_ctime,  # Creation time
-                    'modified': stat.st_mtime,  # Modified time
-                    'size': 0  # Directories size as 0 for sorting
-                })
-            elif os.path.isfile(full) and entry.lower().endswith(('.mp3', '.flac')):
-                stat = os.stat(full)
-                items.append({
-                    'name': entry,
-                    'type': 'file',
-                    'path': rel,
-                    'size': stat.st_size,
                     'created': stat.st_ctime,
-                    'modified': stat.st_mtime
+                    'modified': stat.st_mtime,
+                    'size': 0
                 })
+            elif os.path.isfile(full):
+                # Check for audio files
+                if entry.lower().endswith(('.mp3', '.flac')):
+                    stat = os.stat(full)
+                    items.append({
+                        'name': entry,
+                        'type': 'file',
+                        'file_type': 'audio',
+                        'path': rel,
+                        'size': stat.st_size,
+                        'created': stat.st_ctime,
+                        'modified': stat.st_mtime
+                    })
+                # Check for image files
+                elif entry.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')):
+                    stat = os.stat(full)
+                    items.append({
+                        'name': entry,
+                        'type': 'file',
+                        'file_type': 'image',
+                        'path': rel,
+                        'size': stat.st_size,
+                        'created': stat.st_ctime,
+                        'modified': stat.st_mtime
+                    })
         
     except PermissionError:
-        pass  # skip folders we can't read
+        pass
 
     return items
 
@@ -657,6 +671,105 @@ def delete_cover_art():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
+@app.route('/api/image')
+def serve_image():
+    file_path = request.args.get('path')
+    if not file_path:
+        return jsonify({'error': 'Missing path parameter'}), 400
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Determine mimetype
+        ext = os.path.splitext(full_path)[1].lower()
+        mimetypes = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.bmp': 'image/bmp',
+            '.webp': 'image/webp'
+        }
+        mimetype = mimetypes.get(ext, 'application/octet-stream')
+        
+        return send_file(full_path, mimetype=mimetype)
+    
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/api/metadata/picture/save-as-file', methods=['POST'])
+def save_cover_art_as_file():
+    """Extract cover art from audio file and save as cover.jpg in the same folder."""
+    data = request.get_json()
+    file_path = data.get('path')
+    
+    if not file_path:
+        return jsonify({'error': 'Missing path'}), 400
+    
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Only process mp3 and flac files
+        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+            return jsonify({'error': 'Unsupported file format'}), 400
+        
+        from metadata_extractor import extract_metadata
+        metadata = extract_metadata(full_path)
+        
+        if not metadata.get('picture'):
+            return jsonify({'error': 'No cover art found in file'}), 404
+        
+        # Extract image data from base64
+        import base64
+        picture_data = metadata['picture']
+        if picture_data.startswith('data:image'):
+            # Format: data:image/jpeg;base64,/9j/4AAQ...
+            header, encoded = picture_data.split(',', 1)
+            image_data = base64.b64decode(encoded)
+            
+            # Determine extension from mime type
+            mime_match = re.search(r'image/(\w+)', header)
+            ext = mime_match.group(1) if mime_match else 'jpg'
+            if ext == 'jpeg':
+                ext = 'jpg'
+        else:
+            # Assume it's already base64 without header
+            image_data = base64.b64decode(picture_data)
+            ext = 'jpg'  # default
+        
+        # Save to same folder as the audio file
+        folder_path = os.path.dirname(full_path)
+        output_path = os.path.join(folder_path, f'cover.{ext}')
+        
+        # Handle existing file
+        if os.path.exists(output_path):
+            base = os.path.join(folder_path, 'cover')
+            counter = 1
+            while os.path.exists(output_path):
+                output_path = f'{base} ({counter}).{ext}'
+                counter += 1
+        
+        with open(output_path, 'wb') as f:
+            f.write(image_data)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cover art saved as {os.path.basename(output_path)}',
+            'path': os.path.relpath(output_path, MUSIC_FOLDER).replace('\\', '/')
+        })
+        
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # Serve Svelte frontend
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

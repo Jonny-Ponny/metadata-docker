@@ -437,6 +437,38 @@
     function closeFullImage() {
         showFullImage = false;
     }
+
+    async function saveCoverAsFile() {
+        if (!filePath || !metadata.picture) return;
+
+        try {
+            const URL = `/api/metadata/picture/save-as-file`;
+
+            const response = await fetch(URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    path: filePath,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Failed to save cover art");
+            }
+
+            toast.success(result.message);
+
+            // Refresh the file tree to show the new image
+            // You'll need to emit an event or call a callback to refresh
+        } catch (error) {
+            console.error("Error saving cover art:", error);
+            toast.error(`Failed to save: ${error.message}`);
+        }
+    }
 </script>
 
 <div class="metadata-editor">
@@ -497,16 +529,16 @@
                             disabled={!metadata.picture}
                         >
                             <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 16 16"
+                                width="18"
+                                height="18"
+                                viewBox="0 0 20 20"
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg"
                             >
                                 <path
-                                    d="M6 2H3.5C3.22386 2 3 2.22386 3 2.5V5M13 5V2.5C13 2.22386 12.7761 2 12.5 2H10M10 14H12.5C12.7761 14 13 13.7761 13 13.5V11M3 11V13.5C3 13.7761 3.22386 14 3.5 14H6"
+                                    d="M7 3H4.5C4.22386 3 4 3.22386 4 3.5V7M16 7V3.5C16 3.22386 15.7761 3 15.5 3H13M13 17H15.5C15.7761 17 16 16.7761 16 16.5V13M4 13V16.5C4 16.7761 4.22386 17 4.5 17H7"
                                     stroke="currentColor"
-                                    stroke-width="1.5"
+                                    stroke-width="1.8"
                                     stroke-linecap="round"
                                 />
                             </svg>
@@ -579,6 +611,36 @@
                                 >
                                     <path
                                         d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                                        stroke="currentColor"
+                                        stroke-width="1.5"
+                                        stroke-linecap="round"
+                                    />
+                                </svg>
+                            </button>
+                            <button
+                                class="icon-btn"
+                                title="Save as cover.png"
+                                onclick={saveCoverAsFile}
+                                disabled={isUploadingPicture ||
+                                    !metadata.picture}
+                            >
+                                <!-- Save icon -->
+                                <svg
+                                    width="14"
+                                    height="16"
+                                    viewBox="0 0 14 16"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path
+                                        d="M7 2V11M7 11L10 8M7 11L4 8"
+                                        stroke="currentColor"
+                                        stroke-width="1.8"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                    <path
+                                        d="M2 14H12"
                                         stroke="currentColor"
                                         stroke-width="1.5"
                                         stroke-linecap="round"
@@ -1014,7 +1076,23 @@
         <div role="img" class="full-image-modal" onclick={closeFullImage}>
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="modal-content" onclick={(e) => e.stopPropagation()}>
-                <button class="modal-close" onclick={closeFullImage}>×</button>
+                <!-- svelte-ignore a11y_consider_explicit_label -->
+                <button class="modal-close" onclick={closeFullImage}>
+                    <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            d="M15 5L5 15M5 5L15 15"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                        />
+                    </svg>
+                </button>
                 <img src={metadata.picture} alt="Full size cover art" />
             </div>
         </div>
@@ -1286,6 +1364,11 @@
         color: #333;
         border: none;
         cursor: pointer;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .cover-art-actions .icon-btn:hover {
@@ -1296,6 +1379,12 @@
     .cover-art-actions .icon-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+    }
+
+    .cover-art-actions .icon-btn svg {
+        width: 14px;
+        height: 16px;
+        display: block;
     }
 
     .uploading-indicator {
@@ -1376,25 +1465,37 @@
         z-index: 15;
     }
 
-    .expand-btn {
-        background: rgba(255, 255, 255, 0.8);
-        border-radius: 4px;
-        padding: 6px;
-        color: #333;
-        backdrop-filter: blur(2px);
-        transition: all 0.2s;
-    }
-
-    .expand-btn:hover {
+    .cover-art-expand .icon-btn {
         background: white;
-        color: #fd7d05;
-        transform: scale(1.05);
+        border-radius: 4px;
+        padding: 8px;
+        color: #333;
+        border: none;
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: none;
+        backdrop-filter: none;
     }
 
-    .expand-btn:disabled {
+    .cover-art-expand .icon-btn:hover {
+        background: #fd7d05;
+        color: white;
+    }
+
+    .cover-art-expand .icon-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
         pointer-events: none;
+    }
+
+    .cover-art-expand .icon-btn svg {
+        width: 14px;
+        height: 16px;
+        display: block;
     }
 
     /* Full image modal */
@@ -1430,24 +1531,32 @@
 
     .modal-close {
         position: absolute;
-        top: -40px;
+        top: -44px;
         right: 0;
-        background: none;
+        background: rgba(255, 255, 255, 0.2);
         border: none;
         color: white;
-        font-size: 32px;
         cursor: pointer;
         width: 40px;
         height: 40px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 50%;
-        transition: background 0.2s;
+        border-radius: 4px;
+        transition: all 0.2s;
+        backdrop-filter: blur(4px);
     }
 
     .modal-close:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.3);
+        color: white;
+        transform: scale(1.05);
+    }
+
+    .modal-close svg {
+        width: 20px;
+        height: 20px;
+        display: block;
     }
 
     @keyframes fadeIn {
@@ -1487,7 +1596,7 @@
     }
 
     :global(body.dark) .field-actions {
-        background: transparent;
+        background: #3d3d3d;
     }
 
     :global(body.dark) .icon-btn {
@@ -1522,7 +1631,16 @@
         color: white;
     }
 
-    /* Dark mode adjustments */
+    :global(body.dark) .cover-art-expand .icon-btn {
+        background: #3d3d3d;
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .cover-art-expand .icon-btn:hover {
+        background: #ff9f4b;
+        color: white;
+    }
+
     :global(body.dark) .folder-scope-toggle label {
         color: #aaa;
     }
@@ -1535,25 +1653,12 @@
         background: rgba(255, 107, 107, 0.2);
     }
 
-    :global(body.dark) .field-actions {
-        background: #3d3d3d;
-    }
-
-    :global(body.dark) .expand-btn {
-        background: rgba(61, 61, 61, 0.9);
-        color: #e0e0e0;
-    }
-
-    :global(body.dark) .expand-btn:hover {
-        background: #3d3d3d;
-        color: #ff9f4b;
-    }
-
     :global(body.dark) .modal-close {
+        background: rgba(0, 0, 0, 0.3);
         color: #e0e0e0;
     }
 
     :global(body.dark) .modal-close:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.5);
     }
 </style>

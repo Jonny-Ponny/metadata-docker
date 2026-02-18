@@ -72,18 +72,6 @@ body {
   font-weight: 600;
 }
 
-.filename-badge {
-  font-size: 12px;
-  color: #666;
-  background: rgba(253, 125, 5, 0.1);
-  padding: 4px 8px;
-  border-radius: 4px;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .panel-content {
   flex: 1;
   overflow-y: auto;
