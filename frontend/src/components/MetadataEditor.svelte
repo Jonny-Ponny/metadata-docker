@@ -43,6 +43,8 @@
     let pictureFileInput = $state(null);
     let isUploadingPicture = $state(false);
 
+    let showFullImage = $state(false);
+
     // Field definitions for main and always‑visible other fields
     const mainFields = [
         "title",
@@ -81,7 +83,6 @@
         if (!filePath) return;
 
         try {
-            // const URL = `http://localhost:5000/api/metadata/file`; // development
             const URL = `/api/metadata/file`; // build
 
             const response = await fetch(URL, {
@@ -121,7 +122,6 @@
         try {
             // Choose endpoint based on whether to include subfolders
             const endpoint = applyToSubfolders ? "folder" : "folder/current";
-            // const URL = `http://localhost:5000/api/metadata/${endpoint}`; // development
             const URL = `/api/metadata/${endpoint}`; // build
 
             const response = await fetch(URL, {
@@ -156,7 +156,6 @@
         if (!path) return;
 
         try {
-            // const URL = `http://localhost:5000/api/metadata?path=${encodeURIComponent(path)}`; // development
             const URL = `/api/metadata?path=${encodeURIComponent(path)}`; // build
             const response = await fetch(URL);
 
@@ -287,7 +286,6 @@
                     : "folder/current"
                 : "file";
 
-            // const URL = `http://localhost:5000/api/metadata/picture/${endpoint}`; // development
             const URL = `/api/metadata/picture/${endpoint}`; // build
 
             const response = await fetch(URL, {
@@ -355,7 +353,6 @@
         if (!filePath || !field) return;
 
         try {
-            // const URL = `http://localhost:5000/api/metadata/field/delete`; // development
             const URL = `/api/metadata/field/delete`; // build
 
             const response = await fetch(URL, {
@@ -403,7 +400,6 @@
         }
 
         try {
-            // const URL = `http://localhost:5000/api/metadata/picture/delete`; // development
             const URL = `/api/metadata/picture/delete`; // build
 
             const response = await fetch(URL, {
@@ -430,6 +426,16 @@
             console.error("Error deleting cover art:", error);
             toast.error(`Failed to delete cover art: ${error.message}`);
         }
+    }
+
+    function openFullImage() {
+        if (metadata.picture) {
+            showFullImage = true;
+        }
+    }
+
+    function closeFullImage() {
+        showFullImage = false;
     }
 </script>
 
@@ -482,6 +488,30 @@
                 onmouseleave={() => (pictureEditing = false)}
             >
                 {#if pictureEditing && !isUploadingPicture}
+                    <!-- Expand icon in top-left corner -->
+                    <div class="cover-art-expand">
+                        <button
+                            class="icon-btn expand-btn"
+                            title="View full size"
+                            onclick={openFullImage}
+                            disabled={!metadata.picture}
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    d="M6 2H3.5C3.22386 2 3 2.22386 3 2.5V5M13 5V2.5C13 2.22386 12.7761 2 12.5 2H10M10 14H12.5C12.7761 14 13 13.7761 13 13.5V11M3 11V13.5C3 13.7761 3.22386 14 3.5 14H6"
+                                    stroke="currentColor"
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                />
+                            </svg>
+                        </button>
+                    </div>
                     <div class="cover-art-actions">
                         <button
                             class="icon-btn"
@@ -976,6 +1006,19 @@
             </div>
         </div>
     {/each}
+
+    <!-- Full-size image modal -->
+    {#if showFullImage && metadata.picture}
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div role="img" class="full-image-modal" onclick={closeFullImage}>
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+                <button class="modal-close" onclick={closeFullImage}>×</button>
+                <img src={metadata.picture} alt="Full size cover art" />
+            </div>
+        </div>
+    {/if}
 </div>
 
 <style>
@@ -1326,6 +1369,105 @@
         background: rgba(255, 68, 68, 0.1);
     }
 
+    .cover-art-expand {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 15;
+    }
+
+    .expand-btn {
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 4px;
+        padding: 6px;
+        color: #333;
+        backdrop-filter: blur(2px);
+        transition: all 0.2s;
+    }
+
+    .expand-btn:hover {
+        background: white;
+        color: #fd7d05;
+        transform: scale(1.05);
+    }
+
+    .expand-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    /* Full image modal */
+    .full-image-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        cursor: pointer;
+        animation: fadeIn 0.2s ease;
+    }
+
+    .modal-content {
+        position: relative;
+        max-width: 90vw;
+        max-height: 90vh;
+        animation: scaleIn 0.2s ease;
+    }
+
+    .modal-content img {
+        max-width: 100%;
+        max-height: 90vh;
+        object-fit: contain;
+        border-radius: 4px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-close {
+        position: absolute;
+        top: -40px;
+        right: 0;
+        background: none;
+        border: none;
+        color: white;
+        font-size: 32px;
+        cursor: pointer;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.2s;
+    }
+
+    .modal-close:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes scaleIn {
+        from {
+            transform: scale(0.95);
+        }
+        to {
+            transform: scale(1);
+        }
+    }
+
     /* Dark mode adjustments */
     :global(body.dark) .filename-badge {
         background: rgba(255, 255, 255, 0.1);
@@ -1395,5 +1537,23 @@
 
     :global(body.dark) .field-actions {
         background: #3d3d3d;
+    }
+
+    :global(body.dark) .expand-btn {
+        background: rgba(61, 61, 61, 0.9);
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .expand-btn:hover {
+        background: #3d3d3d;
+        color: #ff9f4b;
+    }
+
+    :global(body.dark) .modal-close {
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .modal-close:hover {
+        background: rgba(255, 255, 255, 0.1);
     }
 </style>
