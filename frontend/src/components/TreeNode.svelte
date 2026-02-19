@@ -143,6 +143,13 @@
         // close the context menu
         contextMenu.update((curr) => ({ ...curr, isOpen: false }));
     }
+
+    import HoldButton from "./HoldButton.svelte";
+
+    async function handleDeleteWithHold() {
+        await onDelete(item.path);
+        contextMenu.update((curr) => ({ ...curr, isOpen: false }));
+    }
 </script>
 
 {#if item.type === "directory"}
@@ -267,16 +274,16 @@
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                    <li
-                        onclick={() => {
-                            onDelete(item.path);
-                            contextMenu.update((curr) => ({
-                                ...curr,
-                                isOpen: false,
-                            }));
-                        }}
-                    >
-                        Delete
+                    <!-- Delete with hold confirmation -->
+                    <li class="hold-delete-item">
+                        <HoldButton
+                            variant="menu"
+                            duration={800}
+                            onConfirm={handleDeleteWithHold}
+                            title="Hold to delete"
+                        >
+                            Delete
+                        </HoldButton>
                     </li>
                 </ul>
             </div>
@@ -419,16 +426,20 @@
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                    <li
-                        onclick={() => {
-                            onDelete(item.path);
-                            contextMenu.update((curr) => ({
-                                ...curr,
-                                isOpen: false,
-                            }));
-                        }}
-                    >
-                        Delete
+                    <li class="hold-delete-item">
+                        <HoldButton
+                            variant="menu"
+                            duration={800}
+                            onConfirm={() => {
+                                onDelete(item.path);
+                                contextMenu.update((curr) => ({
+                                    ...curr,
+                                    isOpen: false,
+                                }));
+                            }}
+                        >
+                            Delete
+                        </HoldButton>
                     </li>
                 </ul>
             </div>
@@ -570,6 +581,10 @@
         color: #6666ff;
     }
 
+    .context-menu li.hold-delete-item {
+        padding: 0;
+    }
+
     /* Dark mode overrides */
     :global(body.dark) .directory .name,
     :global(body.dark) .file .name {
@@ -626,7 +641,6 @@
         border-color: #ff9f4b;
     }
 
-    /* Dark mode override */
     :global(body.dark) .file .format.image-format {
         background: rgba(100, 100, 255, 0.2);
         color: #8888ff;

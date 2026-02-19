@@ -9,3 +9,4 @@ export * from "../stores/auth.store"
 // utils
 export * from "./timestamp.utils"
 export * from "./sort.utils"
+export * from "./hold2confirm.utils"

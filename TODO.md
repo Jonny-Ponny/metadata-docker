@@ -14,3 +14,5 @@
 14. ~~Creating new folders~~
 15. ~~Deleting files/folders~~
 16. ~~Filters for file browser~~
+17. LRC editor
+18. Help/Info modal

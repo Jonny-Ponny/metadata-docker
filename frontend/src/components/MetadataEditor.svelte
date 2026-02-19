@@ -1,5 +1,7 @@
 <!-- src/components/MetadataEditor.svelte -->
 <script>
+    import HoldButton from "./HoldButton.svelte";
+
     import { toast } from "../utils/index.js";
 
     // Props
@@ -127,18 +129,20 @@
         try {
             // Choose endpoint based on whether to include subfolders
             const endpoint = applyToSubfolders ? "folder" : "folder/current";
-            const URL = `/api/metadata/${endpoint}`; // build
+            const URL = `/api/metadata/${endpoint}`;
+
+            const requestBody = {
+                path: folderPath === "" ? "/" : folderPath, // Send "/" for root
+                field: field,
+                value: value,
+            };
 
             const response = await fetch(URL, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    path: folderPath || "", // empty string for root
-                    field: field,
-                    value: value,
-                }),
+                body: JSON.stringify(requestBody),
             });
 
             const result = await response.json();
@@ -396,14 +400,6 @@
     async function deleteCoverArt() {
         if (!filePath) return;
 
-        if (
-            !confirm(
-                "Are you sure you want to delete the cover art from this file?",
-            )
-        ) {
-            return;
-        }
-
         try {
             const URL = `/api/metadata/picture/delete`; // build
 
@@ -512,7 +508,13 @@
         <div class="filename-badge">{filename}</div>
         <div class="folder-scope-toggle">
             <label>
-                <input type="checkbox" bind:checked={applyToSubfolders} />
+                <input
+                    title={applyToSubfolders
+                        ? "Folder operations will be applied to ALL files in this folder and its subfolders"
+                        : "Folder operations will be applied only to files in the same folder"}
+                    type="checkbox"
+                    bind:checked={applyToSubfolders}
+                />
                 Include subfolders
             </label>
         </div>
@@ -606,15 +608,17 @@
                                 />
                             </svg>
                         </button>
-                        <button
-                            class="icon-btn"
-                            title={applyToSubfolders
-                                ? "Apply to all files in folder(including subfolders)"
-                                : "Apply to all files in folder(same level only)"}
-                            onclick={() => triggerPictureUpload(true)}
+                        <HoldButton
+                            variant="icon"
+                            duration={800}
+                            onConfirm={() => triggerPictureUpload(true)}
                             disabled={isUploadingPicture}
+                            title={applyToSubfolders
+                                ? "Hold to apply to all files in folder (including subfolders)"
+                                : "Hold to apply to all files in folder (same level only)"}
+                            class="cover-art-icon"
                         >
-                            <!-- Folder icon - matches other fields -->
+                            <!-- Folder icon SVG -->
                             <svg
                                 width="16"
                                 height="16"
@@ -628,13 +632,15 @@
                                     fill-opacity="0.9"
                                 />
                             </svg>
-                        </button>
+                        </HoldButton>
                         {#if metadata.picture}
-                            <button
-                                class="icon-btn delete-btn"
-                                title="Delete cover art from this file"
-                                onclick={deleteCoverArt}
+                            <HoldButton
+                                variant="icon"
+                                duration={800}
+                                onConfirm={deleteCoverArt}
                                 disabled={isUploadingPicture}
+                                title="Hold to delete cover art"
+                                class="delete-btn cover-art-icon"
                             >
                                 <!-- Trash can icon -->
                                 <svg
@@ -651,10 +657,10 @@
                                         stroke-linecap="round"
                                     />
                                 </svg>
-                            </button>
+                            </HoldButton>
                             <button
                                 class="icon-btn"
-                                title="Save as cover"
+                                title="Save as cover.*"
                                 onclick={saveCoverAsFile}
                                 disabled={isUploadingPicture ||
                                     !metadata.picture}
@@ -714,10 +720,12 @@
                         <div class="field-actions">
                             <!-- Delete button -->
                             {#if metadata[field]}
-                                <button
-                                    class="icon-btn delete-btn"
-                                    title="Delete this field from file"
-                                    onclick={() => deleteField(field)}
+                                <HoldButton
+                                    variant="icon"
+                                    duration={800}
+                                    onConfirm={() => deleteField(field)}
+                                    title="Hold to delete this field"
+                                    class="delete-btn"
                                 >
                                     <!-- Trash can icon -->
                                     <svg
@@ -734,7 +742,7 @@
                                             stroke-linecap="round"
                                         />
                                     </svg>
-                                </button>
+                                </HoldButton>
                             {/if}
                             <!-- File button -->
                             <button
@@ -763,12 +771,14 @@
                                 </svg>
                             </button>
                             <!-- Folder button -->
-                            <button
-                                class="icon-btn"
+                            <HoldButton
+                                variant="icon"
+                                duration={800}
+                                onConfirm={() =>
+                                    applyToFolder(field, metadata[field])}
                                 title={applyToSubfolders
-                                    ? "Apply to all files in folder (including subfolders)"
-                                    : "Apply to all files in folder (same level only)"}
-                                onclick={() => applyToFolder(field, value)}
+                                    ? "Hold to apply to all files in folder (including subfolders)"
+                                    : "Hold to apply to all files in folder (same level only)"}
                             >
                                 <!-- Folder icon SVG -->
                                 <svg
@@ -784,7 +794,7 @@
                                         fill-opacity="0.9"
                                     />
                                 </svg>
-                            </button>
+                            </HoldButton>
                         </div>
                     {/if}
                 </div>
@@ -1313,7 +1323,7 @@
         background: white;
         padding: 2px;
         border-radius: 4px;
-        z-index: 10; /* Ensure it's above the input */
+        z-index: 10;
     }
 
     /* For textareas, align icons to the top */
@@ -1467,6 +1477,7 @@
         display: flex;
         gap: 8px;
         justify-content: center;
+        align-items: center;
     }
 
     .cover-art-actions .icon-btn {
@@ -1481,11 +1492,17 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        position: relative;
     }
 
     .cover-art-actions .icon-btn:hover {
         background: #fd7d05;
         color: white;
+    }
+
+    .cover-art-actions .icon-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     .cover-art-actions .icon-btn:disabled {

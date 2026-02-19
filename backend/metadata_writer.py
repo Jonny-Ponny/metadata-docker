@@ -1,6 +1,7 @@
 import os
+import re
 from mutagen import File
-from mutagen.id3 import ID3, TIT2, TALB, TPE1, TPE2, TRCK, TPOS, TYER, TCON, COMM, TCOM, TPUB, USLT, APIC
+from mutagen.id3 import ID3, TIT2, TALB, TPE1, TPE2, TRCK, TPOS, TYER, TCON, COMM, TCOM, TPUB, USLT, APIC, SYLT, Encoding
 from mutagen.flac import FLAC, Picture
 from mutagen.mp3 import MP3
 
@@ -73,9 +74,32 @@ def update_mp3_metadata(file_path, field, value):
             # Remove existing comment frames and add new one
             tags.delall('COMM')
             tags.add(COMM(encoding=3, lang='eng', desc='', text=value))
-        elif field == 'unsyncedLyrics' or field == 'lyrics':
+
+        elif field == 'unsyncedLyrics':
             tags.delall('USLT')
-            tags.add(USLT(encoding=3, lang='eng', desc='', text=value))
+            tags.add(USLT(encoding=3, lang='eng', desc='', text=value))      
+
+        # Might need to correct timestamps using file bitrate to correctly display in players
+        # SYLT frame logic
+        elif field == 'lyrics':
+            tags.delall('SYLT')
+            # Convert synced_text to SYLT events
+            lines = value.split('\n')
+            events = []
+            for line in lines:
+                # line format: "[MM:SS.ss] text"
+                m = re.match(r'^\[(\d{2}):(\d{2}\.\d{2})\](.*)', line)
+                if m:
+                    minutes = int(m.group(1))
+                    seconds = float(m.group(2))
+                    ms = int((minutes * 60 + seconds) * 1000)
+                    text = m.group(3).strip()
+                    if text:
+                        events.append((text, ms))
+            if events:
+                sylt = SYLT(encoding=Encoding.UTF8, lang='eng', format=1, type=1, desc='', text=events)
+                tags.add(sylt)
+
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]
             tags.delall(frame_id)
