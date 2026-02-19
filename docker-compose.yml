@@ -8,5 +8,9 @@ services:
       - HOST_PORT=${HOST_PORT}                     # Host port
       - PYTHONUNBUFFERED=1
       - DEBUG=${DEBUG}
+      - AUTH_USERNAME=${AUTH_USERNAME}             # Login
+      - AUTH_PASSWORD=${AUTH_PASSWORD}             # Plain text password
+      - TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS}   # Optional
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}           # Optional
     volumes:
       - ~/Media/music:/music                       # Library

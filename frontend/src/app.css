@@ -53,15 +53,20 @@ body {
 }
 
 .panel-header {
-  padding: 15px;
+  padding: 12px 15px;
   border-bottom: 2px solid #ddd;
   background-color: #f0f0f0;
   flex-shrink: 0;
-  height: 60px;
+  min-height: 60px;
+  /* Changed from height to min-height */
+  height: auto;
+  /* Allow height to expand */
   display: flex;
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
+  gap: 10px;
+  /* Add gap for when items wrap */
 }
 
 
@@ -78,7 +83,7 @@ body {
   padding: 15px;
   background: inherit;
   min-height: 0;
-  height: calc(100% - 60px);
+  height: calc(100% - var(--header-height, 60px));
   box-sizing: border-box;
 }
 
@@ -217,7 +222,6 @@ body.dark .status {
   font-size: 14px;
   font-weight: 500;
   z-index: 1001;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: all 0.2s;
   display: flex;
   align-items: center;
@@ -227,7 +231,6 @@ body.dark .status {
 .theme-toggle:hover {
   background: #ff5e00;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 /* Header actions */
@@ -235,6 +238,10 @@ body.dark .status {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  /* Prevent overflow */
 }
 
 .loading-spinner {
@@ -461,6 +468,47 @@ body.dark .status {
   background: rgba(253, 125, 5, 0.1);
 }
 
+@media (max-width: 1200px) {
+  .header-actions {
+    gap: 4px;
+  }
+
+  .search-input {
+    width: 140px;
+  }
+
+  .logout-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+/* Logout button */
+.logout-btn {
+  background: transparent;
+  border: 1px solid #fd7d05;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #fd7d05;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.logout-btn:hover {
+  background: #fd7d05;
+  color: white;
+}
+
+.logout-btn svg {
+  stroke: currentColor;
+}
+
 /* Dark mode overrides */
 body.dark .refresh-btn {
   background: transparent !important;
@@ -540,17 +588,13 @@ body.dark .search-clear:hover {
   background: rgba(255, 159, 75, 0.2);
 }
 
-/* Optional: Add a search results count badge */
-.search-results-count {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  background: #fd7d05;
-  color: white;
-  font-size: 11px;
-  font-weight: bold;
-  padding: 2px 6px;
-  border-radius: 10px;
-  min-width: 18px;
-  text-align: center;
+/* Dark mode overrides */
+body.dark .logout-btn {
+  border-color: #ff9f4b;
+  color: #ff9f4b;
+}
+
+body.dark .logout-btn:hover {
+  background: #ff9f4b;
+  color: #1e1e1e;
 }

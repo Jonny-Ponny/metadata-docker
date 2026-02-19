@@ -1,12 +1,23 @@
 import os
 import shutil
 import re
+import jwt
+import datetime
+from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
 
-from flask import Flask, jsonify, request, send_file, abort, send_from_directory
+from flask import Flask, jsonify, request, send_file, send_from_directory
 
 app = Flask(__name__, static_folder='static', static_url_path='')
+
+# Auth config from environment (with defaults)
+AUTH_USERNAME = os.getenv('AUTH_USERNAME', 'admin')
+AUTH_PASSWORD = os.getenv('AUTH_PASSWORD', 'admin')  # Plain text password
+TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 24
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', os.urandom(24).hex())
+
+app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes', 'on') # Debug
 PORT = int(os.getenv('CONTAINER_PORT', 5000))                            # Container port
@@ -20,6 +31,70 @@ print('\n')
 print(f'Debug set to {DEBUG}')
 print(f'Host port set to {HOST_PORT}')
 print(f'Container port set to {PORT}')
+
+print(f'Login: {AUTH_USERNAME}')
+print(f'Password: {AUTH_PASSWORD}')
+
+# -------------------------AUTH------------------------- #
+
+# Token required decorator
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        
+        # Check for token in Authorization header
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+        
+        if not token:
+            return jsonify({'error': 'Token is missing'}), 401
+        
+        try:
+            # Decode token
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            current_user = data.get('username')
+            if not current_user or current_user != AUTH_USERNAME:
+                raise Exception('Invalid user')
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token has expired'}), 401
+        except Exception as e:
+            return jsonify({'error': 'Token is invalid'}), 401
+        
+        return f(*args, **kwargs)
+    
+    return decorated
+
+# Login endpoint with plain text check
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    
+    if not data or not data.get('username') or not data.get('password'):
+        return jsonify({'error': 'Username and password required'}), 400
+    
+    username = data.get('username')
+    password = data.get('password')
+    
+    # Simple plain text check
+    if username != AUTH_USERNAME or password != AUTH_PASSWORD:
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    # Generate token with configurable expiry
+    token = jwt.encode({
+        'username': username,
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=TOKEN_EXPIRE_HOURS)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+    
+    return jsonify({
+        'success': True,
+        'token': token,
+        'username': username,
+        'expires_in': TOKEN_EXPIRE_HOURS * 3600  # in seconds
+    })
+
+#
 
 def build_tree(current_path, relative_path):
     items = []
@@ -81,6 +156,7 @@ def safe_path(file_path):
 
 # -------------------------API ENDPOINTS------------------------- #
 
+@token_required
 @app.route('/api/files')
 def list_files():
     try:
@@ -92,6 +168,7 @@ def list_files():
 # GET /api/metadata?path=<file_path>
 # Fetch all metadata for a specific file.
 
+@token_required
 @app.route('/api/metadata')
 def get_metadata():
     file_path = request.args.get('path')
@@ -116,6 +193,7 @@ def get_metadata():
 
 # POST /api/metadata/file
 # Update a single metadata field for one file
+@token_required
 @app.route('/api/metadata/file', methods=['POST'])
 def update_single_file():
     data = request.get_json()
@@ -148,6 +226,7 @@ def update_single_file():
 
 # POST /api/metadata/folder
 # Update a single metadata field for all files in a folder
+@token_required
 @app.route('/api/metadata/folder', methods=['POST'])
 def update_folder_files():
     data = request.get_json()
@@ -180,6 +259,7 @@ def update_folder_files():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/audio')
+@token_required
 def serve_audio():
     file_path = request.args.get('path')
     if not file_path:
@@ -199,6 +279,7 @@ def serve_audio():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/upload', methods=['POST'])
+@token_required
 def upload_file():
     """Handle file and folder uploads via drag and drop, preserving structure"""
     if 'file' not in request.files:
@@ -236,9 +317,6 @@ def upload_file():
             target_dir = os.path.join(target_dir, subdir)
             os.makedirs(target_dir, exist_ok=True)
     
-    # Regular file upload - PRESERVE ORIGINAL FILENAME
-    # Don't use secure_filename if you want to preserve special characters
-    # Instead, sanitize only path separators and null bytes
     filename = original_filename.replace('/', '_').replace('\\', '_').replace('\0', '')
     
     # Build the full file path
@@ -268,6 +346,7 @@ def upload_file():
         return jsonify({'error': str(e)}), 500
 
 # Endpoint to create directories
+@token_required
 @app.route('/api/mkdir', methods=['POST'])
 def create_directory():
     """Create a new directory. If the path already exists, generate a unique name."""
@@ -296,6 +375,7 @@ def create_directory():
         return jsonify({'error': str(e)}), 500
     
 # Endpoint to rename files/folders
+@token_required
 @app.route('/api/rename', methods=['POST'])
 def rename_item():
     """Rename a file or folder."""
@@ -328,6 +408,7 @@ def rename_item():
         return jsonify({'error': str(e)}), 500
 
 # Endpoint to delete files/folders
+@token_required
 @app.route('/api/delete', methods=['POST'])
 def delete_item():
     """Delete a file or folder."""
@@ -351,7 +432,8 @@ def delete_item():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Endpoint to move files/folders    
+# Endpoint to move files/folders
+@token_required
 @app.route('/api/move', methods=['POST'])
 def move_item():
     """Move a file or folder to a new destination folder."""
@@ -404,6 +486,7 @@ def move_item():
         return jsonify({'error': str(e)}), 500
     
 # Endpoint to copy files/folders
+@token_required
 @app.route('/api/copy', methods=['POST'])
 def copy_item():
     """Delete a file or folder."""
@@ -446,6 +529,7 @@ def copy_item():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@token_required
 @app.route('/api/metadata/picture/file', methods=['POST'])
 def update_file_picture_endpoint():
     """Update cover art for a single file."""
@@ -491,6 +575,7 @@ def update_file_picture_endpoint():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@token_required
 @app.route('/api/metadata/picture/folder', methods=['POST'])
 def update_folder_pictures_endpoint():
     """Update cover art for all files in a folder."""
@@ -530,6 +615,7 @@ def update_folder_pictures_endpoint():
     
 # POST /api/metadata/folder/current
 # Update a single metadata field for all files in a folder (current folder only, no subfolders)
+@token_required
 @app.route('/api/metadata/folder/current', methods=['POST'])
 def update_folder_files_current_only():
     data = request.get_json()
@@ -561,6 +647,7 @@ def update_folder_files_current_only():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@token_required
 @app.route('/api/metadata/picture/folder/current', methods=['POST'])
 def update_folder_pictures_current_only_endpoint():
     """Update cover art for all files in a folder (current folder only, no subfolders)."""
@@ -599,6 +686,7 @@ def update_folder_pictures_current_only_endpoint():
         return jsonify({'error': str(e)}), 500
 
 # Endpoint to delete specific field
+@token_required
 @app.route('/api/metadata/field/delete', methods=['POST'])
 def delete_metadata_field():
     """Delete a specific metadata field from a file."""
@@ -632,6 +720,7 @@ def delete_metadata_field():
         return jsonify({'error': str(e)}), 500
 
 # Endpoint to delete cover art
+@token_required
 @app.route('/api/metadata/picture/delete', methods=['POST'])
 def delete_cover_art():
     """Delete cover art from a file."""
@@ -671,6 +760,7 @@ def delete_cover_art():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
+@token_required
 @app.route('/api/image')
 def serve_image():
     file_path = request.args.get('path')
@@ -700,7 +790,7 @@ def serve_image():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-
+@token_required
 @app.route('/api/metadata/picture/save-as-file', methods=['POST'])
 def save_cover_art_as_file():
     """Extract cover art from audio file and save as cover.jpg in the same folder."""

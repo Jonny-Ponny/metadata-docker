@@ -8,6 +8,7 @@
   import Player from "./components/Player.svelte";
   import SortButton from "./components/SortButton.svelte";
   import ImageViewer from "./components/ImageViewer.svelte";
+  import Login from "./components/Login.svelte";
 
   import {
     sortItems,
@@ -16,6 +17,10 @@
     toast,
     toggleTheme,
     renamingPath,
+    isAuthenticated,
+    initAuth,
+    logout,
+    getAuthHeaders,
   } from "./utils/index.js";
 
   import "./app.css";
@@ -39,6 +44,8 @@
   // Player-related state variables
   let audioFile = $state(null);
   let currentTime = $state(0);
+
+  // svelte-ignore non_reactive_update
   let playerComponent; // Player component reference (not reactive)
 
   // ========== DRAG AND DROP STATE ==========
@@ -880,65 +887,87 @@
     return nodes.map(filterNode).filter((node) => node !== null);
   }
 
+  // Logout handler
+  function handleLogout() {
+    logout();
+  }
+
   onMount(() => {
-    // Initial scroll if something is selected
-    scrollSelectedIntoView();
+    initAuth();
 
-    // Add refresh listener
-    window.addEventListener("refreshFileTree", loadFileTree);
+    // Add auth headers to all fetch requests
+    const originalFetch = window.fetch;
+    window.fetch = async (url, options = {}) => {
+      const headers = getAuthHeaders();
+      options.headers = {
+        ...headers,
+        ...options.headers,
+      };
 
-    scrollSelectedIntoView();
+      const response = await originalFetch(url, options);
+
+      // If unauthorized, logout
+      if (response.status === 401) {
+        logout();
+      }
+
+      return response;
+    };
 
     return () => {
-      window.removeEventListener("selectImage", (e) => {
-        // @ts-ignore
-        selectImage(e.detail.path);
-      });
-      window.removeEventListener("refreshFileTree", loadFileTree);
+      window.fetch = originalFetch; // Restore original fetch
     };
   });
 </script>
 
-<div
-  role="region"
-  class="container"
-  ondragenter={handleDragEnter}
-  ondragover={handleDragOver}
-  ondragleave={handleDragLeave}
-  ondrop={handleDrop}
-  class:dragging={isDragging}
->
-  <!-- Theme switch toggle -->
-  <button class="theme-toggle" class:blurred={isDragging} onclick={toggleTheme}>
-    {#if $theme === "light"}
-      <span>Light</span>
-    {:else}
-      <span>Dark</span>
+{#if !$isAuthenticated}
+  <Login />
+{:else}
+  <div
+    role="region"
+    class="container"
+    ondragenter={handleDragEnter}
+    ondragover={handleDragOver}
+    ondragleave={handleDragLeave}
+    ondrop={handleDrop}
+    class:dragging={isDragging}
+  >
+    <!-- Theme switch toggle -->
+    <button
+      class="theme-toggle"
+      class:blurred={isDragging}
+      onclick={toggleTheme}
+    >
+      {#if $theme === "light"}
+        <span>Light</span>
+      {:else}
+        <span>Dark</span>
+      {/if}
+    </button>
+
+    <!-- Overall upload progress bar -->
+    {#if uploadOverallProgress.isActive}
+      <div
+        class="upload-progress-bar"
+        style="width: {uploadOverallProgress.total > 0
+          ? (uploadOverallProgress.completed / uploadOverallProgress.total) *
+            100
+          : 0}%;"
+      ></div>
     {/if}
-  </button>
 
-  <!-- Overall upload progress bar -->
-  {#if uploadOverallProgress.isActive}
-    <div
-      class="upload-progress-bar"
-      style="width: {uploadOverallProgress.total > 0
-        ? (uploadOverallProgress.completed / uploadOverallProgress.total) * 100
-        : 0}%;"
-    ></div>
-  {/if}
+    <!-- Toast notifications -->
+    <ToastContainer />
 
-  <!-- Toast notifications -->
-  <ToastContainer />
-
-  <!-- Main split layout -->
-  <div class="split-container" class:blurred={isDragging}>
-    <!-- Left Panel - Folder Navigation / File Selection -->
-    <div class="panel left-panel" style="width: {leftPanelWidth}%;">
-      <div class="panel-header">
-        <h3>File Browser</h3>
-        <div class="header-actions">
-          {#if isLoading}
-            <div class="status loading-spinner">
+    <!-- Main split layout -->
+    <div class="split-container" class:blurred={isDragging}>
+      <!-- Left Panel - Folder Navigation / File Selection -->
+      <div class="panel left-panel" style="width: {leftPanelWidth}%;">
+        <div class="panel-header">
+          <h3>File Browser</h3>
+          <div class="header-actions">
+            <!-- User info and logout -->
+            <button class="logout-btn" onclick={handleLogout} title="Logout">
               <svg
                 width="16"
                 height="16"
@@ -947,216 +976,233 @@
                 stroke="currentColor"
                 stroke-width="2"
               >
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke-dasharray="32"
-                  stroke-dashoffset="32"
-                >
-                  <animate
-                    attributeName="stroke-dashoffset"
-                    values="32;0"
-                    dur="1s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
-              Loading...
-            </div>
-          {/if}
-
-          <!-- Search input -->
-          <div class="search-container">
-            <input
-              type="text"
-              class="search-input"
-              placeholder="Search files..."
-              bind:value={searchQuery}
-              onkeydown={(e) => {
-                if (e.key === "Escape") {
-                  searchQuery = "";
-                }
-              }}
-            />
-            {#if searchQuery}
-              <button
-                class="search-clear"
-                onclick={() => (searchQuery = "")}
-                title="Clear search"
-              >
+              Logout
+            </button>
+            {#if isLoading}
+              <div class="status loading-spinner">
                 <svg
-                  width="14"
-                  height="14"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke-dasharray="32"
+                    stroke-dashoffset="32"
+                  >
+                    <animate
+                      attributeName="stroke-dashoffset"
+                      values="32;0"
+                      dur="1s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
                 </svg>
-              </button>
+                Loading...
+              </div>
             {/if}
-          </div>
-          <SortButton />
-          <button
-            class="refresh-btn"
-            onclick={loadFileTree}
-            title="Refresh file tree"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M23 4v6h-6M1 20v-6h6" />
-              <path
-                d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+
+            <!-- Search input -->
+            <div class="search-container">
+              <input
+                type="text"
+                class="search-input"
+                placeholder="Search files..."
+                bind:value={searchQuery}
+                onkeydown={(e) => {
+                  if (e.key === "Escape") {
+                    searchQuery = "";
+                  }
+                }}
               />
-            </svg>
-          </button>
+              {#if searchQuery}
+                <button
+                  class="search-clear"
+                  onclick={() => (searchQuery = "")}
+                  title="Clear search"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              {/if}
+            </div>
+            <SortButton />
+            <button
+              class="refresh-btn"
+              onclick={loadFileTree}
+              title="Refresh file tree"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M23 4v6h-6M1 20v-6h6" />
+                <path
+                  d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-content file-tree-panel">
+          {#if isLoading && treeData.length === 0}
+            <div class="empty-state">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+              <p>Loading files...</p>
+            </div>
+          {:else if error}
+            <div class="error-state">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <circle cx="12" cy="16" r="0.5" fill="currentColor" />
+              </svg>
+              <p>Failed to load files</p>
+              <p class="error-details">{error}</p>
+              <button class="retry-btn" onclick={loadFileTree}>Retry</button>
+            </div>
+          {:else}
+            <div class="file-tree-container" bind:this={fileTreeContainer}>
+              {#if treeData.length === 0}
+                <div class="empty-state">
+                  <svg
+                    width="48"
+                    height="48"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  >
+                    <path
+                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    />
+                  </svg>
+                  <p>No music files found</p>
+                </div>
+              {:else}
+                <!-- Update TreeNode usage to pass folder path data attributes -->
+                <ul class="file-tree">
+                  {#each sortedTreeData as item (item.path)}
+                    <TreeNode
+                      {item}
+                      expanded={expandedDirs}
+                      {toggleDir}
+                      {selectFile}
+                      {selectFolder}
+                      {selectedFolder}
+                      {selectedFile}
+                      onRename={handleRename}
+                      onDelete={handleDelete}
+                      onCreateFolder={handleCreateFolder}
+                      onCopy={handleCopyItem}
+                    />
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
 
-      <div class="panel-content file-tree-panel">
-        {#if isLoading && treeData.length === 0}
-          <div class="empty-state">
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 6v6l4 2" />
-            </svg>
-            <p>Loading files...</p>
-          </div>
-        {:else if error}
-          <div class="error-state">
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <circle cx="12" cy="16" r="0.5" fill="currentColor" />
-            </svg>
-            <p>Failed to load files</p>
-            <p class="error-details">{error}</p>
-            <button class="retry-btn" onclick={loadFileTree}>Retry</button>
-          </div>
-        {:else}
-          <div class="file-tree-container" bind:this={fileTreeContainer}>
-            {#if treeData.length === 0}
-              <div class="empty-state">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path
-                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                  />
-                </svg>
-                <p>No music files found</p>
-              </div>
+      <!-- Resizer handle -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <div
+        role="separator"
+        class="resizer {isResizing ? 'resizing' : ''}"
+        onmousedown={startResize}
+      ></div>
+
+      <!-- Right Panel - Metadata Editing -->
+      <div class="panel right-panel" style="width: {100 - leftPanelWidth}%;">
+        <div class="panel-header">
+          <h3>
+            {#if selectedFile && selectedFile.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)}
+              Image Viewer
+            {:else if selectedFile}
+              Metadata Editor
             {:else}
-              <!-- Update TreeNode usage to pass folder path data attributes -->
-              <ul class="file-tree">
-                {#each sortedTreeData as item (item.path)}
-                  <TreeNode
-                    {item}
-                    expanded={expandedDirs}
-                    {toggleDir}
-                    {selectFile}
-                    {selectFolder}
-                    {selectedFolder}
-                    {selectedFile}
-                    onRename={handleRename}
-                    onDelete={handleDelete}
-                    onCreateFolder={handleCreateFolder}
-                    onCopy={handleCopyItem}
-                  />
-                {/each}
-              </ul>
+              File Viewer
             {/if}
-          </div>
-        {/if}
-      </div>
-    </div>
+          </h3>
+        </div>
 
-    <!-- Resizer handle -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div
-      role="separator"
-      class="resizer {isResizing ? 'resizing' : ''}"
-      onmousedown={startResize}
-    ></div>
-
-    <!-- Right Panel - Metadata Editing -->
-    <div class="panel right-panel" style="width: {100 - leftPanelWidth}%;">
-      <div class="panel-header">
-        <h3>
+        <div class="panel-content">
           {#if selectedFile && selectedFile.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)}
-            Image Viewer
+            <ImageViewer filePath={selectedFile} />
           {:else if selectedFile}
-            Metadata Editor
+            <MetadataEditor filePath={selectedFile} />
           {:else}
-            File Viewer
+            <div class="empty-state">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+              <p>Select a file to view or edit</p>
+            </div>
           {/if}
-        </h3>
-      </div>
-
-      <div class="panel-content">
-        {#if selectedFile && selectedFile.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)}
-          <ImageViewer filePath={selectedFile} />
-        {:else if selectedFile}
-          <MetadataEditor filePath={selectedFile} />
-        {:else}
-          <div class="empty-state">
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <path
-                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-              />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-              <polyline points="10 9 9 9 8 9" />
-            </svg>
-            <p>Select a file to view or edit</p>
-          </div>
-        {/if}
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-<!-- Player component -->
-<div class="player-wrapper" class:blurred={isDragging}>
-  <Player
-    {audioFile}
-    ontimeupdate={handleTimeUpdate}
-    bind:this={playerComponent}
-  />
-</div>
+  <!-- Player component -->
+  <div class="player-wrapper" class:blurred={isDragging}>
+    <Player
+      {audioFile}
+      ontimeupdate={handleTimeUpdate}
+      bind:this={playerComponent}
+    />
+  </div>
+{/if}
