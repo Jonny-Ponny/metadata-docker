@@ -914,8 +914,12 @@
       return response;
     };
 
+    window.addEventListener("refreshFileTree", loadFileTree);
+    scrollSelectedIntoView();
+
     return () => {
       window.fetch = originalFetch; // Restore original fetch
+      window.removeEventListener('refreshFileTree', loadFileTree);
     };
   });
 </script>
