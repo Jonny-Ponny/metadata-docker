@@ -15,7 +15,7 @@ app = Flask(__name__, static_folder='static', static_url_path='')
 AUTH_USERNAME = os.getenv('AUTH_USERNAME', 'admin')
 AUTH_PASSWORD = os.getenv('AUTH_PASSWORD', 'admin')  # Plain text password
 TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 24
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', os.urandom(24).hex())
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '') if os.getenv('JWT_SECRET_KEY') != '' else os.urandom(24).hex()
 
 app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
