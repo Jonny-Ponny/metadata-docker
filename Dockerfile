@@ -39,5 +39,5 @@ RUN chmod +x /entrypoint.sh
 # Verify size is NOT 0
 RUN ls -la /entrypoint.sh
 
-EXPOSE 5000
+EXPOSE $CONTAINER_PORT
 ENTRYPOINT ["/entrypoint.sh"]

@@ -31,6 +31,8 @@
     let synchronizedLyricsText = $state("");
     let currentActiveLine = $state(-1);
 
+    let currentPlaybackTime = $state(0);
+
     // For the old timestamp edit modal
     let showTimestampModal = $state(false);
     let editingTimestampIndex = $state(-1);
@@ -430,6 +432,8 @@
     // Listen for player time updates - using the existing player events
     onMount(() => {
         const handleTimeUpdate = (e) => {
+            const time = e.detail.time;
+            currentPlaybackTime = time; // Store the current timeF
             updateActiveLine(e.detail.time);
         };
 
@@ -743,7 +747,7 @@
         show={showTimestampModal}
         lineIndex={editingTimestampIndex}
         currentValue={editingTimestampValue}
-        currentTime={0}
+        currentTime={currentPlaybackTime}
         {timestamps}
         {USLT}
         onClose={closeTimestampModal}

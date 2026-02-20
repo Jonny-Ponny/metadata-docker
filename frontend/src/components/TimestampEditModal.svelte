@@ -61,9 +61,8 @@
     onSave(lineIndex, editingTimestampValue);
   }
 
-  // Also update the useCurrentTime function to format correctly
   function useCurrentTime() {
-    const timestamp = secondsToTimestamp(currentTime); // This returns [MM:SS.ss]
+    const timestamp = secondsToTimestamp(currentTime);
     // Remove brackets and ensure proper format
     editingTimestampValue = timestamp.slice(1, -1);
 
