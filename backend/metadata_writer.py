@@ -4,6 +4,7 @@ from mutagen import File
 from mutagen.id3 import ID3, TIT2, TALB, TPE1, TPE2, TRCK, TPOS, TYER, TCON, COMM, TCOM, TPUB, USLT, APIC, SYLT, Encoding
 from mutagen.flac import FLAC, Picture
 from mutagen.mp3 import MP3
+from logger_config import log_error, log_info
 
 # Field mapping for different file types
 FIELD_MAPPING = {
@@ -57,12 +58,13 @@ def update_file_metadata(file_path, field, value):
             return False
             
     except Exception as e:
-        print(f"Error updating metadata for {file_path}: {e}")
+        log_error(f"Error updating metadata for {file_path}: {e}")
         return False
 
 def update_mp3_metadata(file_path, field, value):
     """Update ID3 tag in MP3 file."""
     try:
+        log_info(f"File: {file_path}")
         # Load or create ID3 tags
         try:
             tags = ID3(file_path)
@@ -74,10 +76,12 @@ def update_mp3_metadata(file_path, field, value):
             # Remove existing comment frames and add new one
             tags.delall('COMM')
             tags.add(COMM(encoding=3, lang='eng', desc='', text=value))
+            log_info(f"Edited COMM frame")
 
         elif field == 'unsyncedLyrics':
             tags.delall('USLT')
-            tags.add(USLT(encoding=3, lang='eng', desc='', text=value))      
+            tags.add(USLT(encoding=3, lang='eng', desc='', text=value))    
+            log_info(f"Edited USLT frame")  
 
         # Might need to correct timestamps using file bitrate to correctly display in players
         # SYLT frame logic
@@ -99,6 +103,7 @@ def update_mp3_metadata(file_path, field, value):
             if events:
                 sylt = SYLT(encoding=Encoding.UTF8, lang='eng', format=1, type=1, desc='', text=events)
                 tags.add(sylt)
+                log_info(f"Edited SYLT frame")
 
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]
@@ -111,18 +116,21 @@ def update_mp3_metadata(file_path, field, value):
                 frame_class = globals().get(frame_id)
                 if frame_class:
                     tags.add(frame_class(encoding=3, text=value))
+                    log_info(f"Edited {frame_id} frame, new value:{value}")
         
         # Save tags
         tags.save(file_path)
+        log_info("Changes saved")
         return True
         
     except Exception as e:
-        print(f"Error updating MP3 metadata: {e}")
+        log_error(f"Error updating MP3 metadata: {e}")
         return False
 
 def update_flac_metadata(file_path, field, value):
     """Update Vorbis comment in FLAC file."""
     try:
+        log_info(f"File: {file_path}")
         audio = FLAC(file_path)
         
         if field in FIELD_MAPPING['flac']:
@@ -130,27 +138,33 @@ def update_flac_metadata(file_path, field, value):
             tag_name = FIELD_MAPPING['flac'][field]
             audio.pop(tag_name, None)  # None is the default if key doesn't exist
             audio[tag_name] = value
+            log_info(f"Edited {tag_name} comment, new value:{value}")
         elif field == 'comment':
             audio.pop('COMMENT', None)  # None is the default if key doesn't exist
             audio['COMMENT'] = value
+            log_info(f"Edited COMMENT comment")
         elif field == 'description':
             audio.pop('DESCRIPTION', None)  # None is the default if key doesn't exist
             audio['DESCRIPTION'] = value
+            log_info(f"Edited DESCRIPTION comment")
         elif field == 'lyrics':
             audio.pop('LYRICS', None)  # None is the default if key doesn't exist
             audio['LYRICS'] = value
+            log_info(f"Edited LYRICS comment")
         elif field == 'unsyncedlyrics':
             audio.pop('UNSYNCEDLYRICS', None)  # None is the default if key doesn't exist
             audio['UNSYNCEDLYRICS'] = value
+            log_info(f"Edited UNSYNCEDLYRICS comment, new value:{value}")
         else:
             # For custom fields, use the field name as tag
             audio[field] = value
         
         audio.save()
+        log_info("Changes saved")
         return True
         
     except Exception as e:
-        print(f"Error updating FLAC metadata: {e}")
+        log_error(f"Error updating FLAC metadata: {e}")
         return False
 
 def update_folder_metadata(folder_path, field, value):
@@ -189,12 +203,13 @@ def update_file_picture(file_path, image_data, mime_type=None):
             return False
             
     except Exception as e:
-        print(f"Error updating picture for {file_path}: {e}")
+        log_error(f"Error updating picture for {file_path}: {e}")
         return False
 
 def update_mp3_picture(file_path, image_data, mime_type=None):
     """Update APIC frame in MP3 file."""
     try:
+        log_info(f"File: {file_path}")
         # Load or create ID3 tags
         try:
             tags = ID3(file_path)
@@ -224,15 +239,17 @@ def update_mp3_picture(file_path, image_data, mime_type=None):
         ))
         
         tags.save(file_path)
+        log_info("Updated APIC frame")
         return True
         
     except Exception as e:
-        print(f"Error updating MP3 picture: {e}")
+        log_error(f"Error updating MP3 picture: {e}")
         return False
 
 def update_flac_picture(file_path, image_data):
     """Update picture block in FLAC file."""
     try:
+        log_info(f"File: {file_path}")
         audio = FLAC(file_path)
         
         # Create picture
@@ -255,11 +272,12 @@ def update_flac_picture(file_path, image_data):
         audio.clear_pictures()
         audio.add_picture(picture)
         audio.save()
+        log_info("Updated coveart")
         
         return True
         
     except Exception as e:
-        print(f"Error updating FLAC picture: {e}")
+        log_error(f"Error updating FLAC picture: {e}")
         return False
 
 def update_folder_pictures(folder_path, image_data, mime_type=None):
@@ -344,7 +362,7 @@ def delete_metadata_field(file_path, field):
             return False
             
     except Exception as e:
-        print(f"Error deleting field from {file_path}: {e}")
+        log_error(f"Error deleting field from {file_path}: {e}")
         return False
 
 def delete_mp3_field(file_path, field):
@@ -372,7 +390,7 @@ def delete_mp3_field(file_path, field):
         return True
         
     except Exception as e:
-        print(f"Error deleting MP3 field: {e}")
+        log_error(f"Error deleting MP3 field: {e}")
         return False
 
 def delete_flac_field(file_path, field):
@@ -398,7 +416,7 @@ def delete_flac_field(file_path, field):
         return True
         
     except Exception as e:
-        print(f"Error deleting FLAC field: {e}")
+        log_error(f"Error deleting FLAC field: {e}")
         return False
 
 def delete_cover_art(file_path):
@@ -414,7 +432,7 @@ def delete_cover_art(file_path):
             return False
             
     except Exception as e:
-        print(f"Error deleting cover art from {file_path}: {e}")
+        log_error(f"Error deleting cover art from {file_path}: {e}")
         return False
 
 def delete_mp3_cover_art(file_path):
@@ -431,7 +449,7 @@ def delete_mp3_cover_art(file_path):
         return True
         
     except Exception as e:
-        print(f"Error deleting MP3 cover art: {e}")
+        log_error(f"Error deleting MP3 cover art: {e}")
         return False
 
 def delete_flac_cover_art(file_path):
@@ -443,5 +461,5 @@ def delete_flac_cover_art(file_path):
         return True
         
     except Exception as e:
-        print(f"Error deleting FLAC cover art: {e}")
+        log_error(f"Error deleting FLAC cover art: {e}")
         return False

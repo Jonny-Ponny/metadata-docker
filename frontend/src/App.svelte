@@ -10,6 +10,7 @@
   import ImageViewer from "./components/ImageViewer.svelte";
   import Login from "./components/Login.svelte";
   import HelpModal from "./components/HelpModal.svelte";
+  import LogViewer from "./components/LogViewer.svelte";
 
   import {
     sortItems,
@@ -69,6 +70,8 @@
   let searchResults = $state(null); // null means show all, otherwise filtered results
 
   let showHelpModal = $state(false);
+
+  let showLogViewer = $state(false);
 
   // First apply search filter, then sort
   let filteredTreeData = $derived(
@@ -925,6 +928,20 @@
       window.removeEventListener("refreshFileTree", loadFileTree);
     };
   });
+
+  // Event handler for opening logs
+  function handleOpenLogs() {
+    showLogViewer = true;
+  }
+
+  $effect(() => {
+    // Setup event listener
+    window.addEventListener("openLogs", handleOpenLogs);
+
+    return () => {
+      window.removeEventListener("openLogs", handleOpenLogs);
+    };
+  });
 </script>
 
 {#if !$isAuthenticated}
@@ -1223,4 +1240,5 @@
     />
   </div>
   <HelpModal isOpen={showHelpModal} onClose={() => (showHelpModal = false)} />
+  <LogViewer isOpen={showLogViewer} onClose={() => (showLogViewer = false)} />
 {/if}

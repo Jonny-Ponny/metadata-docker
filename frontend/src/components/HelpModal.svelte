@@ -382,7 +382,8 @@
                                     >
                                     <tr
                                         ><td><code>LYRICS</code></td><td
-                                            >Main lyrics tag, use LRC format for synced lyrics</td
+                                            >Main lyrics tag, use LRC format for
+                                            synced lyrics</td
                                         ></tr
                                     >
                                     <tr
@@ -440,8 +441,35 @@
                         GitHub
                     </a>
                 </div>
-                <button class="close-footer-btn" onclick={onClose}>Close</button
-                >
+                <div class="footer-actions">
+                    <button
+                        class="logs-footer-btn"
+                        onclick={() => {
+                            onClose();
+                            window.dispatchEvent(new CustomEvent("openLogs"));
+                        }}
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                            />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                        Logs
+                    </button>
+                    <button class="close-footer-btn" onclick={onClose}
+                        >Close</button
+                    >
+                </div>
             </div>
         </div>
     </div>
@@ -711,6 +739,92 @@
         }
     }
 
+    .footer-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .logs-footer-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: transparent;
+        border: 1px solid #ddd;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        color: #666;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .logs-footer-btn:hover {
+        background: #f0f0f0;
+        border-color: #fd7d05;
+        color: #fd7d05;
+    }
+
+    .help-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 24px;
+        border-top: 1px solid #eee;
+        background: #fafafa;
+    }
+
+    .footer-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #666;
+    }
+
+    .version {
+        color: #888;
+    }
+
+    .separator {
+        color: #ccc;
+    }
+
+    .github-link {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: #666;
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+    .github-link:hover {
+        color: #fd7d05;
+    }
+
+    .github-link svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .close-footer-btn {
+        background: transparent;
+        border: 1px solid #ddd;
+        padding: 8px 24px;
+        border-radius: 6px;
+        font-size: 14px;
+        color: #666;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .close-footer-btn:hover {
+        background: #f0f0f0;
+        border-color: #fd7d05;
+        color: #fd7d05;
+    }
+
     /* Dark mode */
     :global(body.dark) .help-modal {
         background: #2d2d2d;
@@ -822,66 +936,6 @@
         color: #ff9f4b;
     }
 
-    .help-modal-footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px 24px;
-        border-top: 1px solid #eee;
-        background: #fafafa;
-    }
-
-    .footer-info {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        color: #666;
-    }
-
-    .version {
-        color: #888;
-    }
-
-    .separator {
-        color: #ccc;
-    }
-
-    .github-link {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        color: #666;
-        text-decoration: none;
-        transition: color 0.2s;
-    }
-
-    .github-link:hover {
-        color: #fd7d05;
-    }
-
-    .github-link svg {
-        width: 14px;
-        height: 14px;
-    }
-
-    .close-footer-btn {
-        background: transparent;
-        border: 1px solid #ddd;
-        padding: 8px 24px;
-        border-radius: 6px;
-        font-size: 14px;
-        color: #666;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .close-footer-btn:hover {
-        background: #f0f0f0;
-        border-color: #fd7d05;
-        color: #fd7d05;
-    }
-
     :global(body.dark) .footer-info {
         color: #b0b0b0;
     }
@@ -899,6 +953,17 @@
     }
 
     :global(body.dark) .github-link:hover {
+        color: #ff9f4b;
+    }
+
+    :global(body.dark) .logs-footer-btn {
+        border-color: #555;
+        color: #b0b0b0;
+    }
+
+    :global(body.dark) .logs-footer-btn:hover {
+        background: #444;
+        border-color: #ff9f4b;
         color: #ff9f4b;
     }
 </style>

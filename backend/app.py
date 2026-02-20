@@ -6,8 +6,10 @@ import datetime
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
+from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
+from logger_config import log_info, log_error, log_warning, LOG_DIR
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
@@ -24,16 +26,16 @@ PORT = int(os.getenv('CONTAINER_PORT', 5000))                            # Conta
 HOST_PORT = os.getenv('HOST_PORT')                                       # Host port, only for info
 MUSIC_FOLDER = '/music'
 
-print('\n')
-print('==============================================================================================')
-print('\n')
+log_info("STARTING")
+log_info(f'Debug set to {DEBUG}')
+log_info(f'Host port set to {HOST_PORT}')
+log_info(f'Container port set to {PORT}')
 
-print(f'Debug set to {DEBUG}')
-print(f'Host port set to {HOST_PORT}')
-print(f'Container port set to {PORT}')
+log_info(f'Music folder: {Path(MUSIC_FOLDER).absolute()}')
+log_info(f'Log folder:{Path(LOG_DIR).absolute()}')
 
-print(f'Login: {AUTH_USERNAME}')
-print(f'Password: {AUTH_PASSWORD}')
+log_info(f'Login: {AUTH_USERNAME}')
+log_info(f'Password: {AUTH_PASSWORD}')
 
 # -------------------------AUTH------------------------- #
 
@@ -268,7 +270,7 @@ def serve_audio():
         full_path = safe_path(file_path)
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
-        print(f'Serving audio: {full_path}')
+        log_info(f'Serving audio: {full_path}')
         # Set correct MIME type based on file extension
         mimetype = 'audio/mpeg' if full_path.lower().endswith('.mp3') else 'audio/flac'
         return send_file(full_path, mimetype=mimetype, conditional=True)
@@ -428,6 +430,8 @@ def delete_item():
         else:
             shutil.rmtree(full_path)
 
+        log_info(f"Deleted {full_path} and its contents")
+
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -475,6 +479,8 @@ def move_item():
 
         # Perform the move
         shutil.move(source_full, new_full)
+
+        log_info(f"Moved {source_full} to {new_full}")
 
         # Return the new relative path
         new_rel = os.path.relpath(new_full, MUSIC_FOLDER).replace('\\', '/')
@@ -524,6 +530,8 @@ def copy_item():
                     new_name = f'{base} ({counter})'
                     counter += 1
             shutil.copytree(full_path, new_name)
+        
+        log_info(f"Created a copy of {full_path}")
 
         return jsonify({'success': True})
     except Exception as e:
@@ -847,6 +855,8 @@ def save_cover_art_as_file():
         
         with open(output_path, 'wb') as f:
             f.write(image_data)
+
+        log_info(f'Created {output_path}')
         
         return jsonify({
             'success': True,
@@ -858,6 +868,87 @@ def save_cover_art_as_file():
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@token_required
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """Get log entries with filtering options"""
+    try:
+        # Get query parameters
+        lines = request.args.get('lines', default=100, type=int)
+        level = request.args.get('level', default=None, type=str)
+        search = request.args.get('search', default=None, type=str)
+        
+        log_file = LOG_DIR / "app.log"
+        
+        if not log_file.exists():
+            return jsonify({
+                "logs": [],
+                "total": 0,
+                "message": "No logs found"
+            })
+        
+        # Read log file
+        with open(log_file, 'r', encoding='utf-8') as f:
+            all_logs = f.readlines()
+        
+        # Filter by level if specified
+        if level:
+            all_logs = [log for log in all_logs if f" - {level.upper()} - " in log]
+        
+        # Filter by search term if specified
+        if search:
+            all_logs = [log for log in all_logs if search.lower() in log.lower()]
+        
+        # Get last N lines (most recent)
+        recent_logs = all_logs[-lines:]
+        
+        # Parse logs into structured format
+        parsed_logs = []
+        for log in recent_logs:
+            # Parse timestamp, level, and message from format: [2024-01-01 12:34:56] [INFO] message
+            log_line = log.strip()
+            
+            # Try to match the pattern [timestamp] [level] message
+            import re
+            match = re.match(r'\[(.*?)\] \[(.*?)\] (.*)', log_line)
+            
+            if match:
+                parsed_logs.append({
+                    'timestamp': match.group(1),
+                    'level': match.group(2),
+                    'message': match.group(3)
+                })
+            else:
+                parsed_logs.append({'raw': log_line})
+        
+        return jsonify({
+            "logs": parsed_logs,
+            "total": len(all_logs),
+            "displayed": len(recent_logs),
+            "filters": {
+                "level": level,
+                "search": search
+            }
+        })
+        
+    except Exception as e:
+        log_error(f"Error fetching logs: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@token_required
+@app.route('/api/logs/clear', methods=['POST'])
+def clear_logs():
+    """Clear all logs"""
+    try:
+        log_file = LOG_DIR / "app.log"
+        if log_file.exists():
+            log_file.write_text("")
+            log_info("Logs cleared by user")
+        return jsonify({"message": "Logs cleared successfully"})
+    except Exception as e:
+        log_error(f"Error clearing logs: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 # Serve Svelte frontend

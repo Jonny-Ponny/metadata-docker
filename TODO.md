@@ -16,3 +16,4 @@
 16. ~~Filters for file browser~~
 17. LRC editor
 18. ~~Help/Info modal~~
+19. Logs
