@@ -359,7 +359,7 @@ body {
 .theme-toggle-group {
   position: fixed;
   bottom: 73px;
-  left: 10px;
+  right: 10px;
   display: flex;
   gap: 8px;
   z-index: 1001;

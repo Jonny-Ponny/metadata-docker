@@ -121,19 +121,19 @@
                             onclick={openFullImage}
                         >
                             <svg
-                                width="18"
-                                height="18"
                                 viewBox="0 0 20 20"
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M7 3H4.5C4.22386 3 4 3.22386 4 3.5V7M16 7V3.5C16 3.22386 15.7761 3 15.5 3H13M13 17H15.5C15.7761 17 16 16.7761 16 16.5V13M4 13V16.5C4 16.7761 4.22386 17 4.5 17H7"
+                                class="svelte-1n4vb3j"
+                                width="20"
+                                height="20"
+                                ><path
+                                    d="M7 3H4.5C4 3 4 3 4 3.5V6M17 6V4C17 3 17 3 16 3H14M14 16H16C17 16 17 16 17 15V13M4 13V15C4 16 4 16 5 16H7"
                                     stroke="currentColor"
                                     stroke-width="1.8"
                                     stroke-linecap="round"
-                                />
-                            </svg>
+                                ></path></svg
+                            >
                         </button>
                     </div>
                 </div>
@@ -413,7 +413,6 @@
 
     :global(body.dark) .modal-close {
         background: rgba(255, 255, 255, 0.2);
-        
     }
 
     :global(body.dark) .modal-close:hover {

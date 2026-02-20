@@ -942,6 +942,14 @@
     <!-- Theme switch and help toggle -->
     <div class="theme-toggle-group">
       <button
+        class="help-toggle"
+        class:blurred={isDragging}
+        onclick={() => (showHelpModal = true)}
+        title="Help & Information"
+      >
+        <span>Help</span>
+      </button>
+      <button
         class="theme-toggle"
         class:blurred={isDragging}
         onclick={toggleTheme}
@@ -951,15 +959,6 @@
         {:else}
           <span>Dark</span>
         {/if}
-      </button>
-
-      <button
-        class="help-toggle"
-        class:blurred={isDragging}
-        onclick={() => (showHelpModal = true)}
-        title="Help & Information"
-      >
-        <span>Help</span>
       </button>
     </div>
 

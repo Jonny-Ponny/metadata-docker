@@ -102,7 +102,7 @@
   .theme-toggle {
     position: fixed;
     bottom: 13px;
-    left: 10px;
+    right: 10px;
     background: #fd7d05;
     color: white;
     border: none;
