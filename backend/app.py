@@ -19,6 +19,9 @@ AUTH_PASSWORD = os.getenv('AUTH_PASSWORD', 'admin')  # Plain text password
 TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 24
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '') if os.getenv('JWT_SECRET_KEY') != '' else os.urandom(24).hex()
 
+PUID = os.getenv('PUID', '1000')
+PGID = os.getenv('PGID', '1000')
+
 app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes', 'on') # Debug
@@ -30,6 +33,8 @@ log_info("STARTING")
 log_info(f'Debug set to {DEBUG}')
 log_info(f'Host port set to {HOST_PORT}')
 log_info(f'Container port set to {PORT}')
+log_info(f'PUID set to {PUID}')
+log_info(f'PUID set to {PGID}')
 
 log_info(f'Music folder: {Path(MUSIC_FOLDER).absolute()}')
 log_info(f'Log folder:{Path(LOG_DIR).absolute()}')
@@ -749,6 +754,8 @@ def delete_cover_art():
         
         from metadata_writer import delete_cover_art as delete_picture
         success = delete_picture(full_path)
+
+        log_info(f"Deleted cove art from {full_path}")
         
         if success:
             # Get updated metadata to confirm deletion
