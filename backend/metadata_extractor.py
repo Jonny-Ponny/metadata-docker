@@ -120,10 +120,4 @@ def extract_metadata(filepath):
     if picture_uri:
         result['picture'] = picture_uri
 
-    # Fallbacks
-    if not result['description'] and result['comment']:
-        result['description'] = result['comment']
-    if not result['unsyncedLyrics'] and result['lyrics']:
-        result['unsyncedLyrics'] = result['lyrics']
-
     return result

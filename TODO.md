@@ -15,4 +15,4 @@
 15. ~~Deleting files/folders~~
 16. ~~Filters for file browser~~
 17. LRC editor
-18. Help/Info modal
+18. ~~Help/Info modal~~

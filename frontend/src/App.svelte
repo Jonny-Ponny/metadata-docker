@@ -9,6 +9,7 @@
   import SortButton from "./components/SortButton.svelte";
   import ImageViewer from "./components/ImageViewer.svelte";
   import Login from "./components/Login.svelte";
+  import HelpModal from "./components/HelpModal.svelte";
 
   import {
     sortItems,
@@ -66,6 +67,8 @@
   // ========== SEARCH STATE ==========
   let searchQuery = $state("");
   let searchResults = $state(null); // null means show all, otherwise filtered results
+
+  let showHelpModal = $state(false);
 
   // First apply search filter, then sort
   let filteredTreeData = $derived(
@@ -919,7 +922,7 @@
 
     return () => {
       window.fetch = originalFetch; // Restore original fetch
-      window.removeEventListener('refreshFileTree', loadFileTree);
+      window.removeEventListener("refreshFileTree", loadFileTree);
     };
   });
 </script>
@@ -936,18 +939,29 @@
     ondrop={handleDrop}
     class:dragging={isDragging}
   >
-    <!-- Theme switch toggle -->
-    <button
-      class="theme-toggle"
-      class:blurred={isDragging}
-      onclick={toggleTheme}
-    >
-      {#if $theme === "light"}
-        <span>Light</span>
-      {:else}
-        <span>Dark</span>
-      {/if}
-    </button>
+    <!-- Theme switch and help toggle -->
+    <div class="theme-toggle-group">
+      <button
+        class="theme-toggle"
+        class:blurred={isDragging}
+        onclick={toggleTheme}
+      >
+        {#if $theme === "light"}
+          <span>Light</span>
+        {:else}
+          <span>Dark</span>
+        {/if}
+      </button>
+
+      <button
+        class="help-toggle"
+        class:blurred={isDragging}
+        onclick={() => (showHelpModal = true)}
+        title="Help & Information"
+      >
+        <span>Help</span>
+      </button>
+    </div>
 
     <!-- Overall upload progress bar -->
     {#if uploadOverallProgress.isActive}
@@ -1209,4 +1223,5 @@
       bind:this={playerComponent}
     />
   </div>
+  <HelpModal isOpen={showHelpModal} onClose={() => (showHelpModal = false)} />
 {/if}
