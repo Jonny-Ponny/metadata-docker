@@ -583,12 +583,10 @@
   function selectFolder(path) {
     selectedFolder = path;
     selectedFile = null;
-    // selectedImage = null;
   }
 
   function handleTimeUpdate(time) {
     currentTime = time;
-    // You can add additional logic here if needed
   }
 
   // ========== RESIZE HANDLERS ==========

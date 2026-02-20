@@ -3,6 +3,7 @@
     // VS Code doesnt like this
     // @ts-ignore
     import Self from "./TreeNode.svelte";
+    import HoldButton from "./HoldButton.svelte";
 
     import {
         contextMenu,
@@ -36,6 +37,9 @@
             ? sortItems(item.children, $sortConfig.by, $sortConfig.direction)
             : [],
     );
+
+    let menuRef = $state(null);
+    let menuStyle = $state({ left: "0px", top: "0px" });
 
     function handleDirectoryClick() {
         selectFolder(item.path); // Select the folder
@@ -77,8 +81,14 @@
 
     $effect(() => {
         if ($contextMenu.isOpen && $contextMenu.path === item.path) {
+            // Small delay to ensure menu is rendered
+            setTimeout(() => {
+                positionMenu($contextMenu.x, $contextMenu.y);
+            }, 0);
+
             window.addEventListener("click", handleClickOutside);
             window.addEventListener("keydown", handleKeyDown);
+
             return () => {
                 window.removeEventListener("click", handleClickOutside);
                 window.removeEventListener("keydown", handleKeyDown);
@@ -144,11 +154,52 @@
         contextMenu.update((curr) => ({ ...curr, isOpen: false }));
     }
 
-    import HoldButton from "./HoldButton.svelte";
-
     async function handleDeleteWithHold() {
         await onDelete(item.path);
         contextMenu.update((curr) => ({ ...curr, isOpen: false }));
+    }
+
+    // Function to position menu
+    function positionMenu(clickX, clickY) {
+        if (!menuRef) return;
+
+        // Get viewport dimensions
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Get menu dimensions
+        const menuWidth = menuRef.offsetWidth;
+        const menuHeight = menuRef.offsetHeight;
+
+        // Calculate horizontal position (prevent going off right edge)
+        let left = clickX;
+        if (left + menuWidth > viewportWidth - 10) {
+            left = viewportWidth - menuWidth - 10;
+        }
+
+        // Calculate vertical position
+        let top = clickY;
+
+        // Check if menu would go below viewport
+        if (top + menuHeight > viewportHeight - 10) {
+            // Position above the click point
+            top = clickY - menuHeight;
+
+            // If that would go above viewport, position at top with small margin
+            if (top < 10) {
+                top = 10;
+            }
+        }
+
+        // Ensure menu doesn't go above viewport
+        if (top < 10) {
+            top = 10;
+        }
+
+        menuStyle = {
+            left: left + "px",
+            top: top + "px",
+        };
     }
 </script>
 
@@ -255,26 +306,19 @@
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
+                bind:this={menuRef}
                 id={`context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`}
                 class="context-menu"
-                style="left: {$contextMenu.x}px; top: {$contextMenu.y}px;"
+                style="left: {menuStyle.left}; top: {menuStyle.top};"
                 onclick={(e) => e.stopPropagation()}
             >
                 <ul>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                    <li
-                        onclick={() => {
-                            onCopy(item.path);
-                        }}
-                    >
-                        Copy
-                    </li>
+                    <li onclick={() => onCopy(item.path)}>Copy</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
-                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                    <!-- Delete with hold confirmation -->
                     <li class="hold-delete-item">
                         <HoldButton
                             variant="menu"
@@ -411,12 +455,11 @@
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
+                bind:this={menuRef}
                 id={`context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`}
                 class="context-menu"
-                style="left: {$contextMenu.x}px; top: {$contextMenu.y}px;"
-                onclick={(e) => {
-                    e.stopPropagation();
-                }}
+                style="left: {menuStyle.left}; top: {menuStyle.top};"
+                onclick={(e) => e.stopPropagation()}
             >
                 <ul>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -425,7 +468,6 @@
                     <li onclick={() => onCopy(item.path)}>Copy</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
-                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li class="hold-delete-item">
                         <HoldButton
                             variant="menu"

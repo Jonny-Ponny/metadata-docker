@@ -19,8 +19,9 @@ AUTH_PASSWORD = os.getenv('AUTH_PASSWORD', 'admin')  # Plain text password
 TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 24
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '') if os.getenv('JWT_SECRET_KEY') != '' else os.urandom(24).hex()
 
-PUID = os.getenv('PUID', '1000')
-PGID = os.getenv('PGID', '1000')
+# If not in environment docker will run as root
+PUID = os.getenv('PUID', '0')
+PGID = os.getenv('PGID', '0')
 
 app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
