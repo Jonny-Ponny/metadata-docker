@@ -894,7 +894,9 @@ def get_logs():
         
         # Filter by level if specified
         if level:
-            all_logs = [log for log in all_logs if f" - {level.upper()} - " in log]
+            # Match the pattern [LEVEL] in the log
+            level_pattern = f"[{level.upper()}]"
+            all_logs = [log for log in all_logs if level_pattern in log]
         
         # Filter by search term if specified
         if search:
