@@ -523,12 +523,14 @@
 
   function selectFile(path) {
     selectedFile = path;
-    selectedFolder = null; // Clear folder selection
-    // selectedImage = null;
-
-    loadAudioFile(path);
-  }
-
+    selectedFolder = null;
+    
+    // Only load as audio if it's an audio file
+    const isAudio = path.match(/\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i);
+    if (isAudio) {
+        loadAudioFile(path);
+    }
+}
   async function loadAudioFile(filePath) {
     try {
       // Clean up previous blob URL if any
