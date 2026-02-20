@@ -476,7 +476,25 @@
         lyricsModalType = type;
         lyricsModalContent =
             type === "synced" ? metadata.lyrics : metadata.unsyncedLyrics;
-        lyricsModalOpen = true;
+
+        // Parse existing lyrics to extract timestamps if present
+        if (type === "synced" && metadata.lyrics) {
+            const result = processEditedLyrics(metadata.lyrics);
+            lyricsData = {
+                lyrics: result.text,
+                timestamps: result.timestamps,
+            };
+        } else {
+            lyricsData = {
+                lyrics:
+                    type === "synced"
+                        ? metadata.lyrics
+                        : metadata.unsyncedLyrics,
+                timestamps: [],
+            };
+        }
+
+        showLyricsModal = true;
     }
 
     function closeLyricsModal() {
@@ -499,6 +517,94 @@
 
         // Close modal
         closeLyricsModal();
+    }
+
+    let showLyricsModal = $state(false);
+    let lyricsData = $state({ lyrics: "", timestamps: [] });
+
+    // Handle save from lyrics modal
+    async function handleLyricsSave(data) {
+        const field =
+            lyricsModalType === "synced" ? "lyrics" : "unsyncedLyrics";
+
+        // Update local state
+        if (lyricsModalType === "synced") {
+            metadata.lyrics = data.synchronizedLyrics || data.lyrics;
+        } else {
+            metadata.unsyncedLyrics = data.lyrics;
+        }
+
+        // Save to file
+        await applyToFile(field, data.synchronizedLyrics || data.lyrics);
+
+        // Close modal
+        showLyricsModal = false;
+    }
+
+    import { processEditedLyrics } from "../utils/index.js";
+    import LyricsEditorModal from "./LRCEditor.svelte";
+
+    // Separate modals for synced and unsynced lyrics
+    let showSyncedLyricsModal = $state(false);
+    let showUnsyncedLyricsModal = $state(false);
+    let syncedLyricsData = $state({ lyrics: "", timestamps: [] });
+
+    function openSyncedLyricsModal() {
+        // For synced lyrics, we need to parse timestamps
+        if (metadata.lyrics) {
+            const result = processEditedLyrics(metadata.lyrics);
+            syncedLyricsData = {
+                lyrics: result.text,
+                timestamps: result.timestamps,
+            };
+        } else {
+            syncedLyricsData = {
+                lyrics: "",
+                timestamps: [],
+            };
+        }
+        showSyncedLyricsModal = true;
+    }
+
+    function openUnsyncedLyricsModal() {
+        lyricsModalType = "unsynced";
+        lyricsModalContent = metadata.unsyncedLyrics || "";
+        showUnsyncedLyricsModal = true;
+    }
+
+    function closeUnsyncedLyricsModal() {
+        showUnsyncedLyricsModal = false;
+    }
+
+    async function saveUnsyncedLyrics() {
+        const field = "unsyncedLyrics";
+
+        // Update local state
+        metadata.unsyncedLyrics = lyricsModalContent;
+
+        // Save to file
+        await applyToFile(field, lyricsModalContent);
+
+        // Close modal
+        closeUnsyncedLyricsModal();
+    }
+
+    // Handle save from synced lyrics modal
+    async function handleSyncedLyricsSave(data) {
+        const field = "lyrics";
+
+        // Update local state with the synchronized lyrics
+        metadata.lyrics = data.synchronizedLyrics || data.lyrics;
+
+        // Save to file
+        await applyToFile(field, data.synchronizedLyrics || data.lyrics);
+
+        // Close modal
+        showSyncedLyricsModal = false;
+    }
+
+    function stopPropagation(e) {
+        e.stopPropagation();
     }
 </script>
 
@@ -804,10 +910,10 @@
 
     <!-- Lyrics action buttons -->
     <div class="lyrics-actions">
-        <button class="action-btn" onclick={() => openLyricsModal("synced")}>
-            Edit lyrics
+        <button class="action-btn" onclick={openSyncedLyricsModal}>
+            Edit synced lyrics
         </button>
-        <button class="action-btn" onclick={() => openLyricsModal("unsynced")}>
+        <button class="action-btn" onclick={openUnsyncedLyricsModal}>
             Edit unsynced lyrics
         </button>
     </div>
@@ -1109,23 +1215,17 @@
     {/each}
 
     <!-- Lyrics Modal -->
-    {#if lyricsModalOpen}
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
+    {#if showUnsyncedLyricsModal}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="lyrics-modal-overlay" onclick={closeLyricsModal}>
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="lyrics-modal" onclick={(e) => e.stopPropagation()}>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div class="lyrics-modal-overlay" onclick={closeUnsyncedLyricsModal}>
+            <div class="lyrics-modal" onclick={stopPropagation}>
                 <div class="lyrics-modal-header">
-                    <h3>
-                        {lyricsModalType === "synced"
-                            ? "Edit Synced Lyrics"
-                            : "Edit Unsynced Lyrics"}
-                    </h3>
+                    <h3>Edit Unsynced Lyrics</h3>
                     <button
                         title="Close"
                         class="modal-close-btn"
-                        onclick={closeLyricsModal}
+                        onclick={closeUnsyncedLyricsModal}
                     >
                         <svg
                             width="16"
@@ -1148,23 +1248,25 @@
                     <!-- svelte-ignore a11y_autofocus -->
                     <textarea
                         bind:value={lyricsModalContent}
-                        placeholder="Enter lyrics here..."
+                        placeholder="Enter unsynced lyrics here..."
                         class="lyrics-textarea"
                         autofocus
                     ></textarea>
                 </div>
 
                 <div class="lyrics-modal-footer">
-                    <button class="cancel-btn" onclick={closeLyricsModal}>
+                    <button
+                        class="cancel-btn"
+                        onclick={closeUnsyncedLyricsModal}
+                    >
                         Cancel
                     </button>
                     <div class="save-actions">
                         <button
                             class="save-btn"
-                            onclick={saveLyrics}
+                            onclick={saveUnsyncedLyrics}
                             title="Save to this file only"
                         >
-                            <!-- File icon SVG (same as your other file buttons) -->
                             <svg
                                 width="14"
                                 height="16"
@@ -1219,6 +1321,14 @@
             </div>
         </div>
     {/if}
+    <LyricsEditorModal
+        isOpen={showSyncedLyricsModal}
+        onClose={() => (showSyncedLyricsModal = false)}
+        {filePath}
+        initialLyrics={syncedLyricsData.lyrics}
+        initialTimestamps={syncedLyricsData.timestamps}
+        onSave={handleSyncedLyricsSave}
+    />
 </div>
 
 <style>

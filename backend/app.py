@@ -28,6 +28,7 @@ DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes', 'on') # Debug
 PORT = int(os.getenv('CONTAINER_PORT', 5000))                            # Container port
 HOST_PORT = os.getenv('HOST_PORT')                                       # Host port, only for info
 MUSIC_FOLDER = '/music'
+MUSIC_FOLDER = 'D:\\Music'
 
 log_info("STARTING")
 log_info(f'Debug set to {DEBUG}')

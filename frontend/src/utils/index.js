@@ -10,3 +10,5 @@ export * from "../stores/auth.store"
 export * from "./timestamp.utils"
 export * from "./sort.utils"
 export * from "./hold2confirm.utils"
+export * from "./lyrics.utils.js";
+export * from "./dom.utils.js";

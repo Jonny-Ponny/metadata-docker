@@ -34,8 +34,13 @@
 
         audio.addEventListener("timeupdate", () => {
             currentTime = audio.currentTime;
-            // log("timeupdate", currentTime);
             if (ontimeupdate) ontimeupdate(currentTime);
+
+            // Dispatch event for lyrics editor
+            const event = new CustomEvent("player-time-update", {
+                detail: { time: currentTime },
+            });
+            window.dispatchEvent(event);
         });
 
         audio.addEventListener("loadedmetadata", () => {
@@ -95,6 +100,25 @@
         audio.addEventListener("waiting", () => {
             log("waiting event");
         });
+        
+        // Listen for lyrics-seek events (when user clicks on a timestamp/lyric line)
+        const handleLyricsSeek = (e) => {
+            const time = e.detail.time;
+            log("Lyrics seek requested to:", time);
+            seekToTime(time);
+        };
+
+        // Listen for get-current-time events (when sync button is pressed)
+        const handleGetCurrentTime = (e) => {
+            const callback = e.detail.callback;
+            if (callback && typeof callback === 'function') {
+                log("Providing current time:", currentTime);
+                callback(currentTime);
+            }
+        };
+
+        window.addEventListener("lyrics-seek", handleLyricsSeek);
+        window.addEventListener("get-current-time", handleGetCurrentTime);
 
         return () => {
             log("Cleanup: pausing and clearing audio");
@@ -102,6 +126,8 @@
                 audio.pause();
                 audio.src = "";
             }
+            window.removeEventListener("lyrics-seek", handleLyricsSeek);
+            window.removeEventListener("get-current-time", handleGetCurrentTime);
         };
     });
 
@@ -272,8 +298,12 @@
         }
     });
 
+    function getCurrentTime() {
+        return currentTime;
+    }
+
     // Expose functions to parent
-    export { seekToTime, stop };
+    export { seekToTime, stop, getCurrentTime };
 </script>
 
 <!-- Template – unchanged -->
