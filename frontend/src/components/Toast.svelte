@@ -106,7 +106,7 @@ toast.show("This will stay longer", "info", 10000); -->
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     /* Add these properties to ensure proper layering and interaction */
     pointer-events: auto;
-    z-index: 9999;
+    z-index: 99999;
   }
 
   .toast.fade-out {
@@ -189,7 +189,7 @@ toast.show("This will stay longer", "info", 10000); -->
     /* Ensure button is clickable */
     pointer-events: auto;
     position: relative;
-    z-index: 10000;
+    z-index: 100000;
   }
 
   .toast-close:hover {
