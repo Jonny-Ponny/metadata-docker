@@ -524,13 +524,15 @@
   function selectFile(path) {
     selectedFile = path;
     selectedFolder = null;
-    
+
     // Only load as audio if it's an audio file
-    const isAudio = path.match(/\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i);
+    const isAudio = path.match(
+      /\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i,
+    );
     if (isAudio) {
-        loadAudioFile(path);
+      loadAudioFile(path);
     }
-}
+  }
   async function loadAudioFile(filePath) {
     try {
       // Clean up previous blob URL if any
@@ -622,8 +624,25 @@
 
   // Keydown
   function handleKeyDown(e) {
+    // Check if we're in a rename operation
     if ($renamingPath) {
       // Let the rename input handle the keys
+      return;
+    }
+
+    // Check if any input, textarea, or contenteditable is focused
+    const activeElement = document.activeElement;
+    const isInputFocused =
+      activeElement &&
+      (activeElement.tagName === "INPUT" ||
+        activeElement.tagName === "TEXTAREA" ||
+        activeElement.getAttribute("contenteditable") === "true" ||
+        activeElement.closest(".modal-content") !== null || // Any modal content
+        activeElement.closest(".timestamp-input") !== null || // Timestamp editor
+        activeElement.closest(".edit-textarea") !== null); // Edit modal textarea
+
+    if (isInputFocused) {
+      // Don't handle keyboard shortcuts when user is typing
       return;
     }
 

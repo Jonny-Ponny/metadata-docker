@@ -376,9 +376,6 @@
                     currentActiveLine = targetIndex;
                     requestAnimationFrame(scrollToCurrentLine);
 
-                    // Show success message
-                    toast.success(`Timestamp added to line ${targetIndex + 1}`);
-
                     // Re-equalize heights after adding timestamp
                     requestAnimationFrame(() => {
                         equalizeAllLineHeights();

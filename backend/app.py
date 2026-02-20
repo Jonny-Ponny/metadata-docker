@@ -432,10 +432,11 @@ def delete_item():
 
         if os.path.isfile(full_path):
             os.remove(full_path)
+            log_info(f"Deleted {full_path}")
         else:
             shutil.rmtree(full_path)
+            log_info(f"Deleted {full_path} and its contents")
 
-        log_info(f"Deleted {full_path} and its contents")
 
         return jsonify({'success': True})
     except Exception as e:
