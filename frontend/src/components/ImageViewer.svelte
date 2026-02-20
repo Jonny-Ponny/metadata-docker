@@ -124,16 +124,16 @@
                                 viewBox="0 0 20 20"
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg"
-                                class="svelte-1n4vb3j"
                                 width="20"
                                 height="20"
-                                ><path
+                            >
+                                <path
                                     d="M7 3H4.5C4 3 4 3 4 3.5V6M17 6V4C17 3 17 3 16 3H14M14 16H16C17 16 17 16 17 15V13M4 13V15C4 16 4 16 5 16H7"
                                     stroke="currentColor"
                                     stroke-width="1.8"
                                     stroke-linecap="round"
-                                ></path></svg
-                            >
+                                />
+                            </svg>
                         </button>
                     </div>
                 </div>
@@ -149,7 +149,11 @@
     <div role="img" class="full-image-modal" onclick={closeFullImage}>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="modal-content" onclick={(e) => e.stopPropagation()}>
-            <button class="modal-close" title="Close" onclick={closeFullImage}>
+            <button
+                class="modal-close-btn"
+                title="Close"
+                onclick={closeFullImage}
+            >
                 <svg
                     width="20"
                     height="20"
@@ -165,7 +169,7 @@
                     />
                 </svg>
             </button>
-            <img src={imageUrl} alt="Full size" />
+            <img src={imageUrl} alt="Full size cover art" />
         </div>
     </div>
 {/if}
@@ -240,7 +244,8 @@
     }
 
     .expand-corner .icon-btn {
-        background: white;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(4px);
         border-radius: 4px;
         padding: 8px;
         color: #333;
@@ -251,13 +256,15 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: none;
-        backdrop-filter: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s;
     }
 
     .expand-corner .icon-btn:hover {
         background: #fd7d05;
         color: white;
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(253, 125, 5, 0.3);
     }
 
     .expand-corner .icon-btn svg {
@@ -295,56 +302,65 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.9);
+        background: rgba(0, 0, 0, 0.95);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 10000;
         cursor: pointer;
         animation: fadeIn 0.2s ease;
+        padding-bottom: 60px; /* Move image up to avoid player */
     }
 
     .modal-content {
         position: relative;
         max-width: 90vw;
-        max-height: 90vh;
+        max-height: 85vh;
         animation: scaleIn 0.2s ease;
+        margin-top: -20px; /* Fine-tune vertical position */
     }
 
     .modal-content img {
         max-width: 100%;
-        max-height: 90vh;
+        max-height: 85vh;
         object-fit: contain;
-        border-radius: 4px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     }
 
-    .modal-close {
+    .modal-close-btn {
         position: absolute;
-        top: -44px;
-        right: 0;
-        background: rgba(255, 255, 255, 0.2);
+        top: 12px;
+        right: 12px;
+        width: 36px;
+        height: 36px;
+        transition: all 0.2s;
+        backdrop-filter: blur(4px);
+        z-index: 10001;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        background: none;
         border: none;
-        color: white;
         cursor: pointer;
-        width: 40px;
-        height: 40px;
+        padding: 4px;
+        color: #666;
         display: flex;
         align-items: center;
         justify-content: center;
         border-radius: 4px;
-        transition: all 0.2s;
-        backdrop-filter: blur(4px);
     }
 
-    .modal-close:hover {
-        background: rgba(255, 255, 255, 0.3);
-        color: white;
+    .modal-close-btn:hover {
+        background: #fd7d05;
+        border-color: rgba(255, 255, 255, 0.4);
         transform: scale(1.05);
+        color: white;
     }
 
-    .modal-close svg {
-        width: 20px;
-        height: 20px;
+    .modal-close-btn svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        stroke-width: 2.2;
     }
 
     @keyframes fadeIn {
@@ -391,13 +407,16 @@
     }
 
     :global(body.dark) .expand-corner .icon-btn {
-        background: #3d3d3d;
+        /* background: rgba(61, 61, 61, 0.9); */
+        backdrop-filter: blur(4px);
         color: #e0e0e0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
 
     :global(body.dark) .expand-corner .icon-btn:hover {
         background: #ff9f4b;
-        color: white;
+        color: #1e1e1e;
+        box-shadow: 0 4px 12px rgba(255, 159, 75, 0.3);
     }
 
     /* Dark mode adjustments */
@@ -411,11 +430,13 @@
         color: #ff9f4b;
     }
 
-    :global(body.dark) .modal-close {
-        background: rgba(255, 255, 255, 0.2);
+    :global(body.dark) .modal-close-btn {
+        border-color: rgba(255, 255, 255, 0.15);
     }
 
-    :global(body.dark) .modal-close:hover {
-        background: rgba(255, 255, 255, 0.3);
+    :global(body.dark) .modal-close-btn:hover {
+        background: #ff9f4b;
+        border-color: rgba(255, 255, 255, 0.3);
+        color: #1e1e1e;
     }
 </style>

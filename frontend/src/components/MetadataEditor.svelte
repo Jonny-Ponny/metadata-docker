@@ -1400,8 +1400,11 @@
         <div role="img" class="full-image-modal" onclick={closeFullImage}>
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="modal-content" onclick={(e) => e.stopPropagation()}>
-                <!-- svelte-ignore a11y_consider_explicit_label -->
-                <button class="modal-close" onclick={closeFullImage}>
+                <button
+                    class="modal-close-btn"
+                    title="Close"
+                    onclick={closeFullImage}
+                >
                     <svg
                         width="20"
                         height="20"
@@ -1857,65 +1860,72 @@
         display: block;
     }
 
-    /* Full image modal */
+    /* Full image modal - updated */
     .full-image-modal {
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.9);
+        background: rgba(0, 0, 0, 0.95);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 10000;
         cursor: pointer;
         animation: fadeIn 0.2s ease;
+        padding-bottom: 60px; /* Move image up to avoid player */
     }
 
     .modal-content {
         position: relative;
         max-width: 90vw;
-        max-height: 90vh;
+        max-height: 85vh;
         animation: scaleIn 0.2s ease;
+        margin-top: -20px; /* Fine-tune vertical position */
     }
 
     .modal-content img {
         max-width: 100%;
-        max-height: 90vh;
+        max-height: 85vh;
         object-fit: contain;
-        border-radius: 4px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     }
 
-    .modal-close {
+    .modal-close-btn {
         position: absolute;
-        top: -44px;
-        right: 0;
-        background: rgba(255, 255, 255, 0.2);
+        top: 12px;
+        right: 12px;
+        width: 36px;
+        height: 36px;
+        transition: all 0.2s;
+        backdrop-filter: blur(4px);
+        z-index: 10001;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        background: none;
         border: none;
-        color: white;
         cursor: pointer;
-        width: 40px;
-        height: 40px;
+        padding: 4px;
+        color: #666;
         display: flex;
         align-items: center;
         justify-content: center;
         border-radius: 4px;
-        transition: all 0.2s;
-        backdrop-filter: blur(4px);
     }
 
-    .modal-close:hover {
-        background: rgba(255, 255, 255, 0.3);
-        color: white;
+    .modal-close-btn:hover {
+        background: #fd7d05;
+        border-color: rgba(255, 255, 255, 0.4);
         transform: scale(1.05);
+        color: white;
     }
 
-    .modal-close svg {
-        width: 20px;
-        height: 20px;
-        display: block;
+    .modal-close-btn svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        stroke-width: 2.2;
     }
 
     @keyframes fadeIn {
@@ -1978,17 +1988,7 @@
         color: #333;
     }
 
-    .modal-close-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 4px;
-        color: #666;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-    }
+    
 
     .modal-close-btn:hover {
         background: rgba(0, 0, 0, 0.1);
@@ -2180,15 +2180,6 @@
         background: rgba(255, 107, 107, 0.2);
     }
 
-    :global(body.dark) .modal-close {
-        background: rgba(255, 255, 255, 0.2);
-        color: #e0e0e0;
-    }
-
-    :global(body.dark) .modal-close:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-
     :global(body.dark) .lyrics-modal {
         background: #2d2d2d;
         border-color: #444;
@@ -2203,12 +2194,13 @@
     }
 
     :global(body.dark) .modal-close-btn {
-        color: #aaa;
+        border-color: rgba(255, 255, 255, 0.15);
     }
 
     :global(body.dark) .modal-close-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: #ff9f4b;
+        background: #ff9f4b;
+        border-color: rgba(255, 255, 255, 0.3);
+        color: #1e1e1e;
     }
 
     :global(body.dark) .lyrics-textarea {
