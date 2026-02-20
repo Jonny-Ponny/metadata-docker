@@ -86,7 +86,7 @@
         customFieldEditing = [...customFieldEditing, false];
     }
 
-    async function applyToFile(field, value) {
+    async function applyToFile(field, value, showToast = true) {
         if (!filePath) return;
 
         try {
@@ -110,7 +110,9 @@
                 throw new Error(result.error || "Failed to update metadata");
             }
 
-            toast.success(`Updated ${field} for this file`);
+            if (showToast) {
+                toast.success(`Updated ${field} for this file`);
+            }
 
             // Refresh metadata to show any changes
             await fetchMetadata(filePath);
@@ -261,7 +263,11 @@
         }
     });
 
-    async function handlePictureUpload(file, applyToFolder = false) {
+    async function handlePictureUpload(
+        file,
+        applyToFolder = false,
+        showToast = true,
+    ) {
         if (!file || !filePath) return;
 
         // Validate file type
@@ -308,11 +314,13 @@
                 throw new Error(result.error || "Failed to upload picture");
             }
 
-            toast.success(
-                applyToFolder
-                    ? `Updated cover art for folder (${result.updated} files)`
-                    : "Updated cover art for this file",
-            );
+            if (showToast) {
+                toast.success(
+                    applyToFolder
+                        ? `Updated cover art for folder (${result.updated} files)`
+                        : "Updated cover art for this file",
+                );
+            }
 
             // Refresh metadata to show new picture
             await fetchMetadata(filePath);
@@ -606,6 +614,74 @@
     function stopPropagation(e) {
         e.stopPropagation();
     }
+
+    async function applyAllChanges() {
+        if (!filePath) return;
+
+        try {
+            // Collect all fields that have values
+            const updates = [];
+
+            // Main fields
+            for (const field of mainFields) {
+                if (metadata[field] && metadata[field].trim() !== "") {
+                    updates.push({ field, value: metadata[field] });
+                }
+            }
+
+            // Textarea fields
+            for (const field of textareaFields) {
+                if (metadata[field] && metadata[field].trim() !== "") {
+                    updates.push({ field, value: metadata[field] });
+                }
+            }
+
+            // Other fields
+            for (const [key, value] of Object.entries(
+                metadata.otherFields || {},
+            )) {
+                if (value && value.trim() !== "") {
+                    updates.push({ field: key, value });
+                }
+            }
+
+            // Custom fields
+            for (const field of customFields) {
+                if (
+                    field.name &&
+                    field.name.trim() !== "" &&
+                    field.value &&
+                    field.value.trim() !== ""
+                ) {
+                    updates.push({ field: field.name, value: field.value });
+                }
+            }
+
+            if (updates.length === 0 && !metadata.picture) {
+                toast.info("No changes to apply");
+                return;
+            }
+
+            // Apply all updates
+            for (const update of updates) {
+                await applyToFile(update.field, update.value, false);
+            }
+
+            // Handle picture if present
+            if (metadata.picture && metadata.picture.startsWith("data:")) {
+                // Convert data URL to file and upload
+                const response = await fetch(metadata.picture);
+                const blob = await response.blob();
+                const file = new File([blob], "cover.jpg", { type: blob.type });
+                await handlePictureUpload(file, false, false);
+            }
+
+            toast.success("All changes applied successfully");
+        } catch (error) {
+            console.error("Error applying all changes:", error);
+            toast.error(`Failed to apply all changes: ${error.message}`);
+        }
+    }
 </script>
 
 <div class="metadata-editor">
@@ -820,6 +896,12 @@
                         bind:value={metadata[field]}
                         onfocus={() => startEditing(field)}
                         onblur={() => stopEditing(field)}
+                        onkeydown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                applyToFile(field, metadata[field]);
+                            }
+                        }}
                         placeholder={field}
                     />
                     {#if editingFields.has(field)}
@@ -1035,6 +1117,15 @@
                                 bind:value={metadata.otherFields[key]}
                                 onfocus={() => startEditing(key)}
                                 onblur={() => stopEditing(key)}
+                                onkeydown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        applyToFile(
+                                            key,
+                                            metadata.otherFields[key],
+                                        );
+                                    }
+                                }}
                             />
                             {#if editingFields.has(key)}
                                 <div class="field-actions">
@@ -1123,15 +1214,15 @@
     </button>
 
     <!-- Custom fields added by user -->
-    {#each customFields, index (index)}
+    {#each customFields as field, i (i)}
         <div
             class="field custom"
-            class:editing={customFieldEditing[index]}
-            onfocusin={() => (customFieldEditing[index] = true)}
+            class:editing={customFieldEditing[i]}
+            onfocusin={() => (customFieldEditing[i] = true)}
             onfocusout={(e) => {
                 // @ts-ignore
                 if (!e.currentTarget.contains(e.relatedTarget)) {
-                    customFieldEditing[index] = false;
+                    customFieldEditing[i] = false;
                 }
             }}
         >
@@ -1139,7 +1230,7 @@
             <input
                 type="text"
                 placeholder="Field name"
-                bind:value={customFields[index].name}
+                bind:value={customFields[i].name}
             />
 
             <!-- Value row: input and icons -->
@@ -1147,9 +1238,18 @@
                 <input
                     type="text"
                     placeholder="Value"
-                    bind:value={customFields[index].value}
+                    bind:value={customFields[i].value}
+                    onkeydown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            applyToFile(
+                                customFields[i].name,
+                                customFields[i].value,
+                            );
+                        }
+                    }}
                 />
-                {#if customFieldEditing[index]}
+                {#if customFieldEditing[i]}
                     <div
                         class="field-actions"
                         style="position: static; transform: none;"
@@ -1160,8 +1260,8 @@
                             title="Apply to this file only"
                             onclick={() =>
                                 applyToFile(
-                                    customFields[index].name,
-                                    customFields[index].value,
+                                    customFields[i].name,
+                                    customFields[i].value,
                                 )}
                         >
                             <!-- File icon SVG -->
@@ -1190,8 +1290,8 @@
                             title="Apply to folder"
                             onclick={() =>
                                 applyToFolder(
-                                    customFields[index].name,
-                                    customFields[index].value,
+                                    customFields[i].name,
+                                    customFields[i].value,
                                 )}
                         >
                             <svg
@@ -1321,6 +1421,26 @@
             </div>
         </div>
     {/if}
+    <div class="batch-actions">
+        <button class="batch-apply-btn" onclick={applyAllChanges}>
+            <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <path
+                    d="M13 4L6 11L3 8"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
+            </svg>
+            Apply All Changes
+        </button>
+    </div>
     <LyricsEditorModal
         isOpen={showSyncedLyricsModal}
         onClose={() => (showSyncedLyricsModal = false)}
@@ -1949,6 +2069,41 @@
         height: 16px;
     }
 
+    .batch-actions {
+        margin-top: 24px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .batch-apply-btn {
+        background: transparent;
+        border: 1px solid #fd7d05;
+        color: #fd7d05;
+        padding: 10px 20px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.2s;
+        width: 100%;
+    }
+
+    .batch-apply-btn:hover {
+        background: rgba(253, 125, 5, 0.1);
+        transform: none;
+        box-shadow: none;
+    }
+
+    .batch-apply-btn svg {
+        stroke: #fd7d05;
+        width: 16px;
+        height: 16px;
+    }
+
     /* Dark mode adjustments */
     :global(body.dark) .filename-badge {
         background: rgba(255, 255, 255, 0.1);
@@ -2034,7 +2189,6 @@
         background: rgba(255, 255, 255, 0.3);
     }
 
-    /* Dark mode adjustments */
     :global(body.dark) .lyrics-modal {
         background: #2d2d2d;
         border-color: #444;
@@ -2084,5 +2238,18 @@
     :global(body.dark) .save-btn:hover {
         background: rgba(255, 159, 75, 0.1);
         color: #ff9f4b;
+    }
+
+    :global(body.dark) .batch-apply-btn {
+        border-color: #ff9f4b;
+        color: #ff9f4b;
+    }
+
+    :global(body.dark) .batch-apply-btn:hover {
+        background: rgba(255, 159, 75, 0.1);
+    }
+
+    :global(body.dark) .batch-apply-btn svg {
+        stroke: #ff9f4b;
     }
 </style>

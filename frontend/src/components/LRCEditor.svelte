@@ -444,6 +444,49 @@
     function stopPropagation(e) {
         e.stopPropagation();
     }
+
+    function clearAllTimestamps() {
+        if (timestamps.length === 0) return;
+
+        timestamps = timestamps.map(() => "[--:--.--]");
+        updateSynchronizedLyricsText();
+        currentActiveLine = -1;
+        toast.success("All timestamps cleared");
+
+        // Re-equalize heights
+        requestAnimationFrame(() => {
+            equalizeAllLineHeights();
+        });
+    }
+
+    async function copyUnsyncedText() {
+        const textToCopy = USLT;
+
+        if (!textToCopy || textToCopy.trim() === "") {
+            toast.info("No unsynced lyrics to copy");
+            return;
+        }
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(textToCopy);
+            } else {
+                const textarea = document.createElement("textarea");
+                textarea.value = textToCopy;
+                textarea.style.position = "fixed";
+                textarea.style.opacity = "0";
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textarea);
+            }
+            toast.success("Unsynced lyrics copied to clipboard");
+        } catch (err) {
+            console.error("Failed to copy text: ", err);
+            toast.error(`Failed to copy: ${err.message}`);
+        }
+    }
 </script>
 
 {#if isOpen}
@@ -505,6 +548,7 @@
                     </svg>
                     Edit
                 </button>
+
                 <button
                     class="toolbar-btn"
                     onclick={copySynchronizedLyrics}
@@ -530,7 +574,59 @@
                             d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
                         />
                     </svg>
-                    Copy
+                    Copy LRC
+                </button>
+
+                <!-- New button: Copy Unsynced Text -->
+                <button
+                    class="toolbar-btn"
+                    onclick={copyUnsyncedText}
+                    title="Copy unsynced lyrics without timestamps"
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <rect
+                            x="9"
+                            y="9"
+                            width="13"
+                            height="13"
+                            rx="2"
+                            ry="2"
+                        />
+                        <path
+                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                        />
+                    </svg>
+                    Copy Text
+                </button>
+
+                <!-- Clear All Timestamps -->
+                <button
+                    class="toolbar-btn clear-timestamps-btn"
+                    onclick={clearAllTimestamps}
+                    title="Clear all timestamps"
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <path
+                            d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                        />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                    Clear Timestamps
                 </button>
             </div>
 
@@ -1165,6 +1261,17 @@
         }
     }
 
+    .clear-timestamps-btn {
+        border-color: #ff4444 !important;
+        color: #ff4444 !important;
+    }
+
+    .clear-timestamps-btn:hover {
+        background: rgba(255, 68, 68, 0.1) !important;
+        border-color: #ff4444 !important;
+        color: #ff4444 !important;
+    }
+
     /* Dark mode */
     :global(body.dark) .lyrics-modal {
         background: #2d2d2d;
@@ -1312,5 +1419,16 @@
     :global(.player) {
         z-index: 10001 !important;
         pointer-events: auto !important;
+    }
+
+    :global(body.dark) .clear-timestamps-btn {
+        border-color: #ff6b6b !important;
+        color: #ff6b6b !important;
+    }
+
+    :global(body.dark) .clear-timestamps-btn:hover {
+        background: rgba(255, 107, 107, 0.2) !important;
+        border-color: #ff6b6b !important;
+        color: #ff6b6b !important;
     }
 </style>

@@ -125,6 +125,14 @@
                             <li>
                                 Edit any field by typing directly in the input
                             </li>
+                            <li>
+                                <strong>Press Enter</strong> while editing a field
+                                to apply changes to the current file
+                            </li>
+                            <li>
+                                <strong>Apply All Changes</strong> button at the
+                                bottom saves all modified fields at once
+                            </li>
                             <li>Icons appear when focusing on a field:</li>
                             <li class="icon-list">
                                 <span class="icon-example">
@@ -211,6 +219,37 @@
                             </li>
                         </ul>
 
+                        <h3>Lyrics Editor</h3>
+                        <ul>
+                            <li>
+                                <strong>Edit</strong> - Modify unsynchronized lyrics
+                                text
+                            </li>
+                            <li>
+                                <strong>Copy LRC</strong> - Copy synchronized lyrics
+                                with timestamps
+                            </li>
+                            <li>
+                                <strong>Copy Text</strong> - Copy unsynchronized
+                                lyrics without timestamps
+                            </li>
+                            <li>
+                                <strong>Clear Timestamps</strong> - Remove all timestamps
+                                from synchronized lyrics
+                            </li>
+                            <li>
+                                <strong>Synchronize line</strong> - Insert current
+                                playback time as timestamp for the next line
+                            </li>
+                            <li>
+                                Click on timestamp values to edit them manually
+                            </li>
+                            <li>
+                                Click on any lyric line with a timestamp to jump
+                                to that position in the audio
+                            </li>
+                        </ul>
+
                         <h3>Search & Sort</h3>
                         <ul>
                             <li>Use the search box to filter files by name</li>
@@ -243,6 +282,9 @@
                             <li><strong>F2</strong> - Rename selected item</li>
                             <li>
                                 <strong>Delete</strong> - Delete selected item
+                            </li>
+                            <li>
+                                <strong>Enter</strong> - Apply current field changes
                             </li>
                             <li>
                                 <strong>Esc</strong> - Close modals/cancel rename
