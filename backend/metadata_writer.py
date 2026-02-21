@@ -83,27 +83,57 @@ def update_mp3_metadata(file_path, field, value):
             tags.add(USLT(encoding=3, lang='eng', desc='', text=value))    
             log_info(f"Edited USLT frame")  
 
-        # Might need to correct timestamps using file bitrate to correctly display in players
-        # SYLT frame logic
+        # SYLT frame logic - CORRECT FOR NAVIDROME
         elif field == 'lyrics':
             tags.delall('SYLT')
-            # Convert synced_text to SYLT events
+            
+            # Get sample rate from MP3
+            mp3 = MP3(file_path)
+            sample_rate = mp3.info.sample_rate if mp3.info.sample_rate else 44100
+            
+            # Convert SYLT lines to events with samples (not milliseconds)
             lines = value.split('\n')
             events = []
+
             for line in lines:
                 # line format: "[MM:SS.ss] text"
                 m = re.match(r'^\[(\d{2}):(\d{2}\.\d{2})\](.*)', line)
                 if m:
                     minutes = int(m.group(1))
                     seconds = float(m.group(2))
-                    ms = int((minutes * 60 + seconds) * 1000)
                     text = m.group(3).strip()
+                    
+                    # Convert to absolute seconds
+                    abs_seconds = minutes * 60 + seconds
+                    
+                    samples = int(round(abs_seconds * sample_rate))
+                    
                     if text:
-                        events.append((text, ms))
+                        events.append((text, samples))
+            
             if events:
-                sylt = SYLT(encoding=Encoding.UTF8, lang='eng', format=1, type=1, desc='', text=events)
+                # Use format=1
+                # format=1 + samples value
+                sylt = SYLT(
+                    encoding=Encoding.UTF8, 
+                    lang='eng', 
+                    format=1,  # 0x01 = milliseconds (in spec), store samples
+                    type=1,    # 0x01 = lyrics
+                    desc='', 
+                    text=events
+                )
                 tags.add(sylt)
-                log_info(f"Edited SYLT frame")
+                log_info(f"Added SYLT frame with {len(events)} events (format=1 + samples)")
+                
+                # Verify first few timestamps
+                for i, (text, samples) in enumerate(events[:3]):
+                    calculated_seconds = samples / sample_rate
+                    minutes = int(calculated_seconds // 60)
+                    secs = calculated_seconds % 60
+            
+            # Save tags
+            tags.save(file_path)
+            log_info("Changes saved")
 
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]
