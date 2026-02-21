@@ -367,18 +367,55 @@
                     }
                     if (targetIndex >= lines.length) return;
 
+                    // Store the target element for scrolling
+                    const targetElement = document.querySelector(
+                        `[data-line-index="${targetIndex}"]`,
+                    );
+
+                    // Update the timestamp
                     timestamps[targetIndex] = secondsToTimestamp(time);
                     if (timestamps.length < lines.length) {
                         while (timestamps.length < lines.length)
                             timestamps.push("[--:--.--]");
                     }
+
+                    // Update text but don't trigger re-equalize yet
                     updateSynchronizedLyricsText();
                     currentActiveLine = targetIndex;
-                    requestAnimationFrame(scrollToCurrentLine);
 
-                    // Re-equalize heights after adding timestamp
+                    // First scroll to the element BEFORE height equalization
+                    if (targetElement) {
+                        targetElement.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                        });
+                    }
+
+                    // Then handle height equalization after scroll starts
                     requestAnimationFrame(() => {
-                        equalizeAllLineHeights();
+                        // Temporarily disable transitions during height equalization
+                        const style = document.createElement("style");
+                        style.id = "temp-no-transition";
+                        style.textContent = `
+                        .lyric-line {
+                            transition: none !important;
+                        }
+                    `;
+                        document.head.appendChild(style);
+
+                        // Force a small delay to let scroll start
+                        setTimeout(() => {
+                            equalizeAllLineHeights();
+
+                            // Remove the temp style after equalization
+                            setTimeout(() => {
+                                const tempStyle =
+                                    document.getElementById(
+                                        "temp-no-transition",
+                                    );
+                                if (tempStyle) tempStyle.remove();
+                            }, 100);
+                        }, 10);
                     });
                 },
             },
@@ -424,22 +461,7 @@
             synchronizedLyrics: synchronizedLyricsText,
         });
         onClose();
-    }
-
-    // Listen for player time updates - using the existing player events
-    onMount(() => {
-        const handleTimeUpdate = (e) => {
-            const time = e.detail.time;
-            currentPlaybackTime = time; // Store the current timeF
-            updateActiveLine(e.detail.time);
-        };
-
-        window.addEventListener("player-time-update", handleTimeUpdate);
-
-        return () => {
-            window.removeEventListener("player-time-update", handleTimeUpdate);
-        };
-    });
+    }   
 
     function stopPropagation(e) {
         e.stopPropagation();
@@ -487,6 +509,21 @@
             toast.error(`Failed to copy: ${err.message}`);
         }
     }
+
+    // Listen for player time updates - using the existing player events
+    onMount(() => {
+        const handleTimeUpdate = (e) => {
+            const time = e.detail.time;
+            currentPlaybackTime = time; // Store the current timeF
+            updateActiveLine(e.detail.time);
+        };
+
+        window.addEventListener("player-time-update", handleTimeUpdate);
+
+        return () => {
+            window.removeEventListener("player-time-update", handleTimeUpdate);
+        };
+    });
 </script>
 
 {#if isOpen}
