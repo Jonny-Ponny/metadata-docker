@@ -350,10 +350,10 @@
     }
 
     .modal-close-btn:hover {
-        background: #fd7d05;
-        border-color: rgba(255, 255, 255, 0.4);
+        background: rgba(0, 0, 0, 0.1);
+        color: #fd7d05;
         transform: scale(1.05);
-        color: white;
+        border-color: rgba(255, 255, 255, 0.4);
     }
 
     .modal-close-btn svg {
@@ -435,8 +435,9 @@
     }
 
     :global(body.dark) .modal-close-btn:hover {
-        background: #ff9f4b;
-        border-color: rgba(255, 255, 255, 0.3);
-        color: #1e1e1e;
+        background: rgba(0, 0, 0, 0.1);
+        color: #fd7d05;
+        transform: scale(1.05);
+        border-color: rgba(255, 255, 255, 0.4);
     }
 </style>

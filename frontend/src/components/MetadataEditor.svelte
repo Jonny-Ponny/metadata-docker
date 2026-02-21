@@ -1915,10 +1915,10 @@
     }
 
     .modal-close-btn:hover {
-        background: #fd7d05;
+        background: rgba(0, 0, 0, 0.1);
+        color: #fd7d05;
         border-color: rgba(255, 255, 255, 0.4);
         transform: scale(1.05);
-        color: white;
     }
 
     .modal-close-btn svg {
@@ -1986,13 +1986,6 @@
         font-size: 16px;
         font-weight: 600;
         color: #333;
-    }
-
-    
-
-    .modal-close-btn:hover {
-        background: rgba(0, 0, 0, 0.1);
-        color: #fd7d05;
     }
 
     .lyrics-modal-content {
@@ -2198,9 +2191,10 @@
     }
 
     :global(body.dark) .modal-close-btn:hover {
-        background: #ff9f4b;
-        border-color: rgba(255, 255, 255, 0.3);
-        color: #1e1e1e;
+        background: rgba(0, 0, 0, 0.1);
+        color: #fd7d05;
+        border-color: rgba(255, 255, 255, 0.4);
+        transform: scale(1.05);
     }
 
     :global(body.dark) .lyrics-textarea {
