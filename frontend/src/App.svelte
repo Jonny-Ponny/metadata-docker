@@ -529,10 +529,17 @@
     const isAudio = path.match(
       /\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i,
     );
+
     if (isAudio) {
-      loadAudioFile(path);
+      // Check if this is the same file that's currently playing
+      if (audioFile && audioFile.originalName === path) {
+      } else {
+        // Different file - load the new audio
+        loadAudioFile(path);
+      }
     }
   }
+
   async function loadAudioFile(filePath) {
     try {
       // Clean up previous blob URL if any
