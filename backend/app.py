@@ -11,12 +11,24 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from logger_config import log_info, log_error, log_warning, LOG_DIR
 
+log_info("STARTING")
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 # Auth config from environment (with defaults)
-AUTH_USERNAME = os.getenv('AUTH_USERNAME', 'admin')
-AUTH_PASSWORD = os.getenv('AUTH_PASSWORD', 'admin')  # Plain text password
+if os.getenv('AUTH_USERNAME'):
+    AUTH_USERNAME = os.getenv('AUTH_USERNAME')
+else:
+    AUTH_USERNAME = 'admin'
+    log_warning('AUTH_USERNAME not in environment, using default')
+if os.getenv('AUTH_PASSWORD'):
+    AUTH_PASSWORD = os.getenv('AUTH_PASSWORD')
+else:
+    AUTH_PASSWORD = 'admin'
+    log_warning('AUTH_PASSWORD not in environment, using default')
+
 TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 24
+TOKEN_EXPIRE_HOURS = TOKEN_EXPIRE_HOURS if TOKEN_EXPIRE_HOURS > 0 else 24
+
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '') if os.getenv('JWT_SECRET_KEY') != '' else os.urandom(24).hex()
 
 # If not in environment docker will run as root
@@ -25,12 +37,11 @@ PGID = os.getenv('PGID', '0')
 
 app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
-DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes', 'on') # Debug
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
 PORT = int(os.getenv('CONTAINER_PORT', 5000))                            # Container port
 HOST_PORT = os.getenv('HOST_PORT')                                       # Host port, only for info
 MUSIC_FOLDER = '/music'
 
-log_info("STARTING")
 log_info(f'Debug set to {DEBUG}')
 log_info(f'Host port set to {HOST_PORT}')
 log_info(f'Container port set to {PORT}')
@@ -92,7 +103,7 @@ def login():
     # Generate token with configurable expiry
     token = jwt.encode({
         'username': username,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=TOKEN_EXPIRE_HOURS)
+        'exp': datetime.datetime.now() + datetime.timedelta(hours=TOKEN_EXPIRE_HOURS)
     }, app.config['SECRET_KEY'], algorithm='HS256')
     
     return jsonify({
@@ -101,8 +112,6 @@ def login():
         'username': username,
         'expires_in': TOKEN_EXPIRE_HOURS * 3600  # in seconds
     })
-
-#
 
 def build_tree(current_path, relative_path):
     items = []
@@ -164,6 +173,8 @@ def safe_path(file_path):
 
 # -------------------------API ENDPOINTS------------------------- #
 
+# GET /api/files
+# Fetch library structure as filetree
 @token_required
 @app.route('/api/files')
 def list_files():
@@ -174,8 +185,7 @@ def list_files():
         return jsonify({'error': str(e)}), 500
 
 # GET /api/metadata?path=<file_path>
-# Fetch all metadata for a specific file.
-
+# Fetch all metadata for a specific file
 @token_required
 @app.route('/api/metadata')
 def get_metadata():
@@ -266,6 +276,8 @@ def update_folder_files():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# GET /api/audio?path=<file_path>
+# Fetch audiofile
 @app.route('/api/audio')
 @token_required
 def serve_audio():
@@ -286,6 +298,8 @@ def serve_audio():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# POST /api/upload
+# Upload file or folder via drag and drop
 @app.route('/api/upload', methods=['POST'])
 @token_required
 def upload_file():
@@ -343,6 +357,8 @@ def upload_file():
         
         # Get relative path for response
         rel_path = os.path.relpath(file_path, MUSIC_FOLDER)
+
+        log_info(f"Successfully uploaded {file_path}")
         
         return jsonify({
             'success': True,
@@ -353,7 +369,8 @@ def upload_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Endpoint to create directories
+# POST /api/mkdir
+# Create a new directory
 @token_required
 @app.route('/api/mkdir', methods=['POST'])
 def create_directory():
@@ -375,6 +392,9 @@ def create_directory():
 
         os.makedirs(full_path, exist_ok=False)  # now it definitely doesn't exist
         rel_path = os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/')
+
+        log_info(f"Created new directory {full_path}")
+
         return jsonify({'success': True, 'path': rel_path})
 
     except PermissionError as e:
@@ -382,7 +402,8 @@ def create_directory():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-# Endpoint to rename files/folders
+# POST /api/rename
+# Rename a file or directory
 @token_required
 @app.route('/api/rename', methods=['POST'])
 def rename_item():
@@ -409,13 +430,16 @@ def rename_item():
 
         os.rename(full_old, full_new)
 
+        log_info(f"Renamed {full_old} to {full_new}")
+
         # Return the new relative path
         new_rel = os.path.relpath(full_new, MUSIC_FOLDER).replace('\\', '/')
         return jsonify({'success': True, 'newPath': new_rel})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Endpoint to delete files/folders
+# POST /api/delete
+# Delete a file or folder
 @token_required
 @app.route('/api/delete', methods=['POST'])
 def delete_item():
@@ -443,7 +467,8 @@ def delete_item():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Endpoint to move files/folders
+# POST /api/move
+# Move a file or folder to a new destination folder
 @token_required
 @app.route('/api/move', methods=['POST'])
 def move_item():
@@ -498,11 +523,11 @@ def move_item():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-# Endpoint to copy files/folders
+# POST /api/copy
+# Create a copy of file/directory
 @token_required
 @app.route('/api/copy', methods=['POST'])
 def copy_item():
-    """Delete a file or folder."""
     data = request.get_json()
     path = data.get('path')
 
@@ -544,6 +569,8 @@ def copy_item():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# POST /api/metadata/picture/file
+# Update cover art for a single file
 @token_required
 @app.route('/api/metadata/picture/file', methods=['POST'])
 def update_file_picture_endpoint():
@@ -590,6 +617,8 @@ def update_file_picture_endpoint():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# POST /api/metadata/picture/folder
+# Update cover art for all files in a folder
 @token_required
 @app.route('/api/metadata/picture/folder', methods=['POST'])
 def update_folder_pictures_endpoint():
@@ -662,6 +691,8 @@ def update_folder_files_current_only():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# POST /api/metadata/picture/folder/current
+# Update cover art for all files in a folder (current folder only, no subfolders)
 @token_required
 @app.route('/api/metadata/picture/folder/current', methods=['POST'])
 def update_folder_pictures_current_only_endpoint():
@@ -700,7 +731,8 @@ def update_folder_pictures_current_only_endpoint():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Endpoint to delete specific field
+# POST /api/metadata/field/delete
+# Delete a specific metadata field from a file
 @token_required
 @app.route('/api/metadata/field/delete', methods=['POST'])
 def delete_metadata_field():
@@ -734,7 +766,8 @@ def delete_metadata_field():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Endpoint to delete cover art
+# POST /api/metadata/picture/delete
+# Delete cover art from a file
 @token_required
 @app.route('/api/metadata/picture/delete', methods=['POST'])
 def delete_cover_art():
@@ -776,7 +809,9 @@ def delete_cover_art():
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
+# GET /api/image
+# Fetch image
 @token_required
 @app.route('/api/image')
 def serve_image():
@@ -806,7 +841,9 @@ def serve_image():
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
+# POST /api/metadata/picture/save-as-file
+# Extract cover art from audio file and save as cover.jpg in the same folder
 @token_required
 @app.route('/api/metadata/picture/save-as-file', methods=['POST'])
 def save_cover_art_as_file():
@@ -877,7 +914,9 @@ def save_cover_art_as_file():
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
+# GET /api/logs
+# Get log entries with filtering options
 @token_required
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
@@ -947,6 +986,9 @@ def get_logs():
         log_error(f"Error fetching logs: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
+# POST /api/logs/clear
+# Clear all logs
 @token_required
 @app.route('/api/logs/clear', methods=['POST'])
 def clear_logs():
