@@ -171,8 +171,8 @@ def safe_path(file_path):
 
 # GET /api/files
 # Fetch library structure as filetree
-@token_required
 @app.route('/api/files')
+@token_required
 def list_files():
     try:
         tree = build_tree(MUSIC_FOLDER, '')
@@ -182,8 +182,8 @@ def list_files():
 
 # GET /api/metadata?path=<file_path>
 # Fetch all metadata for a specific file
-@token_required
 @app.route('/api/metadata')
+@token_required
 def get_metadata():
     file_path = request.args.get('path')
     if not file_path:
@@ -207,8 +207,8 @@ def get_metadata():
 
 # POST /api/metadata/file
 # Update a single metadata field for one file
-@token_required
 @app.route('/api/metadata/file', methods=['POST'])
+@token_required
 def update_single_file():
     data = request.get_json()
     file_path = data.get('path')
@@ -240,8 +240,8 @@ def update_single_file():
 
 # POST /api/metadata/folder
 # Update a single metadata field for all files in a folder
-@token_required
 @app.route('/api/metadata/folder', methods=['POST'])
+@token_required
 def update_folder_files():
     data = request.get_json()
     folder_path = data.get('path')
@@ -367,8 +367,8 @@ def upload_file():
 
 # POST /api/mkdir
 # Create a new directory
-@token_required
 @app.route('/api/mkdir', methods=['POST'])
+@token_required
 def create_directory():
     """Create a new directory. If the path already exists, generate a unique name."""
     data = request.get_json()
@@ -400,8 +400,8 @@ def create_directory():
     
 # POST /api/rename
 # Rename a file or directory
-@token_required
 @app.route('/api/rename', methods=['POST'])
+@token_required
 def rename_item():
     """Rename a file or folder."""
     data = request.get_json()
@@ -436,8 +436,8 @@ def rename_item():
 
 # POST /api/delete
 # Delete a file or folder
-@token_required
 @app.route('/api/delete', methods=['POST'])
+@token_required
 def delete_item():
     """Delete a file or folder."""
     data = request.get_json()
@@ -465,8 +465,8 @@ def delete_item():
 
 # POST /api/move
 # Move a file or folder to a new destination folder
-@token_required
 @app.route('/api/move', methods=['POST'])
+@token_required
 def move_item():
     """Move a file or folder to a new destination folder."""
     data = request.get_json()
@@ -521,8 +521,8 @@ def move_item():
     
 # POST /api/copy
 # Create a copy of file/directory
-@token_required
 @app.route('/api/copy', methods=['POST'])
+@token_required
 def copy_item():
     data = request.get_json()
     path = data.get('path')
@@ -567,8 +567,8 @@ def copy_item():
 
 # POST /api/metadata/picture/file
 # Update cover art for a single file
-@token_required
 @app.route('/api/metadata/picture/file', methods=['POST'])
+@token_required
 def update_file_picture_endpoint():
     """Update cover art for a single file."""
     if 'file' not in request.files:
@@ -615,8 +615,8 @@ def update_file_picture_endpoint():
 
 # POST /api/metadata/picture/folder
 # Update cover art for all files in a folder
-@token_required
 @app.route('/api/metadata/picture/folder', methods=['POST'])
+@token_required
 def update_folder_pictures_endpoint():
     """Update cover art for all files in a folder."""
     if 'file' not in request.files:
@@ -655,8 +655,8 @@ def update_folder_pictures_endpoint():
     
 # POST /api/metadata/folder/current
 # Update a single metadata field for all files in a folder (current folder only, no subfolders)
-@token_required
 @app.route('/api/metadata/folder/current', methods=['POST'])
+@token_required
 def update_folder_files_current_only():
     data = request.get_json()
     folder_path = data.get('path')
@@ -689,8 +689,8 @@ def update_folder_files_current_only():
 
 # POST /api/metadata/picture/folder/current
 # Update cover art for all files in a folder (current folder only, no subfolders)
-@token_required
 @app.route('/api/metadata/picture/folder/current', methods=['POST'])
+@token_required
 def update_folder_pictures_current_only_endpoint():
     """Update cover art for all files in a folder (current folder only, no subfolders)."""
     if 'file' not in request.files:
@@ -729,8 +729,8 @@ def update_folder_pictures_current_only_endpoint():
 
 # POST /api/metadata/field/delete
 # Delete a specific metadata field from a file
-@token_required
 @app.route('/api/metadata/field/delete', methods=['POST'])
+@token_required
 def delete_metadata_field():
     """Delete a specific metadata field from a file."""
     data = request.get_json()
@@ -764,8 +764,8 @@ def delete_metadata_field():
 
 # POST /api/metadata/picture/delete
 # Delete cover art from a file
-@token_required
 @app.route('/api/metadata/picture/delete', methods=['POST'])
+@token_required
 def delete_cover_art():
     """Delete cover art from a file."""
     data = request.get_json()
@@ -808,8 +808,8 @@ def delete_cover_art():
 
 # GET /api/image
 # Fetch image
-@token_required
 @app.route('/api/image')
+@token_required
 def serve_image():
     file_path = request.args.get('path')
     if not file_path:
@@ -840,8 +840,8 @@ def serve_image():
 
 # POST /api/metadata/picture/save-as-file
 # Extract cover art from audio file and save as cover.jpg in the same folder
-@token_required
 @app.route('/api/metadata/picture/save-as-file', methods=['POST'])
+@token_required
 def save_cover_art_as_file():
     """Extract cover art from audio file and save as cover.jpg in the same folder."""
     data = request.get_json()
@@ -913,8 +913,8 @@ def save_cover_art_as_file():
 
 # GET /api/logs
 # Get log entries with filtering options
-@token_required
 @app.route('/api/logs', methods=['GET'])
+@token_required
 def get_logs():
     """Get log entries with filtering options"""
     try:
@@ -985,8 +985,8 @@ def get_logs():
 
 # POST /api/logs/clear
 # Clear all logs
-@token_required
 @app.route('/api/logs/clear', methods=['POST'])
+@token_required
 def clear_logs():
     """Clear all logs"""
     try:
