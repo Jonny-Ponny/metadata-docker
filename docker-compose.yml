@@ -1,20 +1,17 @@
 services:
   app:
-    build: .
+    image: 
     ports:
-      - "${HOST_PORT:-5000}:5000"                  # Host port from env var, default 5000
+      - "8888:5000"                                 
     environment:
-      - CONTAINER_PORT=5000                        # Container port
-      - HOST_PORT=${HOST_PORT}                     # Host port
       - PYTHONUNBUFFERED=1
-      - DEBUG=${DEBUG}
-      - AUTH_USERNAME=${AUTH_USERNAME}             # Login
-      - AUTH_PASSWORD=${AUTH_PASSWORD}             # Plain text password
-      - TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS}   # Optional
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}           # Optional
+      - DEBUG=False
+      - AUTH_USERNAME=USERNAME                      # Login
+      - AUTH_PASSWORD=PASSWORD                      # Plain text password
+      - TOKEN_EXPIRE_HOURS=24                       # Optional
       - PUID=1000
       - PGID=1000
       - TZ=UTC
     volumes:
-      - ~/Media/music:/music                       # Library
-      - ./logs:/logs                               # Logs
+      - ~/path/to/your/music:/music                 # Library
+      - ./logs:/logs                                # Logs

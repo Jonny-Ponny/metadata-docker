@@ -1131,10 +1131,12 @@
                                 <div class="field-actions">
                                     <!-- Delete button -->
                                     {#if value}
-                                        <button
-                                            class="icon-btn delete-btn"
-                                            title="Delete this field from file"
-                                            onclick={() => deleteField(key)}
+                                        <HoldButton
+                                            variant="icon"
+                                            duration={800}
+                                            onConfirm={() => deleteField(key)}
+                                            title="Hold to delete this field"
+                                            class="delete-btn"
                                         >
                                             <!-- Trash can icon -->
                                             <svg
@@ -1151,7 +1153,7 @@
                                                     stroke-linecap="round"
                                                 />
                                             </svg>
-                                        </button>
+                                        </HoldButton>
                                     {/if}
                                     <!-- File button -->
                                     <button
@@ -1179,10 +1181,14 @@
                                         </svg>
                                     </button>
                                     <!-- Folder button -->
-                                    <button
-                                        class="icon-btn"
-                                        onclick={() =>
+                                    <HoldButton
+                                        variant="icon"
+                                        duration={800}
+                                        onConfirm={() =>
                                             applyToFolder(key, value)}
+                                        title={applyToSubfolders
+                                            ? "Hold to apply to all files in folder (including subfolders)"
+                                            : "Hold to apply to all files in folder (same level only)"}
                                     >
                                         <!-- Folder icon SVG -->
                                         <svg
@@ -1198,7 +1204,7 @@
                                                 fill-opacity="0.9"
                                             />
                                         </svg>
-                                    </button>
+                                    </HoldButton>
                                 </div>
                             {/if}
                         </div>
@@ -1285,14 +1291,17 @@
                             </svg>
                         </button>
                         <!-- Folder button -->
-                        <button
-                            class="icon-btn"
-                            title="Apply to folder"
-                            onclick={() =>
+                        <HoldButton
+                            variant="icon"
+                            duration={800}
+                            onConfirm={() =>
                                 applyToFolder(
                                     customFields[i].name,
                                     customFields[i].value,
                                 )}
+                            title={applyToSubfolders
+                                ? "Hold to apply to all files in folder (including subfolders)"
+                                : "Hold to apply to all files in folder (same level only)"}
                         >
                             <svg
                                 width="16"
@@ -1307,7 +1316,7 @@
                                     fill-opacity="0.9"
                                 />
                             </svg>
-                        </button>
+                        </HoldButton>
                     </div>
                 {/if}
             </div>

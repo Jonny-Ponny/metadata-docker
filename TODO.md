@@ -17,3 +17,4 @@
 17. ~~LRC editor~~
 18. ~~Help/Info modal~~
 19. ~~Logs~~
+20. ~~Fix bulk operations for custom fields~~

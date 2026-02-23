@@ -3,7 +3,7 @@ import os
 import base64
 import re
 from mutagen import File
-from mutagen.id3 import ID3, TextFrame, USLT, APIC, SYLT
+from mutagen.id3 import ID3, TextFrame, USLT, APIC, SYLT, TXXX
 from mutagen.flac import FLAC
 
 def get_tag_text(frame):
@@ -16,6 +16,10 @@ def get_tag_text(frame):
         return frame.text
     elif isinstance(frame, SYLT):
         # Handle this separately in extract_metadata
+        return None
+    elif isinstance(frame, TXXX):
+        # For TXXX frames, we handle them separately in extract_metadata
+        # to return the description as the field name
         return None
     elif isinstance(frame, list):
         # For FLAC (list of strings)
@@ -124,17 +128,27 @@ def extract_metadata(filepath):
         for key in tags.keys():
             frames = tags.getall(key)
             for frame in frames:
+                # Special handling for TXXX frames (custom user text frames)
+                if isinstance(frame, TXXX):
+                    if frame.desc and frame.text:
+                        # Use the description as the field name, not "TXXX"
+                        field_name = frame.desc
+                        value = '; '.join(str(t) for t in frame.text)
+                        # Check if this matches any known field
+                        if field_name.upper() in key_to_field:
+                            mapped_field = key_to_field[field_name.upper()]
+                            if not result[mapped_field]:
+                                result[mapped_field] = value
+                        else:
+                            result['customFields'].append({'name': field_name, 'value': value})
+                    continue
+                
                 # Special handling for SYLT frames
                 if isinstance(frame, SYLT):
                     # Extract synchronized lyrics in LRC format
                     lrc_text = extract_sylt_text(frame, sample_rate)
                     if lrc_text:
                         result['lyrics'] = lrc_text
-                        # Also store raw format info for debugging if needed
-                        result['customFields'].append({
-                            'name': 'SYLT_INFO', 
-                            'value': f"format={frame.format}, type={frame.type}, lang={frame.lang}"
-                        })
                     continue
                 
                 value = get_tag_text(frame)
@@ -149,6 +163,7 @@ def extract_metadata(filepath):
                 else:
                     # Add only text‑like frames as custom fields
                     if isinstance(frame, TextFrame) or key in ('COMM', 'USLT') or key.startswith('T'):
+                        # For standard T* frames, use the frame ID as the name
                         result['customFields'].append({'name': key, 'value': value})
     else:
         # FLAC, Ogg, etc. – tags are dicts of lists
@@ -166,8 +181,6 @@ def extract_metadata(filepath):
                     result[field] = value
             else:
                 result['customFields'].append({'name': key, 'value': value})
-        
-        # For FLAC, also check for pictures (already handled by extract_picture)
 
     # Extract picture after processing tags
     picture_uri = extract_picture(audio)

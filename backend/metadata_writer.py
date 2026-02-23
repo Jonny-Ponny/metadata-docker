@@ -112,28 +112,16 @@ def update_mp3_metadata(file_path, field, value):
                         events.append((text, samples))
             
             if events:
-                # Use format=1
-                # format=1 + samples value
                 sylt = SYLT(
                     encoding=Encoding.UTF8, 
                     lang='eng', 
-                    format=1,  # 0x01 = milliseconds (in spec), store samples
-                    type=1,    # 0x01 = lyrics
+                    format=1,
+                    type=1,
                     desc='', 
                     text=events
                 )
                 tags.add(sylt)
-                log_info(f"Added SYLT frame with {len(events)} events (format=1 + samples)")
-                
-                # Verify first few timestamps
-                for i, (text, samples) in enumerate(events[:3]):
-                    calculated_seconds = samples / sample_rate
-                    minutes = int(calculated_seconds // 60)
-                    secs = calculated_seconds % 60
-            
-            # Save tags
-            tags.save(file_path)
-            log_info("Changes saved")
+                log_info(f"Added SYLT frame with {len(events)} events")
 
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]
@@ -142,11 +130,26 @@ def update_mp3_metadata(file_path, field, value):
             # Create appropriate frame based on field
             if frame_id == 'COMM':
                 tags.add(COMM(encoding=3, lang='eng', desc='', text=value))
+                log_info(f"Edited {frame_id} frame, new value:{value}")
             else:
+                # Get the frame class from globals() and create the frame
                 frame_class = globals().get(frame_id)
                 if frame_class:
                     tags.add(frame_class(encoding=3, text=value))
                     log_info(f"Edited {frame_id} frame, new value:{value}")
+                else:
+                    # If frame class not found in globals, use TXXX for custom fields
+                    # This handles cases where the field name isn't a standard ID3 frame
+                    from mutagen.id3 import TXXX
+                    tags.add(TXXX(encoding=3, desc=frame_id, text=value))
+                    log_info(f"Edited {frame_id} as TXXX frame, new value:{value}")
+
+        else:
+            # For fields not in mapping, use the field name directly as TXXX descriptor
+            tags.delall(field)
+            from mutagen.id3 import TXXX
+            tags.add(TXXX(encoding=3, desc=field, text=value))
+            log_info(f"Edited {field} as TXXX frame, new value:{value}")
         
         # Save tags
         tags.save(file_path)
@@ -188,7 +191,8 @@ def update_flac_metadata(file_path, field, value):
         else:
             # For custom fields, use the field name as tag
             audio[field] = value
-        
+            log_info(f"Edited {field} comment, new value:{value}")
+
         audio.save()
         log_info("Changes saved")
         return True

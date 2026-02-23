@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${HOST_PORT:-5000}:5000"                  # Host port from env var, default 5000
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEBUG=${DEBUG}
+      - AUTH_USERNAME=${AUTH_USERNAME}             # Login
+      - AUTH_PASSWORD=${AUTH_PASSWORD}             # Plain text password
+      - TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS}   # Optional
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    volumes:
+      - ~/Media/music:/music                       # Library
+      - ./logs:/logs                               # Logs

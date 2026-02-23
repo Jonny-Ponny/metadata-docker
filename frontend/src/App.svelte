@@ -356,7 +356,6 @@
 
     // Create the directory on the server (skip if dirPath is empty)
     if (dirPath) {
-      console.log("Creating directory:", dirPath);
       await createDirectory(dirPath);
     }
 
@@ -394,25 +393,21 @@
       entry.file(resolve, reject);
     });
     // Upload the file with the correct target path and original filename
-    console.log("uploadFileEntry:", entry.name, "to", targetPath);
     return uploadFile(file, targetPath, file.name);
   }
 
   async function uploadFile(file, targetPath, originalFilename) {
-    console.log("uploadFile:", file.name, "to", targetPath);
     const formData = new FormData();
     formData.append("file", file);
     formData.append("targetPath", targetPath || "");
     formData.append("originalFilename", originalFilename || file.name);
 
     try {
-      console.log("Sending fetch for", originalFilename);
       const api_url = "/api/upload"; // build
       const response = await fetch(api_url, {
         method: "POST",
         body: formData,
       });
-      console.log("Received response", response.status, response.statusText);
 
       const contentType = response.headers.get("content-type");
       let result;
@@ -430,7 +425,6 @@
         throw new Error(result.error || "Upload failed");
       }
 
-      console.log("Upload success:", originalFilename, result);
       return {
         success: true,
         file: originalFilename || file.name,

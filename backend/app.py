@@ -29,7 +29,7 @@ else:
 TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 24
 TOKEN_EXPIRE_HOURS = TOKEN_EXPIRE_HOURS if TOKEN_EXPIRE_HOURS > 0 else 24
 
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '') if os.getenv('JWT_SECRET_KEY') != '' else os.urandom(24).hex()
+JWT_SECRET_KEY = os.urandom(24).hex()
 
 # If not in environment docker will run as root
 PUID = os.getenv('PUID', '0')
@@ -38,13 +38,9 @@ PGID = os.getenv('PGID', '0')
 app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
-PORT = int(os.getenv('CONTAINER_PORT', 5000))                            # Container port
-HOST_PORT = os.getenv('HOST_PORT')                                       # Host port, only for info
 MUSIC_FOLDER = '/music'
 
 log_info(f'Debug set to {DEBUG}')
-log_info(f'Host port set to {HOST_PORT}')
-log_info(f'Container port set to {PORT}')
 log_info(f'PUID set to {PUID}')
 log_info(f'PUID set to {PGID}')
 
@@ -1013,4 +1009,4 @@ def serve(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT, debug=DEBUG)
+    app.run(host='0.0.0.0', port=5000, debug=DEBUG)

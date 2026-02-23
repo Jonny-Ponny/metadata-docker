@@ -22,13 +22,7 @@
         }
     }
 
-    // Helper to log with a consistent prefix
-    function log(...args) {
-        console.log("[Player]", ...args);
-    }
-
     onMount(() => {
-        log("Creating new Audio object");
         audio = new Audio();
         audio.volume = volume;
 
@@ -45,20 +39,12 @@
 
         audio.addEventListener("loadedmetadata", () => {
             duration = audio.duration;
-            log(
-                "loadedmetadata, duration =",
-                duration,
-                "readyState =",
-                audio.readyState,
-            );
             waitingForMetadata = false;
             if (shouldAutoPlay) {
-                log("Auto-playing after metadata loaded");
                 audio
                     .play()
                     .then(() => {
                         playing = true;
-                        log("Auto-play succeeded");
                     })
                     .catch((err) => {
                         console.error("[Player] Auto-play failed:", err);
@@ -69,7 +55,6 @@
         });
 
         audio.addEventListener("ended", () => {
-            log("ended event");
             playing = false;
         });
 
@@ -78,33 +63,26 @@
         });
 
         audio.addEventListener("play", () => {
-            log("play event (audio element)");
         });
 
         audio.addEventListener("pause", () => {
-            log("pause event (audio element)");
         });
 
         audio.addEventListener("seeking", () => {
-            log("seeking event, currentTime =", audio.currentTime);
         });
 
         audio.addEventListener("seeked", () => {
-            log("seeked event, currentTime =", audio.currentTime);
         });
 
         audio.addEventListener("canplay", () => {
-            log("canplay event, readyState =", audio.readyState);
         });
 
         audio.addEventListener("waiting", () => {
-            log("waiting event");
         });
         
         // Listen for lyrics-seek events (when user clicks on a timestamp/lyric line)
         const handleLyricsSeek = (e) => {
             const time = e.detail.time;
-            log("Lyrics seek requested to:", time);
             seekToTime(time);
         };
 
@@ -112,7 +90,6 @@
         const handleGetCurrentTime = (e) => {
             const callback = e.detail.callback;
             if (callback && typeof callback === 'function') {
-                log("Providing current time:", currentTime);
                 callback(currentTime);
             }
         };
@@ -121,7 +98,6 @@
         window.addEventListener("get-current-time", handleGetCurrentTime);
 
         return () => {
-            log("Cleanup: pausing and clearing audio");
             if (audio) {
                 audio.pause();
                 audio.src = "";
@@ -132,28 +108,21 @@
     });
 
     async function togglePlay() {
-        log("togglePlay called, playing =", playing, "audioFile =", audioFile);
         if (!audio || !audioFile) {
-            log("togglePlay: no audio or audioFile, returning");
             return;
         }
 
         if (!audio.src) {
-            log("Setting audio.src to", audioFile.url);
             audio.src = audioFile.url;
         }
 
         if (playing) {
-            log("Pausing");
             audio.pause();
             playing = false;
-            log("playing set to false");
         } else {
             try {
-                log("Calling audio.play()");
                 await audio.play();
                 playing = true;
-                log("Play succeeded, playing = true");
             } catch (err) {
                 console.error("[Player] Playback failed:", err);
                 playing = false;
@@ -163,13 +132,11 @@
 
     function seek(e) {
         if (!audio || !duration) {
-            log("seek: no audio or duration, returning");
             return;
         }
         const rect = e.currentTarget.getBoundingClientRect();
         const percent = (e.clientX - rect.left) / rect.width;
         const time = percent * duration;
-        log("seek: setting currentTime to", time, "from click");
         audio.currentTime = time;
         if (ontimeupdate) ontimeupdate(time);
     }
@@ -178,24 +145,13 @@
         volume = parseFloat(e.target.value);
         if (audio) audio.volume = volume;
         e.target.style.setProperty("--fill-percent", `${volume * 100}%`);
-        log("setVolume:", volume);
     }
 
     function seekToTime(timeInSeconds) {
-        log(
-            "seekToTime called with",
-            timeInSeconds,
-            "audioFile =",
-            audioFile,
-            "audio =",
-            audio,
-        );
         if (!audio || !audioFile) {
-            log("seekToTime: no audio or audioFile, returning false");
             return false;
         }
         if (!audio.src) {
-            log("seekToTime: setting audio.src");
             audio.src = audioFile.url;
         }
 
@@ -204,12 +160,10 @@
                 0,
                 Math.min(timeInSeconds, audio.duration || 0),
             );
-            log("seekToTime: setting currentTime to", targetTime);
             audio.currentTime = targetTime;
             if (ontimeupdate) ontimeupdate(audio.currentTime);
 
             if (!playing) {
-                log("seekToTime: starting playback (optimistic)");
                 playing = true; // <-- optimistic update
                 audio.play().catch((err) => {
                     console.error(
@@ -223,10 +177,6 @@
 
         // If duration isn't known yet, wait for metadata
         if (!duration && audio.readyState < 1) {
-            log(
-                "seekToTime: waiting for metadata, readyState =",
-                audio.readyState,
-            );
             waitingForMetadata = true;
             const onLoaded = () => {
                 audio.removeEventListener("loadedmetadata", onLoaded);
@@ -243,7 +193,6 @@
     }
 
     function stop() {
-        log("stop called");
         if (audio) {
             audio.pause();
             audio.src = "";
@@ -251,34 +200,17 @@
             playing = false;
             currentTime = 0;
             duration = 0;
-            log("stop completed");
         }
     }
 
     // Handle audio file changes – compare absolute URLs
     $effect(() => {
-        log(
-            "$effect: audioFile changed",
-            audioFile,
-            "audio?.src =",
-            audio?.src,
-        );
         if (audioFile && audioFile.url && audio) {
             const newUrl = resolveUrl(audioFile.url);
             const currentUrl = resolveUrl(audio.src || "");
-            log(
-                "$effect: resolved newUrl =",
-                newUrl,
-                "currentUrl =",
-                currentUrl,
-            );
 
             if (currentUrl !== newUrl) {
                 const wasPlaying = playing;
-                log(
-                    "$effect: URL mismatch – setting new src. wasPlaying =",
-                    wasPlaying,
-                );
                 audio.src = audioFile.url; // set with original string (browser will resolve)
                 playing = false;
                 currentTime = 0;
@@ -287,14 +219,11 @@
                 shouldAutoPlay = false;
 
                 if (wasPlaying) {
-                    log("$effect: was playing, will auto-play after metadata");
                     shouldAutoPlay = true;
                 }
             } else {
-                log("$effect: URLs match, no change");
             }
         } else {
-            log("$effect: missing audioFile or audio");
         }
     });
 

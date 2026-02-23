@@ -51,8 +51,6 @@
 
     // ========== INITIALIZATION ==========
     function initializeFromLyrics() {
-        console.log("Initializing with lyrics:", initialLyrics);
-        console.log("Initial timestamps:", initialTimestamps);
 
         let newUSLT = "";
         let newTimestamps = [];
