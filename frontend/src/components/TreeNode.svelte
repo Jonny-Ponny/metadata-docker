@@ -228,7 +228,12 @@
             if (result.success) {
                 toast.success(`Successfully renamed to: ${result.newName}`);
 
-                
+                // Update selection to the new path
+                if (item.type === "directory") {
+                    selectFolder(result.newPath);
+                } else {
+                    selectFile(result.newPath);
+                }
 
                 // Refresh the file tree
                 const event = new CustomEvent("refreshFileTree");

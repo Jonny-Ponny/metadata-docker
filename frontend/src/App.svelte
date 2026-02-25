@@ -666,7 +666,6 @@
 
   // ========== CLEANUP ==========
   $effect(() => {
-    loadFileTree();
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       document.body.classList.remove("resizing");
@@ -949,6 +948,12 @@
       window.fetch = originalFetch; // Restore original fetch
       window.removeEventListener("refreshFileTree", loadFileTree);
     };
+  });
+
+  $effect(() => {
+    if ($isAuthenticated && treeData.length === 0) {
+      loadFileTree();
+    }
   });
 
   // Event handler for opening logs
