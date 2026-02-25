@@ -731,8 +731,7 @@
         margin-top: 20px;
         padding: 12px 16px;
         background: #fff3e0;
-        border-left: 4px solid #fd7d05;
-        border-radius: 4px;
+        border-left: 3px solid #fd7d05;
         font-size: 13px;
         color: #555;
     }

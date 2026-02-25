@@ -233,7 +233,8 @@ body {
 .split-container.blurred .panel:not(.left-panel),
 .player-wrapper.blurred,
 .theme-toggle.blurred,
-.help-toggle.blurred {
+.help-toggle.blurred,
+.settings-toggle.blurred {
   filter: blur(4px);
   opacity: 0.6;
   transition: filter 0.2s, opacity 0.2s;
@@ -431,11 +432,6 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   background: #2d3748;
   /* Darker on hover like help-toggle */
-}
-
-.settings-toggle.blurred {
-  opacity: 0.5;
-  pointer-events: none;
 }
 
 /* Dark mode overrides */

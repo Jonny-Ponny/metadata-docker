@@ -14,8 +14,8 @@ export const ALLOWED_VARIABLES = {
 // Default settings
 const defaultSettings = {
     allowDeleteKey: true,
-    folderScheme: "[[YYYY]]_[ARTIST]_[ALBUM]",  // Scheme for folders
-    fileScheme: "[TRACK]_[TITLE]"               // Scheme for files
+    folderScheme: "[[YYYY]]_[ALBUMARTIST]_[ALBUM]",  // Scheme for folders
+    fileScheme: "[TRACK]_[TITLE]"                    // Scheme for files
 };
 
 // Load settings from localStorage

@@ -271,7 +271,7 @@
         background: white;
         border-radius: 12px;
         width: 90%;
-        max-width: 600px;
+        max-width: 700px;
         max-height: 85vh;
         display: flex;
         flex-direction: column;
@@ -320,8 +320,7 @@
         flex: 1;
         overflow-y: auto;
         padding: 24px;
-        padding-right: 20px; /* Adjust for scrollbar */
-        scrollbar-width: thin;
+        padding-right: 20px;
     }
 
     /* Custom scrollbar for webkit browsers */
