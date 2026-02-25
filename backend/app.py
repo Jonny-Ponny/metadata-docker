@@ -1184,6 +1184,7 @@ def apply_renaming_scheme():
             })
             
     except PermissionError as e:
+        log_error(f"Smart rename error: {str(e)}")
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         log_error(f"Smart rename error: {str(e)}")
