@@ -1,3 +1,5 @@
+// src/utils/settings.utils.js
+
 import { writable } from "svelte/store";
 import { getAuthHeaders } from "../stores/auth.store";
 

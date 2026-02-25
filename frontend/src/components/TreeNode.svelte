@@ -246,6 +246,80 @@
             contextMenu.update((curr) => ({ ...curr, isOpen: false }));
         }
     }
+
+    async function handleSmartRenameAllFiles() {
+        try {
+            const scheme = $settings.fileScheme;
+
+            if (!scheme || scheme.trim() === "") {
+                toast.warning("No file renaming scheme configured in settings");
+                return;
+            }
+
+            // Filter for audio files only (mp3 and flac)
+            const audioFiles =
+                item.children?.filter(
+                    (child) =>
+                        child.type === "file" &&
+                        (child.name.toLowerCase().endsWith(".mp3") ||
+                            child.name.toLowerCase().endsWith(".flac")),
+                ) || [];
+
+            if (audioFiles.length === 0) {
+                toast.info("No audio files (MP3/FLAC) found in this folder");
+                return;
+            }
+
+            let successCount = 0;
+            let failCount = 0;
+            const errors = [];
+
+            // Process each audio file sequentially
+            for (const file of audioFiles) {
+                try {
+                    const result = await applyRenamingScheme(
+                        scheme,
+                        file.path, // Pass each file's path
+                        false, // isFolder = false (it's a file)
+                    );
+
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                        errors.push(
+                            `${file.name}: ${result.error || "Unknown error"}`,
+                        );
+                    }
+                } catch (error) {
+                    failCount++;
+                    errors.push(`${file.name}: ${error.message}`);
+                }
+            }
+
+            // Show final result
+            if (failCount === 0) {
+                toast.success(
+                    `Successfully renamed all ${successCount} audio file(s)`,
+                );
+            } else {
+                toast.warning(
+                    `Renamed ${successCount} of ${audioFiles.length} audio file(s), ${failCount} failed`,
+                );
+                // Log errors to console for debugging
+                console.error("Failed renames:", errors);
+            }
+
+            // Refresh the file tree
+            const event = new CustomEvent("refreshFileTree");
+            window.dispatchEvent(event);
+        } catch (error) {
+            toast.error(`Smart rename failed: ${error.message}`);
+        } finally {
+            // Close context menu
+            contextMenu.update((curr) => ({ ...curr, isOpen: false }));
+        }
+    }
 </script>
 
 {#if item.type === "directory"}
@@ -362,6 +436,10 @@
                     <li onclick={startRename}>Rename</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleSmartRename}>Smart Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={handleSmartRenameAllFiles}>
+                        Smart Rename All Audio
+                    </li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={() => onCopy(item.path)}>Copy</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
