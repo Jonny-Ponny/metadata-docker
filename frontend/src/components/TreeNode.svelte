@@ -10,7 +10,10 @@
         renamingPath,
         sortItems,
         sortConfig,
+        settings,
+        applyRenamingScheme,
     } from "../utils/index.js";
+    import { toast } from "../utils/index.js";
 
     let {
         item,
@@ -201,6 +204,43 @@
             top: top + "px",
         };
     }
+
+    async function handleSmartRename() {
+        try {
+            const isFolder = item.type === "directory";
+            const scheme = isFolder
+                ? $settings.folderScheme
+                : $settings.fileScheme;
+
+            if (!scheme || scheme.trim() === "") {
+                toast.warning(
+                    `No ${isFolder ? "folder" : "file"} renaming scheme configured in settings`,
+                );
+                return;
+            }
+
+            const result = await applyRenamingScheme(
+                scheme,
+                item.path,
+                isFolder,
+            );
+
+            if (result.success) {
+                toast.success(`Successfully renamed to: ${result.newName}`);
+
+                
+
+                // Refresh the file tree
+                const event = new CustomEvent("refreshFileTree");
+                window.dispatchEvent(event);
+            }
+        } catch (error) {
+            toast.error(`Smart rename failed: ${error.message}`);
+        } finally {
+            // Close context menu
+            contextMenu.update((curr) => ({ ...curr, isOpen: false }));
+        }
+    }
 </script>
 
 {#if item.type === "directory"}
@@ -315,6 +355,8 @@
                 <ul>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={handleSmartRename}>Smart Rename</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={() => onCopy(item.path)}>Copy</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -464,6 +506,8 @@
                 <ul>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={handleSmartRename}>Smart Rename</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={() => onCopy(item.path)}>Copy</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

@@ -406,6 +406,38 @@ body {
   background: #2d3748;
 }
 
+.settings-toggle {
+  background: #4a5568;
+  /* Same as help-toggle background */
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  min-width: 70px;
+  justify-content: center;
+  text-align: center;
+}
+
+.settings-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: #2d3748;
+  /* Darker on hover like help-toggle */
+}
+
+.settings-toggle.blurred {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* Dark mode overrides */
 body.dark {
   background-color: #1e1e1e;
@@ -516,4 +548,16 @@ body.dark .help-toggle {
 
 body.dark .help-toggle:hover {
   background: #4a5568;
+}
+
+body.dark .settings-toggle {
+  background: #2d3748;
+  /* Same as help-toggle dark mode */
+  color: #e0e0e0;
+  min-width: 70px;
+}
+
+body.dark .settings-toggle:hover {
+  background: #4a5568;
+  /* Same as help-toggle hover dark mode */
 }

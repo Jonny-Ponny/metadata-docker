@@ -1000,6 +1000,196 @@ def clear_logs():
         return jsonify({"error": str(e)}), 500
 
 
+# POST /api/apply-renaming-scheme
+# Apply renaming scheme to folder or file
+@app.route('/api/apply-renaming-scheme', methods=['POST'])
+@token_required
+def apply_renaming_scheme():
+    """Apply a renaming scheme to a folder or file."""
+    data = request.get_json()
+    path = data.get('path')
+    scheme = data.get('scheme')
+    is_folder = data.get('isFolder', True)
+    
+    if not path or not scheme:
+        return jsonify({'error': 'Missing path or scheme'}), 400
+    
+    try:
+        full_path = safe_path(path)
+        
+        # Allowed variables mapping to metadata fields
+        variable_map = {
+            'TITLE': 'title',
+            'ALBUM': 'album',
+            'ARTIST': 'artist',
+            'ALBUMARTIST': 'albumArtist',
+            'YYYY': 'year',  # Will extract just the year
+            'TRACK': 'track',
+        }
+        
+        def generate_name_from_scheme(scheme_str, metadata):
+            """Generate new name from scheme and metadata."""
+            result = scheme_str
+            
+            # First, check if all variables in the scheme have values
+            import re
+            variables_in_scheme = re.findall(r'\[([^\]]+)\]', scheme_str)
+            
+            missing_fields = []
+            for var in variables_in_scheme:
+                if var not in variable_map:
+                    continue  # Skip unknown variables (they'll remain as-is)
+                
+                field = variable_map[var]
+                has_value = False
+                
+                if field == 'year' and metadata.get('year'):
+                    has_value = True
+                elif field == 'track' and metadata.get('track'):
+                    has_value = True
+                elif metadata.get(field):
+                    has_value = True
+                
+                if not has_value:
+                    missing_fields.append(var)
+            
+            if missing_fields:
+                raise ValueError(f"Missing metadata fields: {', '.join(missing_fields)}. Please fill these fields first.")
+            
+            # Replace each variable with its value
+            for var, field in variable_map.items():
+                value = ''
+                if field == 'year' and metadata.get('year'):
+                    # Extract just the year from date
+                    value = str(metadata['year'])[:4]
+                elif field == 'track' and metadata.get('track'):
+                    # Pad track number with leading zero
+                    track = str(metadata['track'])
+                    # Handle format like "5/12"
+                    if '/' in track:
+                        track = track.split('/')[0]
+                    value = track.zfill(2)
+                elif metadata.get(field):
+                    value = str(metadata[field])
+                
+                # Replace the variable (case sensitive)
+                result = result.replace(f'[{var}]', value)
+            
+            # Clean up multiple spaces and trim
+            result = re.sub(r'\s+', ' ', result).strip()
+            
+            # Remove any characters that aren't allowed in filenames
+            result = re.sub(r'[<>:"/\\|?*]', '', result)
+            
+            return result
+        
+        if is_folder:
+            # Handle folder rename
+            if not os.path.isdir(full_path):
+                return jsonify({'error': 'Folder not found'}), 404
+            
+            # Find first audio file in folder to extract metadata
+            first_audio = None
+            for root, dirs, files in os.walk(full_path):
+                for file in files:
+                    if file.lower().endswith(('.mp3', '.flac')):
+                        first_audio = os.path.join(root, file)
+                        break
+                if first_audio:
+                    break
+            
+            if not first_audio:
+                return jsonify({'error': 'No audio files found in folder to extract metadata'}), 400
+            
+            # Extract metadata from first file
+            from metadata_extractor import extract_metadata
+            metadata = extract_metadata(first_audio)
+            
+            try:
+                # Generate new folder name (this will raise ValueError if fields are missing)
+                new_name = generate_name_from_scheme(scheme, metadata)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
+            
+            if not new_name:
+                return jsonify({'error': 'Generated name is empty'}), 400
+            
+            # Rename folder
+            parent = os.path.dirname(full_path)
+            new_path = os.path.join(parent, new_name)
+            
+            # Handle duplicates
+            if os.path.exists(new_path):
+                base = new_path
+                counter = 1
+                while os.path.exists(new_path):
+                    new_path = f'{base} ({counter})'
+                    counter += 1
+            
+            os.rename(full_path, new_path)
+            
+            log_info(f"Smart renamed folder {full_path} to {new_path}")
+            
+            return jsonify({
+                'success': True,
+                'newPath': os.path.relpath(new_path, MUSIC_FOLDER).replace('\\', '/'),
+                'newName': new_name
+            })
+            
+        else:
+            # Handle file rename
+            if not os.path.isfile(full_path):
+                return jsonify({'error': 'File not found'}), 404
+            
+            if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+                return jsonify({'error': 'Smart rename only works on audio files (MP3/FLAC)'}), 400
+            
+            # Extract metadata from the file itself
+            from metadata_extractor import extract_metadata
+            metadata = extract_metadata(full_path)
+            
+            try:
+                # Generate new file name (this will raise ValueError if fields are missing)
+                new_name_without_ext = generate_name_from_scheme(scheme, metadata)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
+            
+            if not new_name_without_ext:
+                return jsonify({'error': 'Generated name is empty'}), 400
+            
+            # Add original extension
+            ext = os.path.splitext(full_path)[1]
+            new_name = new_name_without_ext + ext
+            
+            # Rename file
+            parent = os.path.dirname(full_path)
+            new_path = os.path.join(parent, new_name)
+            
+            # Handle duplicates
+            if os.path.exists(new_path):
+                base, ext = os.path.splitext(new_path)
+                counter = 1
+                while os.path.exists(new_path):
+                    new_path = f'{base} ({counter}){ext}'
+                    counter += 1
+            
+            os.rename(full_path, new_path)
+            
+            log_info(f"Smart renamed file {full_path} to {new_path}")
+            
+            return jsonify({
+                'success': True,
+                'newPath': os.path.relpath(new_path, MUSIC_FOLDER).replace('\\', '/'),
+                'newName': os.path.basename(new_path)
+            })
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        log_error(f"Smart rename error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 # Serve Svelte frontend
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

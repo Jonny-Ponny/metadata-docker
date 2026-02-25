@@ -653,12 +653,14 @@
       renamingPath.set(selectedFolder);
     }
 
-    if (e.key === "Delete" && selectedFile) {
-      e.preventDefault();
-      handleDelete(selectedFile);
-    } else if (e.key === "Delete" && selectedFolder) {
-      e.preventDefault();
-      handleDelete(selectedFolder);
+    if ($settings.allowDeleteKey) {
+      if (e.key === "Delete" && selectedFile) {
+        e.preventDefault();
+        handleDelete(selectedFile);
+      } else if (e.key === "Delete" && selectedFolder) {
+        e.preventDefault();
+        handleDelete(selectedFolder);
+      }
     }
   }
 
@@ -962,6 +964,11 @@
       window.removeEventListener("openLogs", handleOpenLogs);
     };
   });
+
+  import SettingsModal from "./components/SettingsModal.svelte";
+  import { settings } from "./utils/settings.utils.js";
+
+  let showSettingsModal = $state(false);
 </script>
 
 {#if !$isAuthenticated}
@@ -976,8 +983,16 @@
     ondrop={handleDrop}
     class:dragging={isDragging}
   >
-    <!-- Theme switch and help toggle -->
+    <!-- Theme switch, help toggle and settings toggle -->
     <div class="theme-toggle-group">
+      <button
+        class="settings-toggle"
+        class:blurred={isDragging}
+        onclick={() => (showSettingsModal = true)}
+        title="Settings"
+      >
+        <span>Settings</span>
+      </button>
       <button
         class="help-toggle"
         class:blurred={isDragging}
@@ -1261,4 +1276,8 @@
   </div>
   <HelpModal isOpen={showHelpModal} onClose={() => (showHelpModal = false)} />
   <LogViewer isOpen={showLogViewer} onClose={() => (showLogViewer = false)} />
+  <SettingsModal
+    isOpen={showSettingsModal}
+    onClose={() => (showSettingsModal = false)}
+  />
 {/if}
