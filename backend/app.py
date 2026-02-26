@@ -1010,6 +1010,7 @@ def apply_renaming_scheme():
     path = data.get('path')
     scheme = data.get('scheme')
     is_folder = data.get('isFolder', True)
+    replace_spaces = data.get('replaceSpaces', False)
     
     if not path or not scheme:
         return jsonify({'error': 'Missing path or scheme'}), 400
@@ -1077,6 +1078,10 @@ def apply_renaming_scheme():
             
             # Clean up multiple spaces and trim
             result = re.sub(r'\s+', ' ', result).strip()
+            
+            # Replace spaces with underscores if option is enabled
+            if replace_spaces:
+                result = result.replace(' ', '_')
             
             # Remove any characters that aren't allowed in filenames
             result = re.sub(r'[<>:"/\\|?*]', '', result)

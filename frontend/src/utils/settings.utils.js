@@ -16,8 +16,10 @@ export const ALLOWED_VARIABLES = {
 // Default settings
 const defaultSettings = {
     allowDeleteKey: true,
-    folderScheme: "[[YYYY]]_[ALBUMARTIST]_[ALBUM]",  // Scheme for folders
-    fileScheme: "[TRACK]_[TITLE]"                    // Scheme for files
+    folderScheme: "[[YYYY]]_[ALBUMARTIST]_[ALBUM]",    // Scheme for folders
+    fileScheme: "[TRACK]_[TITLE]",                     // Scheme for files
+    replaceSpacesInFolders: false,                     // Setting for folders
+    replaceSpacesInFiles: false                        // Setting for files
 };
 
 // Load settings from localStorage
@@ -51,7 +53,8 @@ export function saveSettings(newSettings) {
     }
 }
 
-export async function applyRenamingScheme(scheme, path, isFolder = true) {
+// Updated to accept options parameter
+export async function applyRenamingScheme(scheme, path, isFolder = true, options = {}) {
     try {
         const response = await fetch("/api/apply-renaming-scheme", {
             method: "POST",
@@ -62,7 +65,8 @@ export async function applyRenamingScheme(scheme, path, isFolder = true) {
             body: JSON.stringify({
                 path,
                 scheme,
-                isFolder
+                isFolder,
+                replaceSpaces: options.replaceSpaces || false  // Pass the option to backend
             })
         });
         

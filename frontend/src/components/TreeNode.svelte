@@ -223,6 +223,11 @@
                 scheme,
                 item.path,
                 isFolder,
+                {
+                    replaceSpaces: isFolder
+                        ? $settings.replaceSpacesInFolders
+                        : $settings.replaceSpacesInFiles,
+                },
             );
 
             if (result.success) {
@@ -279,8 +284,11 @@
                 try {
                     const result = await applyRenamingScheme(
                         scheme,
-                        file.path, // Pass each file's path
+                        file.path,
                         false, // isFolder = false (it's a file)
+                        {
+                            replaceSpaces: $settings.replaceSpacesInFiles,
+                        },
                     );
 
                     if (result.success) {

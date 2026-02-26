@@ -183,6 +183,24 @@
                             >{getPreview(localSettings.folderScheme)}</code
                         >
                     </div>
+                    <div class="setting-item" style="margin-top: 12px;">
+                        <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                bind:checked={
+                                    localSettings.replaceSpacesInFolders
+                                }
+                            />
+                            <span
+                                >Replace spaces with underscores when smart
+                                renaming folders</span
+                            >
+                        </label>
+                        <p class="setting-description">
+                            When enabled, all spaces in the generated folder
+                            name will be replaced with underscores (_).
+                        </p>
+                    </div>
                 </div>
 
                 <!-- File Renaming Scheme -->
@@ -228,6 +246,25 @@
                         <code class="preview-result"
                             >{getPreview(localSettings.fileScheme, true)}</code
                         >
+                    </div>
+
+                    <div class="setting-item" style="margin-top: 12px;">
+                        <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                bind:checked={
+                                    localSettings.replaceSpacesInFiles
+                                }
+                            />
+                            <span
+                                >Replace spaces with underscores when smart
+                                renaming files</span
+                            >
+                        </label>
+                        <p class="setting-description">
+                            When enabled, all spaces in the generated file name
+                            will be replaced with underscores (_).
+                        </p>
                     </div>
 
                     <p class="note">
