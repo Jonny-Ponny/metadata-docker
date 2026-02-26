@@ -11,6 +11,10 @@
     // Local state for form
     let localSettings = $state({ ...$settings });
 
+    // Refs for input elements
+    let folderInputRef = $state(null);
+    let fileInputRef = $state(null);
+
     // Mock data for preview
     const mockMetadata = {
         title: "THE DYING MESSAGE",
@@ -37,6 +41,13 @@
 
         // Clean up
         preview = preview.replace(/\s+/g, " ").trim();
+
+        // Replace spaces with underscores if option is checked
+        if (isFile && localSettings.replaceSpacesInFiles) {
+            preview = preview.replace(/ /g, "_");
+        } else if (!isFile && localSettings.replaceSpacesInFolders) {
+            preview = preview.replace(/ /g, "_");
+        }
 
         // Add extension for file preview
         if (isFile) {
@@ -73,13 +84,49 @@
     }
 
     function insertVariable(type, variable) {
-        if (type === "folder") {
-            localSettings.folderScheme += variable;
-        } else {
-            localSettings.fileScheme += variable;
+        const inputElement = type === "folder" ? folderInputRef : fileInputRef;
+
+        if (!inputElement) {
+            // Fallback to appending at the end if input ref not available
+            if (type === "folder") {
+                localSettings.folderScheme += variable;
+            } else {
+                localSettings.fileScheme += variable;
+            }
+            localSettings = { ...localSettings };
+            return;
         }
+
+        const start = inputElement.selectionStart;
+        const end = inputElement.selectionEnd;
+        const currentValue =
+            type === "folder"
+                ? localSettings.folderScheme
+                : localSettings.fileScheme;
+
+        // Insert at cursor position
+        const newValue =
+            currentValue.substring(0, start) +
+            variable +
+            currentValue.substring(end);
+
+        if (type === "folder") {
+            localSettings.folderScheme = newValue;
+        } else {
+            localSettings.fileScheme = newValue;
+        }
+
         // Trigger reactivity
         localSettings = { ...localSettings };
+
+        // Restore cursor position after the inserted variable
+        setTimeout(() => {
+            inputElement.focus();
+            inputElement.setSelectionRange(
+                start + variable.length,
+                start + variable.length,
+            );
+        }, 0);
     }
 
     // Variable descriptions
@@ -146,6 +193,7 @@
 
                     <div class="scheme-input-group">
                         <input
+                            bind:this={folderInputRef}
                             type="text"
                             class="scheme-input"
                             bind:value={localSettings.folderScheme}
@@ -183,6 +231,7 @@
                             >{getPreview(localSettings.folderScheme)}</code
                         >
                     </div>
+
                     <div class="setting-item" style="margin-top: 12px;">
                         <label class="checkbox-label">
                             <input
@@ -213,6 +262,7 @@
 
                     <div class="scheme-input-group">
                         <input
+                            bind:this={fileInputRef}
                             type="text"
                             class="scheme-input"
                             bind:value={localSettings.fileScheme}
