@@ -4,7 +4,7 @@
 
     let { isOpen, onClose } = $props();
 
-    // State using $state rune
+    // State
     let logs = $state([]);
     let loading = $state(false);
     let error = $state(null);
@@ -12,18 +12,23 @@
     let levelFilter = $state("");
     let searchFilter = $state("");
     let autoRefresh = $state(false);
-    let refreshInterval = $state(null);
-    let hasMounted = $state(false);
 
-    // Derived values using $derived
-    let hasFilters = $derived(levelFilter || searchFilter);
-    let filteredCount = $derived(logs.length);
+    // Refs for setInterval
+    let intervalId = null;
 
     // Available log levels
     const logLevels = ["INFO", "WARNING", "ERROR", "DEBUG"];
 
-    // Methods (not using runes)
-    async function fetchLogs() {
+    // Derived
+    let hasFilters = $derived(levelFilter || searchFilter);
+    let filteredCount = $derived(logs.length);
+
+    // Manual fetch function
+    async function doFetchLogs() {
+        // Don't fetch if not open
+        if (!isOpen) return;
+
+        // Set loading to true
         loading = true;
         error = null;
 
@@ -35,27 +40,37 @@
 
             const headers = getAuthHeaders();
 
-            const response = await fetch(`/api/logs?${params}`, {
-                headers,
-            });
-
+            const response = await fetch(`/api/logs?${params}`, { headers });
             const data = await response.json();
 
             if (response.ok) {
                 logs = data.logs || [];
             } else {
                 error = data.error || "Failed to fetch logs";
-                console.error("Log fetch error:", data);
             }
         } catch (err) {
             error = "Network error: " + err.message;
-            console.error("Log fetch exception:", err);
         } finally {
+            // Always set loading to false when done
             loading = false;
         }
     }
 
-    async function clearLogs() {
+    // Wrapper functions
+    function handleRefresh() {
+        doFetchLogs();
+    }
+
+    function handleFilterChange() {
+        doFetchLogs();
+    }
+
+    function handleClearSearch() {
+        searchFilter = "";
+        doFetchLogs();
+    }
+
+    async function handleClearLogs() {
         try {
             const headers = getAuthHeaders();
             headers["Content-Type"] = "application/json";
@@ -78,7 +93,7 @@
         }
     }
 
-    function downloadLogs() {
+    function handleDownload() {
         const logText = logs
             .map((log) => {
                 if (log.timestamp) {
@@ -99,9 +114,36 @@
         URL.revokeObjectURL(url);
     }
 
+    function handleAutoRefreshToggle(e) {
+        autoRefresh = e.target.checked;
+
+        if (autoRefresh && isOpen) {
+            // Clear any existing interval
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+
+            // Set new interval
+            intervalId = setInterval(() => {
+                if (isOpen && !loading) {
+                    doFetchLogs();
+                }
+            }, 5000);
+
+            // Do an immediate fetch when turning on
+            doFetchLogs();
+        } else {
+            // Clear interval
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+    }
+
     function getLevelClass(level) {
         if (!level) return "";
-
         const levelLower = level.toLowerCase();
         switch (levelLower) {
             case "error":
@@ -118,6 +160,7 @@
         }
     }
 
+    // Event handlers
     function handleKeyDown(e) {
         if (e.key === "Escape" && isOpen) {
             e.preventDefault();
@@ -131,7 +174,6 @@
     }
 
     function handleOverlayClick(e) {
-        // Only close if clicking directly on the overlay, not its children
         if (e.target === e.currentTarget) {
             e.preventDefault();
             e.stopPropagation();
@@ -143,43 +185,41 @@
         e.preventDefault();
         e.stopPropagation();
         onClose();
+
+        // Clean up interval when closing
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
     }
 
-    // Effects using $effect
+    // Handle modal open
     $effect(() => {
-        // Handle auto-refresh
-        if (autoRefresh && isOpen) {
-            if (refreshInterval) clearInterval(refreshInterval);
-            refreshInterval = setInterval(() => {
-                fetchLogs();
-            }, 5000);
-
-            return () => {
-                clearInterval(refreshInterval);
-                refreshInterval = null;
-            };
-        } else if (refreshInterval) {
-            clearInterval(refreshInterval);
-            refreshInterval = null;
-        }
-    });
-
-    $effect(() => {
-        // Initial fetch when modal opens
-        if (isOpen && !hasMounted) {
-            hasMounted = true;
-            fetchLogs();
-        }
-    });
-
-    $effect(() => {
-        // Setup keyboard listener
         if (isOpen) {
+            // Initial fetch
+            doFetchLogs();
+
+            // Set up auto-refresh if enabled
+            if (autoRefresh) {
+                intervalId = setInterval(() => {
+                    if (!loading) {
+                        doFetchLogs();
+                    }
+                }, 5000);
+            }
+
+            // Add keyboard listener
             window.addEventListener("keydown", handleKeyDown);
-            return () => {
-                window.removeEventListener("keydown", handleKeyDown);
-            };
         }
+
+        return () => {
+            // Cleanup when modal closes or component unmounts
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+            window.removeEventListener("keydown", handleKeyDown);
+        };
     });
 </script>
 
@@ -212,7 +252,7 @@
                 <div class="control-group">
                     <select
                         bind:value={linesToShow}
-                        onchange={fetchLogs}
+                        onchange={handleFilterChange}
                         class="log-select"
                     >
                         <option value={50}>50 lines</option>
@@ -223,7 +263,7 @@
 
                     <select
                         bind:value={levelFilter}
-                        onchange={fetchLogs}
+                        onchange={handleFilterChange}
                         class="log-select"
                     >
                         <option value="">All Levels</option>
@@ -237,16 +277,13 @@
                             type="text"
                             bind:value={searchFilter}
                             placeholder="Search logs..."
-                            oninput={fetchLogs}
+                            oninput={handleFilterChange}
                             class="log-search"
                         />
                         {#if searchFilter}
                             <button
                                 class="search-clear"
-                                onclick={() => {
-                                    searchFilter = "";
-                                    fetchLogs();
-                                }}
+                                onclick={handleClearSearch}
                                 title="Clear search"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24">
@@ -260,13 +297,17 @@
 
                 <div class="action-group">
                     <label class="auto-refresh">
-                        <input type="checkbox" bind:checked={autoRefresh} />
+                        <input
+                            type="checkbox"
+                            checked={autoRefresh}
+                            onchange={handleAutoRefreshToggle}
+                        />
                         <span>Auto-refresh (5s)</span>
                     </label>
 
                     <button
                         class="log-btn refresh-btn"
-                        onclick={fetchLogs}
+                        onclick={handleRefresh}
                         disabled={loading}
                     >
                         {#if loading}
@@ -314,7 +355,10 @@
                         {/if}
                     </button>
 
-                    <button class="log-btn download-btn" onclick={downloadLogs}>
+                    <button
+                        class="log-btn download-btn"
+                        onclick={handleDownload}
+                    >
                         <svg
                             width="16"
                             height="16"
@@ -332,7 +376,7 @@
                         Download
                     </button>
 
-                    <button class="log-btn clear-btn" onclick={clearLogs}>
+                    <button class="log-btn clear-btn" onclick={handleClearLogs}>
                         <svg
                             width="16"
                             height="16"
@@ -401,7 +445,7 @@
                             />
                         </svg>
                         <p>{error}</p>
-                        <button class="retry-btn" onclick={fetchLogs}
+                        <button class="retry-btn" onclick={handleRefresh}
                             >Retry</button
                         >
                     </div>
