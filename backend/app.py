@@ -169,9 +169,21 @@ def safe_path(file_path):
 
 # -------------------------API ENDPOINTS------------------------- #
 
+# GET /api/ping
+# Health check endpoint
+@app.route('/api/ping', methods=['GET'])
+def health():
+    try:
+        return jsonify({
+            "status": "healthy",
+            "timestamp": datetime.datetime.now().isoformat()
+        })
+    except Exception:
+        return jsonify({"status": "error"}), 500
+
 # GET /api/files
 # Fetch library structure as filetree
-@app.route('/api/files')
+@app.route('/api/files', methods=['GET'])
 @token_required
 def list_files():
     try:
@@ -182,7 +194,7 @@ def list_files():
 
 # GET /api/metadata?path=<file_path>
 # Fetch all metadata for a specific file
-@app.route('/api/metadata')
+@app.route('/api/metadata', methods=['GET'])
 @token_required
 def get_metadata():
     file_path = request.args.get('path')
@@ -274,7 +286,7 @@ def update_folder_files():
 
 # GET /api/audio?path=<file_path>
 # Fetch audiofile
-@app.route('/api/audio')
+@app.route('/api/audio', methods=['GET'])
 @token_required
 def serve_audio():
     file_path = request.args.get('path')
@@ -808,7 +820,7 @@ def delete_cover_art():
 
 # GET /api/image
 # Fetch image
-@app.route('/api/image')
+@app.route('/api/image', methods=['GET'])
 @token_required
 def serve_image():
     file_path = request.args.get('path')
