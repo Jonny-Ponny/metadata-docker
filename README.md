@@ -182,7 +182,7 @@ It uses:
 - **PyJWT** (MIT) for authentication
 - **Svelte** (MIT) for the frontend
 
-See [NOTICE](NOTICE) and [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full attribution.
+See [NOTICE](NOTICE) and [THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES) for full attribution.
 
 
 ## Screenshots
