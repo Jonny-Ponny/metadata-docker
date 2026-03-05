@@ -461,11 +461,10 @@
             <!-- Footer -->
             <div class="help-modal-footer">
                 <div class="footer-info">
-                    <span class="version">Version 0.0.0</span>
+                    <span class="version">Version 1.0.0</span>
                     <span class="separator">•</span>
-                    <!-- PLACEHOLDER -->
                     <a
-                        href="https://github.com"
+                        href="https://github.com/Jonny-Ponny/metadata-docker"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="github-link"

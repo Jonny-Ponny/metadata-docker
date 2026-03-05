@@ -1,17 +1,18 @@
 services:
   app:
-    image: 
+    image: oneandonlyjonnyponny/metadata-docker:latest
+    container_name: metadata-docker
     ports:
-      - "8888:5000"                                 
+      - "8888:5000"                                 # Change 8888 to preferred port
     environment:
       - PYTHONUNBUFFERED=1
       - DEBUG=False
       - AUTH_USERNAME=USERNAME                      # Login
       - AUTH_PASSWORD=PASSWORD                      # Plain text password
       - TOKEN_EXPIRE_HOURS=24                       # Optional
-      - PUID=1000
-      - PGID=1000
-      - TZ=UTC
+      - PUID=1000                                   # User(optional)
+      - PGID=1000                                   # Group(optional)
+      - TZ=UTC                                      # Timezone(optional)
     volumes:
       - ~/path/to/your/music:/music                 # Library
       - ./logs:/logs                                # Logs

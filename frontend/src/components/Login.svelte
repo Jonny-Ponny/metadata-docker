@@ -40,7 +40,7 @@
   </button>
   
   <div class="login-box">
-    <h1>Metadata</h1>
+    <h1>metadata-docker</h1>
     <h2>Login</h2>
     
     <form onsubmit={handleSubmit}>

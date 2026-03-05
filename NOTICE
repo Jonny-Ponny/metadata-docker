@@ -1,0 +1,23 @@
+metadata-docker
+Copyright (c) 2026 [JonnyPonny](https://github.com/Jonny-Ponny)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+This software includes third-party code:
+
+- Mutagen (GPLv2) - Copyright (c) Christoph Reiter
+- PyJWT (MIT) - Copyright (c) 2015-2022 José Padilla
+- Svelte (MIT) - Copyright (c) 2016-2025 Svelte Contributors
+- Flask (BSD-3) - Copyright (c) 2010 Pallets
+- Gunicorn(MIT) - 2009-2026 (c) Benoît Chesneau <benoitc@gunicorn.org>, 2009-2015 (c) Paul J. Davis <paul.joseph.davis@gmail.com>
