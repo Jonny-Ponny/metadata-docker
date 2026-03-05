@@ -1,7 +1,6 @@
-# Third-Party Licenses
+Third-Party Licenses
 
-
-## Mutagen - GPLv2
+Mutagen - GPLv2:
 
 Used for audio metadata processing
 
@@ -347,7 +346,7 @@ Public License instead of this License.
 
 
 
-## PyJWT - MIT
+PyJWT - MIT:
 
 Used for authentication
 
@@ -374,7 +373,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-## Svelte - MIT
+Svelte - MIT:
 
 UI framework
 
@@ -387,7 +386,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-## Flask
+Flask:
 
 Web framework for the backend
 
@@ -423,7 +422,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-## Gunicorn
+Gunicorn:
 
 Python WSGI server
 
