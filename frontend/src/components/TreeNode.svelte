@@ -455,7 +455,7 @@
                     <li class="hold-delete-item">
                         <HoldButton
                             variant="menu"
-                            duration={800}
+                            duration={1500}
                             onConfirm={handleDeleteWithHold}
                             title="Hold to delete"
                         >

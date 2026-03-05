@@ -16,10 +16,10 @@ export const ALLOWED_VARIABLES = {
 // Default settings
 const defaultSettings = {
     allowDeleteKey: true,
-    folderScheme: "[[YYYY]] - [ALBUMARTIST] - [ALBUM]",// Scheme for folders
-    fileScheme: "[TRACK]_[TITLE]",                     // Scheme for files
-    replaceSpacesInFolders: false,                     // Setting for folders
-    replaceSpacesInFiles: false                        // Setting for files
+    folderScheme: "[[YYYY]] - [ALBUMARTIST] - [ALBUM]",          // Scheme for folders
+    fileScheme: "[ALBUMARTIST] - [ALBUM] - [TRACK] - [TITLE]",   // Scheme for files
+    replaceSpacesInFolders: false,                               // Setting for folders
+    replaceSpacesInFiles: false                                  // Setting for files
 };
 
 // Load settings from localStorage
