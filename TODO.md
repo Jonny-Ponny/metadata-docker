@@ -20,3 +20,4 @@
 20. ~~Fix bulk operations for custom fields~~
 21. ~~Settings modal~~
 22. ~~Smart rename~~
+23. Fix MP3 tag issues

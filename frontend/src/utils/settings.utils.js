@@ -16,7 +16,7 @@ export const ALLOWED_VARIABLES = {
 // Default settings
 const defaultSettings = {
     allowDeleteKey: true,
-    folderScheme: "[[YYYY]]_[ALBUMARTIST]_[ALBUM]",    // Scheme for folders
+    folderScheme: "[[YYYY]] - [ALBUMARTIST] - [ALBUM]",// Scheme for folders
     fileScheme: "[TRACK]_[TITLE]",                     // Scheme for files
     replaceSpacesInFolders: false,                     // Setting for folders
     replaceSpacesInFiles: false                        // Setting for files

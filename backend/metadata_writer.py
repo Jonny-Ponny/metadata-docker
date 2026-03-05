@@ -123,14 +123,21 @@ def update_mp3_metadata(file_path, field, value):
                 tags.add(sylt)
                 log_info(f"Added SYLT frame with {len(events)} events")
 
+        elif field == 'year':
+            frame_id = FIELD_MAPPING['mp3']['year']  # This is 'TYER'
+            tags.delall(frame_id)
+            tags.add(TYER(encoding=3, text=value))
+            log_info(f"Edited {frame_id} frame, new value:{value}")
+
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]
             tags.delall(frame_id)
-            
+
             # Create appropriate frame based on field
             if frame_id == 'COMM':
                 tags.add(COMM(encoding=3, lang='eng', desc='', text=value))
                 log_info(f"Edited {frame_id} frame, new value:{value}")
+            
             else:
                 # Get the frame class from globals() and create the frame
                 frame_class = globals().get(frame_id)
