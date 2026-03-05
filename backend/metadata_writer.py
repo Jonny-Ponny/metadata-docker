@@ -15,7 +15,7 @@ FIELD_MAPPING = {
         'albumArtist': 'TPE2',
         'track': 'TRCK',
         'disk': 'TPOS',
-        'year': 'TYER',
+        'year': 'TDRC',
         'genre': 'TCON',
         'comment': 'COMM',
         'composer': 'TCOM',
@@ -122,12 +122,6 @@ def update_mp3_metadata(file_path, field, value):
                 )
                 tags.add(sylt)
                 log_info(f"Added SYLT frame with {len(events)} events")
-
-        elif field == 'year':
-            frame_id = FIELD_MAPPING['mp3']['year']  # This is 'TYER'
-            tags.delall(frame_id)
-            tags.add(TYER(encoding=3, text=value))
-            log_info(f"Edited {frame_id} frame, new value:{value}")
 
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]
