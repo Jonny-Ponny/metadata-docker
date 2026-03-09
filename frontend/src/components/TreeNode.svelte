@@ -328,6 +328,67 @@
             contextMenu.update((curr) => ({ ...curr, isOpen: false }));
         }
     }
+
+    async function handleDownload() {
+        try {
+            const isFolder = item.type === "directory";
+
+            // Make API call to download endpoint
+            const response = await fetch("/api/download", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    path: item.path,
+                    isFolder: isFolder,
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error || "Download failed");
+            }
+
+            // Get the filename from Content-Disposition header or create one
+            const contentDisposition = response.headers.get(
+                "Content-Disposition",
+            );
+            let filename = isFolder ? `${item.name}.zip` : item.name;
+
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(
+                    /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/,
+                );
+                if (filenameMatch && filenameMatch[1]) {
+                    filename = filenameMatch[1].replace(/['"]/g, "");
+                }
+            }
+
+            // Convert response to blob
+            const blob = await response.blob();
+
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+
+            // Cleanup
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            toast.success(`Download started: ${filename}`);
+        } catch (error) {
+            toast.error(`Download failed: ${error.message}`);
+            console.error("Download error:", error);
+        } finally {
+            // Close context menu
+            contextMenu.update((curr) => ({ ...curr, isOpen: false }));
+        }
+    }
 </script>
 
 {#if item.type === "directory"}
@@ -450,6 +511,8 @@
                     </li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={() => onCopy(item.path)}>Copy</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={handleDownload}>Download</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
                     <li class="hold-delete-item">
@@ -601,6 +664,8 @@
                     <li onclick={handleSmartRename}>Smart Rename</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={() => onCopy(item.path)}>Copy</li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={handleDownload}>Download</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleCreateFolder}>Create folder</li>
                     <li class="hold-delete-item">

@@ -3,6 +3,8 @@ import shutil
 import re
 import jwt
 import datetime
+import zipfile
+import io
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
@@ -1205,6 +1207,83 @@ def apply_renaming_scheme():
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         log_error(f"Smart rename error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# POST /api/download
+# Download a file or folder as a ZIP archive
+@app.route('/api/download', methods=['POST'])
+@token_required
+def download_item():
+    """Download a file or folder as a ZIP archive."""
+    data = request.get_json()
+    path = data.get('path')
+    is_folder = data.get('isFolder', False)
+    
+    if not path:
+        return jsonify({'error': 'Missing path'}), 400
+    
+    try:
+        full_path = safe_path(path)
+        if not os.path.exists(full_path):
+            return jsonify({'error': 'Path not found'}), 404
+        
+        # Handle single file download
+        if not is_folder and os.path.isfile(full_path):
+            # Determine mimetype
+            ext = os.path.splitext(full_path)[1].lower()
+            if ext in ['.mp3', '.flac', '.wav', '.aac', '.ogg', '.m4a', '.wma', '.opus', '.ape', '.dsf', '.dff']:
+                mimetype = 'audio/mpeg' if ext == '.mp3' else 'audio/flac' if ext == '.flac' else 'application/octet-stream'
+            elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
+                mimetype = {
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.png': 'image/png',
+                    '.gif': 'image/gif',
+                    '.bmp': 'image/bmp',
+                    '.webp': 'image/webp'
+                }.get(ext, 'application/octet-stream')
+            else:
+                mimetype = 'application/octet-stream'
+            
+            log_info(f'Downloading file: {full_path}')
+            return send_file(
+                full_path,
+                mimetype=mimetype,
+                as_attachment=True,
+                download_name=os.path.basename(full_path)
+            )
+        
+        # Handle folder download as ZIP
+        elif os.path.isdir(full_path):
+            # Create ZIP in memory
+            memory_file = io.BytesIO()
+            
+            with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # Walk through all files in the folder
+                for root, dirs, files in os.walk(full_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        # Create archive name with relative path from the folder being downloaded
+                        arcname = os.path.relpath(file_path, os.path.dirname(full_path))
+                        zf.write(file_path, arcname)
+            
+            memory_file.seek(0)
+            
+            log_info(f'Downloading folder as ZIP: {full_path}')
+            return send_file(
+                memory_file,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=f'{os.path.basename(full_path)}.zip'
+            )
+        else:
+            return jsonify({'error': 'Invalid item type'}), 400
+            
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        log_error(f"Download error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
