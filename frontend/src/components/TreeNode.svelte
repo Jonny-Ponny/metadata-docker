@@ -132,13 +132,26 @@
         e.dataTransfer.effectAllowed = "move";
     }
 
-    // Reset newName when entering rename mode for this item
     $effect(() => {
         if ($renamingPath === item.path) {
             newName = item.name;
             if (inputRef) {
                 inputRef.focus();
-                inputRef.select();
+
+                // For files, select name without extension
+                if (item.type === "file") {
+                    const lastDotIndex = item.name.lastIndexOf(".");
+                    if (lastDotIndex > 0) {
+                        // Select from start to last dot (excluding the extension)
+                        inputRef.setSelectionRange(0, lastDotIndex);
+                    } else {
+                        // No extension, select all
+                        inputRef.select();
+                    }
+                } else {
+                    // For folders, select all text
+                    inputRef.select();
+                }
             }
         }
     });
@@ -458,7 +471,10 @@
                     }}
                     onblur={submitRename}
                     onclick={(e) => {
-                        e.stopPropagation();
+                        e.stopPropagation(); // Prevent parent div's onclick
+                    }}
+                    onmousedown={(e) => {
+                        e.stopPropagation(); // Prevent parent's mousedown (if any)
                     }}
                     oncontextmenu={(e) => {
                         e.preventDefault();
@@ -579,7 +595,7 @@
             style="--level: {level}"
             onclick={() => {
                 // Call selectFile for both audio AND images
-                selectFile(item.path);
+                handleFileClick()
             }}
             oncontextmenu={(e) => {
                 e.preventDefault();
@@ -624,11 +640,14 @@
                     }}
                     onblur={submitRename}
                     onclick={(e) => {
-                        e.stopPropagation();
+                        e.stopPropagation(); // Prevent parent div's onclick
+                    }}
+                    onmousedown={(e) => {
+                        e.stopPropagation(); // Prevent parent's mousedown (if any)
                     }}
                     oncontextmenu={(e) => {
                         e.preventDefault();
-                        handleContextMenu(e);
+                        handleContextMenu(e); // Keep context menu on right-click
                     }}
                     class="rename-input"
                     type="text"
