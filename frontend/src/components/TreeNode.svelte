@@ -136,22 +136,22 @@
         if ($renamingPath === item.path) {
             newName = item.name;
             if (inputRef) {
-                inputRef.focus();
+                // Small delay to ensure the input is ready in Firefox
+                setTimeout(() => {
+                    inputRef.focus();
 
-                // For files, select name without extension
-                if (item.type === "file") {
-                    const lastDotIndex = item.name.lastIndexOf(".");
-                    if (lastDotIndex > 0) {
-                        // Select from start to last dot (excluding the extension)
-                        inputRef.setSelectionRange(0, lastDotIndex);
+                    // For files, select name without extension
+                    if (item.type === "file") {
+                        const lastDotIndex = item.name.lastIndexOf(".");
+                        if (lastDotIndex > 0) {
+                            inputRef.setSelectionRange(0, lastDotIndex);
+                        } else {
+                            inputRef.select();
+                        }
                     } else {
-                        // No extension, select all
                         inputRef.select();
                     }
-                } else {
-                    // For folders, select all text
-                    inputRef.select();
-                }
+                }, 10); // Small delay for Firefox
             }
         }
     });
@@ -420,7 +420,8 @@
                 handleContextMenu(e);
             }}
             data-folder-path={item.path}
-            draggable="true"
+            draggable={$renamingPath !== item.path}
+            // Disable dragging when renaming
             ondragstart={handleDragStart}
         >
             <span class="toggle">
@@ -469,13 +470,11 @@
                         if (e.key === "Enter") {
                             submitRename();
                         } else if (e.key === "Escape") {
-                            e.preventDefault(); // Prevent default behavior
+                            e.preventDefault();
                             cancelRename();
                         }
                     }}
                     onblur={(e) => {
-                        // Only submit if we're not in the process of cancelling
-                        // Check if this input is still the one being renamed
                         if ($renamingPath === item.path) {
                             submitRename();
                         }
@@ -616,7 +615,8 @@
                 0,
                 item.path.lastIndexOf("/"),
             )}
-            draggable="true"
+            draggable={$renamingPath !== item.path}
+            // Disable dragging when renaming
             ondragstart={handleDragStart}
         >
             <span class="file-icon">
@@ -648,12 +648,11 @@
                         if (e.key === "Enter") {
                             submitRename();
                         } else if (e.key === "Escape") {
-                            e.preventDefault(); // Prevent default behavior
+                            e.preventDefault();
                             cancelRename();
                         }
                     }}
                     onblur={(e) => {
-                        // Only submit if we're still in rename mode for this item
                         if ($renamingPath === item.path) {
                             submitRename();
                         }
