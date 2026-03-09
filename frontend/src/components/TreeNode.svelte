@@ -466,15 +466,25 @@
                     bind:this={inputRef}
                     bind:value={newName}
                     onkeydown={(e) => {
-                        if (e.key === "Enter") submitRename();
-                        else if (e.key === "Escape") cancelRename();
+                        if (e.key === "Enter") {
+                            submitRename();
+                        } else if (e.key === "Escape") {
+                            e.preventDefault(); // Prevent default behavior
+                            cancelRename();
+                        }
                     }}
-                    onblur={submitRename}
+                    onblur={(e) => {
+                        // Only submit if we're not in the process of cancelling
+                        // Check if this input is still the one being renamed
+                        if ($renamingPath === item.path) {
+                            submitRename();
+                        }
+                    }}
                     onclick={(e) => {
-                        e.stopPropagation(); // Prevent parent div's onclick
+                        e.stopPropagation();
                     }}
                     onmousedown={(e) => {
-                        e.stopPropagation(); // Prevent parent's mousedown (if any)
+                        e.stopPropagation();
                     }}
                     oncontextmenu={(e) => {
                         e.preventDefault();
@@ -595,7 +605,7 @@
             style="--level: {level}"
             onclick={() => {
                 // Call selectFile for both audio AND images
-                handleFileClick()
+                handleFileClick();
             }}
             oncontextmenu={(e) => {
                 e.preventDefault();
@@ -635,19 +645,28 @@
                     bind:this={inputRef}
                     bind:value={newName}
                     onkeydown={(e) => {
-                        if (e.key === "Enter") submitRename();
-                        else if (e.key === "Escape") cancelRename();
+                        if (e.key === "Enter") {
+                            submitRename();
+                        } else if (e.key === "Escape") {
+                            e.preventDefault(); // Prevent default behavior
+                            cancelRename();
+                        }
                     }}
-                    onblur={submitRename}
+                    onblur={(e) => {
+                        // Only submit if we're still in rename mode for this item
+                        if ($renamingPath === item.path) {
+                            submitRename();
+                        }
+                    }}
                     onclick={(e) => {
-                        e.stopPropagation(); // Prevent parent div's onclick
+                        e.stopPropagation();
                     }}
                     onmousedown={(e) => {
-                        e.stopPropagation(); // Prevent parent's mousedown (if any)
+                        e.stopPropagation();
                     }}
                     oncontextmenu={(e) => {
                         e.preventDefault();
-                        handleContextMenu(e); // Keep context menu on right-click
+                        handleContextMenu(e);
                     }}
                     class="rename-input"
                     type="text"

@@ -20,4 +20,7 @@
 20. ~~Fix bulk operations for custom fields~~
 21. ~~Settings modal~~
 22. ~~Smart rename~~
-23. Fix MP3 tag issues
+23. ~~Fix MP3 tag issues~~
+24. Fix input click not moving cursor when renaming (Firefox)
+25. ~~Fix success toast appearing after cancelling rename with Escape (Edge)~~
+26. Implement tag deletion for all audio in folder
