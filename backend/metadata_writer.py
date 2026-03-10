@@ -166,7 +166,7 @@ def update_flac_metadata(file_path, field, value):
     try:
         log_info(f"File: {file_path}")
         audio = FLAC(file_path)
-        
+
         if field in FIELD_MAPPING['flac']:
             # Remove existing tag and add new one
             tag_name = FIELD_MAPPING['flac'][field]
@@ -435,6 +435,8 @@ def delete_flac_field(file_path, field):
         
         # Map field to tag name
         if field == 'comment':
+            audio.pop('COMMENT', None)
+        elif field == 'description':
             audio.pop('DESCRIPTION', None)
         elif field == 'lyrics':
             audio.pop('LYRICS', None)
@@ -498,3 +500,43 @@ def delete_flac_cover_art(file_path):
     except Exception as e:
         log_error(f"Error deleting FLAC cover art: {e}")
         return False
+    
+def delete_field_from_folder(folder_path, field, recursive=False):
+    """Delete a metadata field from all audio files in a folder.
+    
+    Args:
+        folder_path: Path to the folder
+        field: Field name to delete
+        recursive: Whether to include subfolders
+    
+    Returns:
+        dict: Statistics about the operation
+    """
+    updated = 0
+    failed = 0
+    total = 0
+    
+    # Walk through folder
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.lower().endswith(('.mp3', '.flac')):
+                total += 1
+                file_path = os.path.join(root, file)
+                try:
+                    if delete_metadata_field(file_path, field):
+                        updated += 1
+                    else:
+                        failed += 1
+                except Exception as e:
+                    print(f"Error deleting field from {file_path}: {e}")
+                    failed += 1
+        
+        # If not recursive, break after first iteration
+        if not recursive:
+            break
+    
+    return {
+        'updated': updated,
+        'failed': failed,
+        'total': total
+    }

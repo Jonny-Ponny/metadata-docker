@@ -52,6 +52,8 @@
     let lyricsModalType = $state("unsynced"); // 'unsynced' or 'synced'
     let lyricsModalContent = $state("");
 
+    let applyDeleteToFolder = $state(false); // false = current file only, true = all files in folder
+
     // Field definitions for main and always‑visible other fields
     const mainFields = [
         "title",
@@ -90,7 +92,7 @@
         if (!filePath) return;
 
         try {
-            const URL = `/api/metadata/file`; // build
+            const URL = `/api/metadata/file`;
 
             const response = await fetch(URL, {
                 method: "POST",
@@ -167,7 +169,7 @@
         if (!path) return;
 
         try {
-            const URL = `/api/metadata?path=${encodeURIComponent(path)}`; // build
+            const URL = `/api/metadata?path=${encodeURIComponent(path)}`;
             const response = await fetch(URL);
 
             if (!response.ok) {
@@ -301,7 +303,7 @@
                     : "folder/current"
                 : "file";
 
-            const URL = `/api/metadata/picture/${endpoint}`; // build
+            const URL = `/api/metadata/picture/${endpoint}`;
 
             const response = await fetch(URL, {
                 method: "POST",
@@ -370,7 +372,7 @@
         if (!filePath || !field) return;
 
         try {
-            const URL = `/api/metadata/field/delete`; // build
+            const URL = `/api/metadata/field/delete`;
 
             const response = await fetch(URL, {
                 method: "POST",
@@ -409,7 +411,7 @@
         if (!filePath) return;
 
         try {
-            const URL = `/api/metadata/picture/delete`; // build
+            const URL = `/api/metadata/picture/delete`;
 
             const response = await fetch(URL, {
                 method: "POST",
@@ -682,24 +684,77 @@
             toast.error(`Failed to apply all changes: ${error.message}`);
         }
     }
+
+    async function deleteFieldFromFolder(field) {
+        if (!filePath || !field) return;
+
+        // Get the folder path from the file path
+        const folderPath = filePath.split("/").slice(0, -1).join("/") || "/";
+
+        try {
+            // Same endpoint but with folder path and recursive flag
+            const URL = `/api/metadata/field/delete`;
+
+            const response = await fetch(URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    path: folderPath, // Send folder path instead of file path
+                    field: field,
+                    recursive: applyToSubfolders, // Add recursive flag
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error || "Failed to delete field from folder",
+                );
+            }
+
+            toast.success(
+                result.message || `Deleted "${field}" from files in folder`,
+            );
+
+            // Refresh current file's metadata in case it was updated
+            await fetchMetadata(filePath);
+
+            // Clear editing state
+            if (editingFields.has(field)) {
+                editingFields.delete(field);
+                editingFields = new Set(editingFields);
+            }
+        } catch (error) {
+            console.error("Error deleting field from folder:", error);
+            toast.error(`Failed to delete from folder: ${error.message}`);
+        }
+    }
 </script>
 
 <div class="metadata-editor">
+    <div class="operation-controls">
+        <label
+            class="checkbox-label"
+            title="When enabled, folder operations will include subfolders"
+        >
+            <input type="checkbox" bind:checked={applyToSubfolders} />
+            <span>Recursive</span>
+        </label>
+        <label
+            class="checkbox-label"
+            title="When enabled, tag deletetion operations will apply to all files in folder"
+        >
+            <input type="checkbox" bind:checked={applyDeleteToFolder} />
+            <span>Tag deletion applies to folder</span>
+        </label>
+    </div>
+
     <!-- Filename badge -->
     <div class="editor-header">
         <div class="filename-badge">{filename}</div>
-        <div class="folder-scope-toggle">
-            <label>
-                <input
-                    title={applyToSubfolders
-                        ? "Folder operations will be applied to ALL files in this folder and its subfolders"
-                        : "Folder operations will be applied only to files in the same folder"}
-                    type="checkbox"
-                    bind:checked={applyToSubfolders}
-                />
-                Include subfolders
-            </label>
-        </div>
     </div>
 
     <div class="cover-art-container">
@@ -911,8 +966,16 @@
                                 <HoldButton
                                     variant="icon"
                                     duration={800}
-                                    onConfirm={() => deleteField(field)}
-                                    title="Hold to delete this field"
+                                    onConfirm={() => {
+                                        if (applyDeleteToFolder) {
+                                            deleteFieldFromFolder(field);
+                                        } else {
+                                            deleteField(field);
+                                        }
+                                    }}
+                                    title={applyDeleteToFolder
+                                        ? "Hold to delete this field from all files in folder"
+                                        : "Hold to delete this field from current file"}
                                     class="delete-btn"
                                 >
                                     <!-- Trash can icon -->
@@ -1029,12 +1092,24 @@
                             ></textarea>
                             {#if editingFields.has(field)}
                                 <div class="field-actions textarea-actions">
-                                    <!-- Delete button - new -->
+                                    <!-- Delete button -->
                                     {#if metadata[field]}
-                                        <button
-                                            class="icon-btn delete-btn"
-                                            title="Delete this field from file"
-                                            onclick={() => deleteField(field)}
+                                        <HoldButton
+                                            variant="icon"
+                                            duration={800}
+                                            onConfirm={() => {
+                                                if (applyDeleteToFolder) {
+                                                    deleteFieldFromFolder(
+                                                        field,
+                                                    );
+                                                } else {
+                                                    deleteField(field);
+                                                }
+                                            }}
+                                            title={applyDeleteToFolder
+                                                ? "Hold to delete this field from all files in folder"
+                                                : "Hold to delete this field from current file"}
+                                            class="delete-btn"
                                         >
                                             <!-- Trash can icon -->
                                             <svg
@@ -1051,7 +1126,7 @@
                                                     stroke-linecap="round"
                                                 />
                                             </svg>
-                                        </button>
+                                        </HoldButton>
                                     {/if}
                                     <!-- File button -->
                                     <button
@@ -1134,8 +1209,16 @@
                                         <HoldButton
                                             variant="icon"
                                             duration={800}
-                                            onConfirm={() => deleteField(key)}
-                                            title="Hold to delete this field"
+                                            onConfirm={() => {
+                                                if (applyDeleteToFolder) {
+                                                    deleteFieldFromFolder(key);
+                                                } else {
+                                                    deleteField(key);
+                                                }
+                                            }}
+                                            title={applyDeleteToFolder
+                                                ? "Hold to delete this field from all files in folder"
+                                                : "Hold to delete this field from current file"}
                                             class="delete-btn"
                                         >
                                             <!-- Trash can icon -->
@@ -1787,26 +1870,6 @@
         margin-bottom: 0; /* Override the previous margin */
     }
 
-    .folder-scope-toggle {
-        flex-shrink: 0;
-    }
-
-    .folder-scope-toggle label {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 12px;
-        color: #666;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-
-    .folder-scope-toggle input[type="checkbox"] {
-        margin: 0;
-        cursor: pointer;
-        accent-color: #ff9f4b;
-    }
-
     /* Adjust padding for 3 icons */
     .field.editing input,
     .field.editing textarea {
@@ -1818,15 +1881,6 @@
     .input-wrapper textarea {
         width: 100%;
         padding-left: 10px; /* Normal padding */
-    }
-
-    .delete-btn {
-        color: #ff4444; /* Red color for delete */
-    }
-
-    .delete-btn:hover {
-        color: #ff4444;
-        background: rgba(255, 68, 68, 0.1);
     }
 
     .cover-art-expand {
@@ -2106,6 +2160,35 @@
         height: 16px;
     }
 
+    .operation-controls {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 16px;
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.02);
+        border-radius: 4px;
+        border-left: 2px solid #fd7d05;
+        flex-wrap: wrap;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #666;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+        margin: 0;
+        cursor: pointer;
+        accent-color: #ff9f4b;
+        width: 14px;
+        height: 14px;
+    }
+
     /* Dark mode adjustments */
     :global(body.dark) .filename-badge {
         background: rgba(255, 255, 255, 0.1);
@@ -2168,18 +2251,6 @@
     :global(body.dark) .cover-art-expand .icon-btn:hover {
         background: #ff9f4b;
         color: white;
-    }
-
-    :global(body.dark) .folder-scope-toggle label {
-        color: #aaa;
-    }
-
-    :global(body.dark) .delete-btn {
-        color: #ff6b6b;
-    }
-
-    :global(body.dark) .delete-btn:hover {
-        background: rgba(255, 107, 107, 0.2);
     }
 
     :global(body.dark) .lyrics-modal {
@@ -2246,5 +2317,14 @@
 
     :global(body.dark) .batch-apply-btn svg {
         stroke: #ff9f4b;
+    }
+
+    :global(body.dark) .operation-controls {
+        background: rgba(255, 255, 255, 0.05);
+        border-left-color: #ff9f4b;
+    }
+
+    :global(body.dark) .checkbox-label {
+        color: #aaa;
     }
 </style>

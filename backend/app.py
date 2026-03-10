@@ -741,35 +741,49 @@ def update_folder_pictures_current_only_endpoint():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 # POST /api/metadata/field/delete
-# Delete a specific metadata field from a file
+# Delete a specific metadata field from a file or all files in a folder
 @app.route('/api/metadata/field/delete', methods=['POST'])
 @token_required
 def delete_metadata_field():
-    """Delete a specific metadata field from a file."""
+    """Delete a specific metadata field from a file or all files in a folder."""
     data = request.get_json()
-    file_path = data.get('path')
+    path = data.get('path')
     field = data.get('field')
+    recursive = data.get('recursive', False)  # Add recursive flag
     
-    if not file_path or not field:
+    if not path or not field:
         return jsonify({'error': 'Missing path or field'}), 400
     
     try:
-        full_path = safe_path(file_path)
-        if not os.path.isfile(full_path):
-            return jsonify({'error': 'File not found'}), 404
+        full_path = safe_path(path)
         
-        # Only process mp3 and flac files
-        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
-            return jsonify({'error': 'Unsupported file format'}), 400
-        
-        from metadata_writer import delete_metadata_field as delete_field
-        success = delete_field(full_path, field)
-        
-        if success:
-            return jsonify({'success': True, 'message': f'Deleted {field} from {os.path.basename(file_path)}'})
+        # Check if it's a folder
+        if os.path.isdir(full_path):
+            # Delete field from all files in folder
+            from metadata_writer import delete_field_from_folder
+            results = delete_field_from_folder(full_path, field, recursive)
+            
+            return jsonify({
+                'success': True, 
+                'updated': results['updated'],
+                'failed': results['failed'],
+                'total': results['total'],
+                'message': f"Deleted '{field}' from {results['updated']} of {results['total']} files"
+            })
         else:
-            return jsonify({'error': 'Failed to delete field'}), 500
+            # Single file deletion (existing behavior)
+            if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+                return jsonify({'error': 'Unsupported file format'}), 400
+            
+            from metadata_writer import delete_metadata_field as delete_field
+            success = delete_field(full_path, field)
+            
+            if success:
+                return jsonify({'success': True, 'message': f'Deleted {field} from {os.path.basename(path)}'})
+            else:
+                return jsonify({'error': 'Failed to delete field'}), 500
             
     except PermissionError as e:
         return jsonify({'error': str(e)}), 403
