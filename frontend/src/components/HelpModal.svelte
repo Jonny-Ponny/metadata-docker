@@ -336,7 +336,10 @@
                                         ></tr
                                     >
                                     <tr
-                                        ><td><code>TYER</code></td><td>Year</td
+                                        ><td
+                                            ><code>TYER</code> /
+                                            <code>TDRC</code></td
+                                        ><td>Year/Date (YYYY or YYYY-MM-DD)</td
                                         ></tr
                                     >
                                     <tr
@@ -361,6 +364,150 @@
                                     <tr
                                         ><td><code>APIC</code></td><td
                                             >Attached picture (cover art)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TCMP</code></td><td
+                                            >Compilation flag (set to "1" for
+                                            Various Artists compilations)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code
+                                                >TXXX:MusicBrainz Album Type</code
+                                            ></td
+                                        ><td
+                                            >Release type (album, single, EP,
+                                            live, compilation)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TXXX:ALBUMVERSION</code></td
+                                        ><td
+                                            >Album version (Deluxe Edition,
+                                            Remastered, Live)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TCOM</code></td><td
+                                            >Composer(s)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TPE3</code></td><td
+                                            >Conductor</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code>TMCL</code> /
+                                            <code>TIPL</code></td
+                                        ><td
+                                            >Performer/contributor with role
+                                            (musicians credits)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TSOT</code></td><td
+                                            >Title sort order</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TSOA</code></td><td
+                                            >Album sort order</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TSOP</code></td><td
+                                            >Artist sort order</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TSO2</code></td><td
+                                            >Album artist sort order</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code
+                                                >TXXX:MusicBrainz Recording Id</code
+                                            ></td
+                                        ><td
+                                            >MusicBrainz recording ID
+                                            (persistent identifier)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code
+                                                >TXXX:MusicBrainz Album Id</code
+                                            ></td
+                                        ><td
+                                            >MusicBrainz release ID (persistent
+                                            identifier)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code
+                                                >TXXX:MusicBrainz Artist Id</code
+                                            ></td
+                                        ><td
+                                            >MusicBrainz artist ID (persistent
+                                            identifier)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TSRC</code></td><td
+                                            >ISRC (International Standard
+                                            Recording Code)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TBPM</code></td><td
+                                            >BPM (Beats Per Minute)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TMOO</code></td><td
+                                            >Mood (Energetic, Calm, etc.)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TPUB</code></td><td
+                                            >Label/Publisher</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TXXX:CatalogNumber</code></td
+                                        ><td>Catalog number</td></tr
+                                    >
+                                    <tr
+                                        ><td><code>TDOR</code></td><td
+                                            >Original release date</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>GRP1</code></td><td
+                                            >Grouping (for grouping
+                                            albums/tracks)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TIT1</code></td><td
+                                            >Work (larger work name, e.g.,
+                                            "Symphony No. 5")</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>MVMN</code></td><td
+                                            >Movement name</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>MVIN</code></td><td
+                                            >Movement number/index</td
                                         ></tr
                                     >
                                 </tbody>
@@ -399,27 +546,24 @@
                                     >
                                     <tr
                                         ><td><code>TRACKNUMBER</code></td><td
-                                            >Track number</td
+                                            >Track number (e.g., "5" or "5/12")</td
                                         ></tr
                                     >
                                     <tr
                                         ><td><code>DISCNUMBER</code></td><td
-                                            >Disc number</td
+                                            >Disc number (e.g., "1" or "1/2")</td
                                         ></tr
                                     >
                                     <tr
-                                        ><td><code>DATE</code></td><td
-                                            >Year/Date</td
+                                        ><td
+                                            ><code>DATE</code> /
+                                            <code>YEAR</code></td
+                                        ><td>Year/Date (YYYY or YYYY-MM-DD)</td
                                         ></tr
                                     >
                                     <tr
                                         ><td><code>GENRE</code></td><td
                                             >Genre</td
-                                        ></tr
-                                    >
-                                    <tr
-                                        ><td><code>COMMENT</code></td><td
-                                            >Comment</td
                                         ></tr
                                     >
                                     <tr
@@ -440,10 +584,152 @@
                                         ></tr
                                     >
                                     <tr
+                                        ><td><code>COMMENT</code></td><td
+                                            >Comment</td
+                                        ></tr
+                                    >
+                                    <tr
                                         ><td
                                             ><code>METADATA_BLOCK_PICTURE</code
                                             ></td
                                         ><td>Cover art</td></tr
+                                    >
+                                    <tr
+                                        ><td><code>COMPILATION</code></td><td
+                                            >Compilation flag (set to "1" for
+                                            Various Artists compilations)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>RELEASETYPE</code></td><td
+                                            >Release type (album, single, EP,
+                                            live, compilation)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>ALBUMVERSION</code></td><td
+                                            >Album version (Deluxe Edition,
+                                            Remastered, Live)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>COMPOSER</code></td><td
+                                            >Composer(s)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>CONDUCTOR</code></td><td
+                                            >Conductor</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>PERFORMER:*role*</code></td
+                                        ><td
+                                            >Performer with role (e.g.,
+                                            PERFORMER:Lead Vocals,
+                                            PERFORMER:Drums)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TITLESORT</code></td><td
+                                            >Title sort order</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>ALBUMSORT</code></td><td
+                                            >Album sort order</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>ARTISTSORT</code></td><td
+                                            >Artist sort order</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>ALBUMARTISTSORT</code></td
+                                        ><td>Album artist sort order</td></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code>MUSICBRAINZ_RECORDINGID</code
+                                            ></td
+                                        ><td
+                                            >MusicBrainz recording ID
+                                            (persistent identifier)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code>MUSICBRAINZ_ALBUMID</code
+                                            ></td
+                                        ><td
+                                            >MusicBrainz release ID (persistent
+                                            identifier)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code>MUSICBRAINZ_ARTISTID</code
+                                            ></td
+                                        ><td
+                                            >MusicBrainz artist ID (persistent
+                                            identifier)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>ISRC</code></td><td
+                                            >ISRC (International Standard
+                                            Recording Code)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>BPM</code></td><td
+                                            >Beats Per Minute</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>MOOD</code></td><td
+                                            >Mood (Energetic, Calm, etc.)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code>LABEL</code> /
+                                            <code>PUBLISHER</code></td
+                                        ><td>Label/Publisher</td></tr
+                                    >
+                                    <tr
+                                        ><td><code>CATALOGNUMBER</code></td><td
+                                            >Catalog number</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code>ORIGINALDATE</code> /
+                                            <code>ORIGINALYEAR</code></td
+                                        ><td>Original release date</td></tr
+                                    >
+                                    <tr
+                                        ><td><code>GROUPING</code></td><td
+                                            >Grouping (for grouping
+                                            albums/tracks)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>WORK</code></td><td
+                                            >Work (larger work name, e.g.,
+                                            "Symphony No. 5")</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>MOVEMENTNAME</code></td><td
+                                            >Movement name</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>MOVEMENT</code></td><td
+                                            >Movement number/index</td
+                                        ></tr
                                     >
                                 </tbody>
                             </table>
