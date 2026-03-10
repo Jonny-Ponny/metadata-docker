@@ -9,8 +9,10 @@ export const ALLOWED_VARIABLES = {
     'ALBUM': 'album',
     'ARTIST': 'artist',
     'ALBUMARTIST': 'albumArtist',
-    'YYYY': 'year',  // Will extract just the year from date
+    'YYYY': 'year',                  // Will extract just the year from date
     'TRACK': 'track',
+    'DISK': 'disk',                  // Disk number
+    'RELEASETYPE': 'releaseType',    // Release type (album, ep, etc.)
 };
 
 // Default settings
@@ -58,7 +60,7 @@ export async function applyRenamingScheme(scheme, path, isFolder = true, options
     try {
         const response = await fetch("/api/apply-renaming-scheme", {
             method: "POST",
-            headers: { 
+            headers: {
                 "Content-Type": "application/json",
                 ...getAuthHeaders()
             },
@@ -69,13 +71,13 @@ export async function applyRenamingScheme(scheme, path, isFolder = true, options
                 replaceSpaces: options.replaceSpaces || false  // Pass the option to backend
             })
         });
-        
+
         const result = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(result.error || "Failed to apply renaming scheme");
         }
-        
+
         return result;
     } catch (error) {
         throw new Error(`Failed to apply renaming scheme: ${error.message}`);

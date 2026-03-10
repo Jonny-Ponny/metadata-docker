@@ -1,7 +1,7 @@
 import os
 import re
 from mutagen import File
-from mutagen.id3 import ID3, TIT2, TALB, TPE1, TPE2, TRCK, TPOS, TYER, TCON, COMM, TCOM, TPUB, USLT, APIC, SYLT, Encoding
+from mutagen.id3 import ID3, TIT2, TALB, TPE1, TPE2, TRCK, TPOS, TYER, TCON, COMM, TCOM, TPUB, USLT, APIC, SYLT, Encoding, TDRC
 from mutagen.flac import FLAC, Picture
 from mutagen.mp3 import MP3
 from logger_config import log_error, log_info
@@ -122,6 +122,9 @@ def update_mp3_metadata(file_path, field, value):
                 )
                 tags.add(sylt)
                 log_info(f"Added SYLT frame with {len(events)} events")
+ 
+        # elif field == 'TDRC':
+        #     tags.delall('TDRC')
 
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]
@@ -144,7 +147,7 @@ def update_mp3_metadata(file_path, field, value):
                     from mutagen.id3 import TXXX
                     tags.add(TXXX(encoding=3, desc=frame_id, text=value))
                     log_info(f"Edited {frame_id} as TXXX frame, new value:{value}")
-
+        
         else:
             # For fields not in mapping, use the field name directly as TXXX descriptor
             tags.delall(field)
@@ -408,8 +411,12 @@ def delete_mp3_field(file_path, field):
         # Map field to frame ID
         if field == 'comment':
             tags.delall('COMM')
-        elif field == 'unsyncedLyrics' or field == 'lyrics':
+        elif field == 'unsyncedLyrics':
             tags.delall('USLT')
+        elif field == 'lyrics':
+            tags.delall('SYLT')
+        elif field == 'year':
+            tags.delall('TDRC')
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]
             tags.delall(frame_id)

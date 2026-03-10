@@ -23,6 +23,8 @@
         albumArtist: "鬱P",
         year: "2013",
         track: "12",
+        disk: "1",
+        releaseType: "Album",
     };
 
     // Generate preview from scheme
@@ -38,6 +40,11 @@
         preview = preview.replace(/\[ALBUMARTIST\]/g, mockMetadata.albumArtist);
         preview = preview.replace(/\[YYYY\]/g, mockMetadata.year);
         preview = preview.replace(/\[TRACK\]/g, mockMetadata.track);
+        preview = preview.replace(
+            /\[DISK\]/g,
+            mockMetadata.disk.padStart(2, "0"),
+        );
+        preview = preview.replace(/\[RELEASETYPE\]/g, mockMetadata.releaseType);
 
         // Clean up
         preview = preview.replace(/\s+/g, " ").trim();
@@ -138,6 +145,8 @@
             "Album artist. Specific field used to identify the primary artist or group responsible for an entire album. It is separate from the standard Artist (or Track Artist) tag, which identifies the performer(s) on an individual song",
         YYYY: "Year (from date field)",
         TRACK: "Track number (padded: 01, 02, etc.)",
+        DISK: "Disk number (padded: 01, 02, etc.)",
+        RELEASETYPE: "Release type (Album, EP, Single, etc.)",
     };
 </script>
 

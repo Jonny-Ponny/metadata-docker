@@ -1054,6 +1054,8 @@ def apply_renaming_scheme():
             'ALBUMARTIST': 'albumArtist',
             'YYYY': 'year',  # Will extract just the year
             'TRACK': 'track',
+            'DISK': 'disk',
+            'RELEASETYPE': 'releaseType',
         }
         
         def generate_name_from_scheme(scheme_str, metadata):
@@ -1070,11 +1072,20 @@ def apply_renaming_scheme():
                     continue  # Skip unknown variables (they'll remain as-is)
                 
                 field = variable_map[var]
+                field_value = metadata.get(field)
                 has_value = False
                 
-                if field == 'year' and metadata.get('year'):
-                    has_value = True
+                if field == 'year':
+                    has_value = (
+                        field_value is not None and 
+                        str(field_value).strip() != "" and
+                        len(str(field_value).strip()) >= 4  # At least 4 chars for a year
+                    )
                 elif field == 'track' and metadata.get('track'):
+                    has_value = True
+                elif field == 'disk' and metadata.get('disk'):
+                    has_value = True
+                elif field == 'releaseType' and metadata.get('releaseType'):
                     has_value = True
                 elif metadata.get(field):
                     has_value = True
@@ -1098,6 +1109,14 @@ def apply_renaming_scheme():
                     if '/' in track:
                         track = track.split('/')[0]
                     value = track.zfill(2)
+                elif field == 'disk' and metadata.get('disk'):
+                    # Pad disk number with leading zero
+                    disk = str(metadata['disk'])
+                    if '/' in disk:
+                        disk = disk.split('/')[0]
+                    value = disk.zfill(2)
+                elif field == 'releaseType' and metadata.get('releaseType'):
+                    value = str(metadata['releaseType'])
                 elif metadata.get(field):
                     value = str(metadata[field])
                 

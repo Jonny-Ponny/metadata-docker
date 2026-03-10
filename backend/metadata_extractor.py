@@ -91,7 +91,7 @@ def extract_metadata(filepath):
     result = {
         'title': '', 'album': '', 'artist': '', 'albumArtist': '', 'track': '', 'disk': '',
         'year': '', 'genre': '', 'comment': '', 'description': '',
-        'lyrics': '', 'unsyncedLyrics': '', 'composer': '', 'publisher': '',
+        'lyrics': '', 'unsyncedLyrics': '', 'composer': '', 'publisher': '', 'releaseType': '',
         'customFields': []          # list of {name, value} for truly unknown tags
     }
 
@@ -110,7 +110,8 @@ def extract_metadata(filepath):
         'lyrics': ['SYLT', 'LYRICS'],
         'unsyncedLyrics': ['USLT', 'UNSYNCEDLYRICS'],
         'composer': ['TCOM', 'COMPOSER'],
-        'publisher': ['TPUB', 'PUBLISHER']
+        'publisher': ['TPUB', 'PUBLISHER'],
+        'releaseType': ['TXXX:RELEASETYPE', 'RELEASETYPE']
     }
 
     # Build case‑insensitive lookup: uppercase key -> frontend field
