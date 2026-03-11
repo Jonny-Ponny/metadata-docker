@@ -33,13 +33,13 @@ export function processEditedLyrics(text) {
 
         // Check if it looks like a valid timestamp [00:00.00] or [00:00.000]
         // This regex matches both 2 and 3 decimal places: \d{2}:\d{2}\.\d{2,3}
-        if (timestamp.match(/^\[\d{2}:\d{2}\.\d{2,3}\]$/)) {
+        if (timestamp.match(/^\[\d{2}:\d{2}\.\d{2}\]$/)) {
           // It's a valid timestamp - extract text after it
           extractedTimestamps.push(timestamp);
-          
+
           // Extract text after the closing bracket
           const afterBracket = trimmedLine.substring(timestampEnd + 1).trim();
-          
+
           // Check if there's actual text after the timestamp
           if (afterBracket) {
             processedLines.push(afterBracket);

@@ -24,7 +24,6 @@ App could be useful to anyone selfhosting their own music streaming service like
 ## Limitations:
 - No API/external metadata fetching is implemented at the moment
 - History is saved with logs, but there is no way to undo changes
-- SYLT specification allows for multiple timestamp formats. ```$02  Absolute time, 32 bit sized, using milliseconds as unit``` is more common in most players and tools. Navidrome uses ```$01  Absolute time, 32 bit sized, using MPEG frames as unit```. Logic for creating/editing SYLT frame implemented in the app will probably make other players display wrong timestamps.
 
 ## Quickstart
 

@@ -83,48 +83,40 @@ def update_mp3_metadata(file_path, field, value):
             tags.add(USLT(encoding=3, lang='eng', desc='', text=value))    
             log_info(f"Edited USLT frame")  
 
-        # SYLT frame logic - CORRECT FOR NAVIDROME
+        # SYLT frame logic - CORRECT FOR NAVIDROME with absolute milliseconds
         elif field == 'lyrics':
             tags.delall('SYLT')
             
-            # Get sample rate from MP3
-            mp3 = MP3(file_path)
-            sample_rate = mp3.info.sample_rate if mp3.info.sample_rate else 44100
-            
-            # Convert SYLT lines to events with samples (not milliseconds)
+            # Convert SYLT lines to events with absolute milliseconds (format 2)
             lines = value.split('\n')
             events = []
 
             for line in lines:
-                # line format: "[MM:SS.ss] text"
+                # line format: "[MM:SS.ss] text" - expects 2 decimal places
                 m = re.match(r'^\[(\d{2}):(\d{2}\.\d{2})\](.*)', line)
                 if m:
                     minutes = int(m.group(1))
                     seconds = float(m.group(2))
                     text = m.group(3).strip()
                     
-                    # Convert to absolute seconds
+                    # Convert to absolute milliseconds (format 2)
                     abs_seconds = minutes * 60 + seconds
-                    
-                    samples = int(round(abs_seconds * sample_rate))
+                    milliseconds = int(round(abs_seconds * 1000))  # Convert to ms
                     
                     if text:
-                        events.append((text, samples))
+                        events.append((text, milliseconds))
             
             if events:
                 sylt = SYLT(
                     encoding=Encoding.UTF8, 
                     lang='eng', 
-                    format=1,
+                    format=2,  # Changed from 1 to 2 (absolute milliseconds)
                     type=1,
                     desc='', 
                     text=events
                 )
                 tags.add(sylt)
-                log_info(f"Added SYLT frame with {len(events)} events")
- 
-        # elif field == 'TDRC':
-        #     tags.delall('TDRC')
+                log_info(f"Added SYLT frame with {len(events)} events (format 2 - absolute ms)")
 
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]

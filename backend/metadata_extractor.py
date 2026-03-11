@@ -28,26 +28,42 @@ def get_tag_text(frame):
         # Fallback
         return str(frame)
 
-def format_sylt_timestamp(samples, sample_rate):
-    """Convert samples to LRC timestamp format [MM:SS.ss]"""
-    if sample_rate <= 0:
-        return "[--:--.--]"
+def format_sylt_timestamp(timestamp, sample_rate=None):
+    """
+    Convert SYLT timestamp to LRC format [MM:SS.ss]
     
-    seconds = samples / sample_rate
+    For format 2, timestamp is already in milliseconds
+    For format 1, timestamp is in samples (needs sample_rate)
+    """
+    # If sample_rate is provided, assume format 1 (samples)
+    if sample_rate is not None and sample_rate > 0:
+        seconds = timestamp / sample_rate
+    else:
+        # Assume format 2 (milliseconds)
+        seconds = timestamp / 1000
+    
     minutes = int(seconds // 60)
     secs = seconds % 60
-    return f"[{minutes:02d}:{secs:06.3f}]"
+    # Format with 2 decimal places (not 3)
+    return f"[{minutes:02d}:{secs:05.2f}]"
 
 def extract_sylt_text(sylt_frame, sample_rate):
     """Extract synchronized lyrics from SYLT frame in LRC format"""
     if not sylt_frame or not hasattr(sylt_frame, 'text'):
         return ""
     
-    # SYLT frame text is a list of (text, timestamp) tuples
+    # Check the format of the SYLT frame
+    # format=1: samples, format=2: milliseconds
+    frame_format = getattr(sylt_frame, 'format', 1)
+    
     lines = []
     for text, timestamp in sylt_frame.text:
-        # Convert samples to timestamp
-        timestamp_str = format_sylt_timestamp(timestamp, sample_rate)
+        if frame_format == 2:
+            # Format 2 - timestamp is already in milliseconds
+            timestamp_str = format_sylt_timestamp(timestamp, sample_rate=None)
+        else:
+            # Format 1 - timestamp is in samples, need sample_rate
+            timestamp_str = format_sylt_timestamp(timestamp, sample_rate)
         lines.append(f"{timestamp_str} {text}")
     
     return "\n".join(lines)
