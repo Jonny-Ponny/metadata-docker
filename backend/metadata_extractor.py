@@ -3,7 +3,7 @@ import os
 import base64
 import re
 from mutagen import File
-from mutagen.id3 import ID3, TextFrame, USLT, APIC, SYLT, TXXX
+from mutagen.id3 import ID3, TextFrame, USLT, APIC, SYLT, TXXX, USLT
 from mutagen.flac import FLAC
 
 def get_tag_text(frame):
@@ -43,6 +43,7 @@ def extract_sylt_text(sylt_frame, sample_rate):
     if not sylt_frame or not hasattr(sylt_frame, 'text'):
         return ""
     
+    # SYLT frame text is a list of (text, timestamp) tuples
     lines = []
     for text, timestamp in sylt_frame.text:
         # Convert samples to timestamp
@@ -124,6 +125,7 @@ def extract_metadata(filepath):
     if tags is None:
         return result
 
+    # MP3
     if isinstance(audio, mutagen.mp3.MP3):
         # ID3 tags
         for key in tags.keys():
@@ -151,6 +153,12 @@ def extract_metadata(filepath):
                     if lrc_text:
                         result['lyrics'] = lrc_text
                     continue
+
+                # Special handling for USLT frames
+                if isinstance(frame, USLT):
+                    if frame.text:
+                        result['unsyncedLyrics'] = frame.text
+                    continue
                 
                 value = get_tag_text(frame)
                 if not value:
@@ -166,6 +174,8 @@ def extract_metadata(filepath):
                     if isinstance(frame, TextFrame) or key in ('COMM', 'USLT') or key.startswith('T'):
                         # For standard T* frames, use the frame ID as the name
                         result['customFields'].append({'name': key, 'value': value})
+
+    # FLAC
     else:
         # FLAC, Ogg, etc. – tags are dicts of lists
         for key, values in tags.items():

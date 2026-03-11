@@ -22,20 +22,18 @@ export function processEditedLyrics(text) {
       continue;
     }
 
-    // Check if trimmed line starts with timestamp pattern [00:00.00] or similar
+    // Check if trimmed line starts with timestamp pattern [00:00.00] or [00:00.000]
     if (trimmedLine.startsWith("[") && trimmedLine.includes("]")) {
       const timestampEnd = trimmedLine.indexOf("]");
 
-      // Check if it's a valid timestamp format (e.g., [00:00.00])
+      // Check if it's a valid timestamp format with 2 or 3 decimal places
       if (timestampEnd > 0 && timestampEnd <= trimmedLine.length - 1) {
-        // Extract the timestamp (first 10 characters including brackets)
-        const timestamp = trimmedLine.substring(
-          0,
-          Math.min(timestampEnd + 1, 10),
-        );
+        // Extract the timestamp (up to the closing bracket)
+        const timestamp = trimmedLine.substring(0, timestampEnd + 1);
 
-        // Check if it looks like a valid timestamp [00:00.00]
-        if (timestamp.match(/^\[\d{2}:\d{2}\.\d{2}\]$/)) {
+        // Check if it looks like a valid timestamp [00:00.00] or [00:00.000]
+        // This regex matches both 2 and 3 decimal places: \d{2}:\d{2}\.\d{2,3}
+        if (timestamp.match(/^\[\d{2}:\d{2}\.\d{2,3}\]$/)) {
           // It's a valid timestamp - extract text after it
           extractedTimestamps.push(timestamp);
           
