@@ -83,6 +83,14 @@ def token_required(f):
     
     return decorated
 
+# GET /api/validate
+# Simple endpoint to check if token is valid
+@app.route('/api/validate', methods=['GET'])
+@token_required
+def validate_token():
+    """Simple endpoint to check if token is valid."""
+    return jsonify({'valid': True})
+
 # Login endpoint with plain text check
 @app.route('/api/login', methods=['POST'])
 def login():

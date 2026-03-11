@@ -7,19 +7,36 @@ export const authUser = writable(null);
 export const authError = writable(null);
 export const tokenExpiry = writable(null);
 
-export function initAuth() {
+export async function initAuth() {
     const token = localStorage.getItem('auth_token');
     const user = localStorage.getItem('auth_user');
     const expiry = localStorage.getItem('token_expiry');
     
-    // Check if token is still valid
+    // Check if token exists and hasn't expired client-side
     if (token && user && expiry) {
         const now = Math.floor(Date.now() / 1000);
         if (now < parseInt(expiry)) {
-            authToken.set(token);
-            authUser.set(user);
-            tokenExpiry.set(parseInt(expiry));
-            isAuthenticated.set(true);
+            // Validate token with server
+            try {
+                const response = await fetch('/api/validate', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    authToken.set(token);
+                    authUser.set(user);
+                    tokenExpiry.set(parseInt(expiry));
+                    isAuthenticated.set(true);
+                } else {
+                    // Token invalid on server, clear storage
+                    logout();
+                }
+            } catch (error) {
+                // Network error, clear to be safe
+                logout();
+            }
         } else {
             // Token expired, clear storage
             logout();
@@ -81,17 +98,4 @@ export function getAuthHeaders() {
     return token ? {
         'Authorization': `Bearer ${token}`
     } : {};
-}
-
-// Optional: Check if token is about to expire (e.g., within next hour)
-export function isTokenExpiringSoon(minutes = 60) {
-    let expiry;
-    tokenExpiry.subscribe(value => expiry = value)();
-    
-    if (!expiry) return true;
-    
-    const now = Math.floor(Date.now() / 1000);
-    const minutesToSeconds = minutes * 60;
-    
-    return (expiry - now) < minutesToSeconds;
 }
