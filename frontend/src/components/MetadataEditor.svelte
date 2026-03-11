@@ -2028,8 +2028,9 @@
         background: white;
         border-radius: 8px;
         width: 90%;
-        max-width: 600px;
-        max-height: 80vh;
+        max-width: 700px;
+        height: 70vh;
+        max-height: 600px;
         display: flex;
         flex-direction: column;
         animation: scaleIn 0.2s ease;
@@ -2053,13 +2054,15 @@
 
     .lyrics-modal-content {
         padding: 20px;
-        overflow-y: auto;
+        overflow-y: hidden;
         flex: 1;
+        display: flex;
+        min-height: 0; /* Critical for flex children to respect container height */
     }
 
     .lyrics-textarea {
         width: 100%;
-        min-height: 200px;
+        height: 100%; /* Take full height of parent */
         padding: 12px;
         border: 1px solid #ddd;
         border-radius: 4px;
@@ -2067,6 +2070,8 @@
         font-family: inherit;
         resize: vertical;
         box-sizing: border-box;
+        overflow-y: auto;
+        max-height: 100%; /* Ensure it doesn't exceed parent */
     }
 
     .lyrics-textarea:focus {
