@@ -1,7 +1,7 @@
 import os
 import re
 from mutagen import File
-from mutagen.id3 import ID3, TIT2, TALB, TPE1, TPE2, TRCK, TPOS, TYER, TCON, COMM, TCOM, TPUB, USLT, APIC, SYLT, Encoding, TDRC
+from mutagen.id3 import ID3, TIT2, TALB, TPE1, TPE2, TRCK, TPOS, TYER, TCON, COMM, TCOM, TPUB, USLT, APIC, SYLT, Encoding, TDRC, TXXX
 from mutagen.flac import FLAC, Picture
 from mutagen.mp3 import MP3
 from logger_config import log_error, log_info
@@ -413,14 +413,44 @@ def delete_mp3_field(file_path, field):
             frame_id = FIELD_MAPPING['mp3'][field]
             tags.delall(frame_id)
         else:
-            # For custom fields, try to delete as is
-            tags.delall(field)
+            # For custom fields, they're stored as TXXX frames
+            # We need to find and delete TXXX frames with matching description
+            
+            # Common field name variations to check
+            variations = [
+                field,  # original (releaseType)
+                field.upper(),  # uppercase (RELEASETYPE)
+                field.lower(),  # lowercase (releasetype)
+                field.capitalize(),  # capitalized (Releasetype)
+                field.replace(' ', '').upper(),  # no spaces uppercase
+                field.replace(' ', '').lower(),  # no spaces lowercase
+            ]
+            
+            # Add specific mappings for known fields
+            if field == 'releaseType' or field == 'releasetype':
+                variations.extend(['RELEASETYPE', 'ReleaseType', 'release type', 'RELEASE TYPE'])
+            
+            keys_to_delete = []
+            for key, frame in tags.items():
+                # Check if it's a TXXX frame
+                if isinstance(frame, TXXX):
+                    # Check against all variations
+                    if frame.desc in variations:
+                        keys_to_delete.append(key)
+                        log_info(f"Found TXXX frame with desc='{frame.desc}' to delete")
+            
+            # Delete all collected keys
+            for key in keys_to_delete:
+                if key in tags:
+                    del tags[key]
+                    log_info(f"Deleted frame with key: {key}")
         
         # If no frames left, remove the entire tag structure
         if not tags:
             tags.delete()
         
         tags.save(file_path)
+        log_info(f"Deleted {field} from file")
         return True
         
     except Exception as e:

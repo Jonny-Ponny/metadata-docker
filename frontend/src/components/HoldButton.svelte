@@ -16,6 +16,13 @@
     let buttonRef = $state(null);
 
     function handleConfirm(e) {
+        // Blur any active element before calling onConfirm
+        if (
+            document.activeElement &&
+            document.activeElement instanceof HTMLElement
+        ) {
+            document.activeElement.blur();
+        }
         onConfirm(e);
     }
 
