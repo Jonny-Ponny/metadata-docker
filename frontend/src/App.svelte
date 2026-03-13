@@ -11,6 +11,7 @@
   import Login from "./components/Login.svelte";
   import HelpModal from "./components/HelpModal.svelte";
   import LogViewer from "./components/LogViewer.svelte";
+  import SettingsModal from "./components/SettingsModal.svelte";
 
   import {
     sortItems,
@@ -23,6 +24,7 @@
     initAuth,
     logout,
     getAuthHeaders,
+    settings
   } from "./utils/index.js";
 
   import "./app.css";
@@ -84,6 +86,8 @@
   let sortedTreeData = $derived(
     sortItems(filteredTreeData || [], $sortConfig.by, $sortConfig.direction),
   );
+
+  let showSettingsModal = $state(false);
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
@@ -519,17 +523,30 @@
     selectedFile = path;
     selectedFolder = null;
 
-    // Only load as audio if it's an audio file
+    // Check if player is enabled in settings
+    const isPlayerEnabled = $settings.enablePlayer;
+
+    // Only load as audio if player is enabled AND it's an audio file
     const isAudio = path.match(
       /\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i,
     );
 
-    if (isAudio) {
+    if (isAudio && isPlayerEnabled) {
       // Check if this is the same file that's currently playing
       if (audioFile && audioFile.originalName === path) {
+        // Same file - optionally resume or just keep as is
       } else {
         // Different file - load the new audio
         loadAudioFile(path);
+      }
+    } else if (isAudio && !isPlayerEnabled) {
+      // Player is disabled - clear any existing audio
+      if (audioFile) {
+        // Clean up previous blob URL if any
+        if (audioFile?.url?.startsWith("blob:")) {
+          URL.revokeObjectURL(audioFile.url);
+        }
+        audioFile = null;
       }
     }
   }
@@ -970,10 +987,20 @@
     };
   });
 
-  import SettingsModal from "./components/SettingsModal.svelte";
-  import { settings } from "./utils/settings.utils.js";
+  $effect(() => {
+    if (!$settings.enablePlayer && audioFile) {
+      // Player was disabled - clean up audio
+      if (audioFile?.url?.startsWith("blob:")) {
+        URL.revokeObjectURL(audioFile.url);
+      }
+      audioFile = null;
 
-  let showSettingsModal = $state(false);
+      // If you want to also stop any playing audio through the player component
+      if (playerComponent?.stop) {
+        playerComponent.stop();
+      }
+    }
+  });
 </script>
 
 {#if !$isAuthenticated}

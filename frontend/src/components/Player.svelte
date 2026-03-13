@@ -1,7 +1,7 @@
 <!-- src/components/Player.svelte -->
 <script>
     import { onMount } from "svelte";
-    import { formatTimeDisplay } from "../utils/index.js";
+    import { formatTimeDisplay, settings } from "../utils/index.js";
 
     let { audioFile, ontimeupdate, ...rest } = $props();
 
@@ -62,24 +62,18 @@
             console.error("[Player] Audio error:", audio.error);
         });
 
-        audio.addEventListener("play", () => {
-        });
+        audio.addEventListener("play", () => {});
 
-        audio.addEventListener("pause", () => {
-        });
+        audio.addEventListener("pause", () => {});
 
-        audio.addEventListener("seeking", () => {
-        });
+        audio.addEventListener("seeking", () => {});
 
-        audio.addEventListener("seeked", () => {
-        });
+        audio.addEventListener("seeked", () => {});
 
-        audio.addEventListener("canplay", () => {
-        });
+        audio.addEventListener("canplay", () => {});
 
-        audio.addEventListener("waiting", () => {
-        });
-        
+        audio.addEventListener("waiting", () => {});
+
         // Listen for lyrics-seek events (when user clicks on a timestamp/lyric line)
         const handleLyricsSeek = (e) => {
             const time = e.detail.time;
@@ -89,7 +83,7 @@
         // Listen for get-current-time events (when sync button is pressed)
         const handleGetCurrentTime = (e) => {
             const callback = e.detail.callback;
-            if (callback && typeof callback === 'function') {
+            if (callback && typeof callback === "function") {
                 callback(currentTime);
             }
         };
@@ -103,7 +97,10 @@
                 audio.src = "";
             }
             window.removeEventListener("lyrics-seek", handleLyricsSeek);
-            window.removeEventListener("get-current-time", handleGetCurrentTime);
+            window.removeEventListener(
+                "get-current-time",
+                handleGetCurrentTime,
+            );
         };
     });
 
@@ -236,10 +233,14 @@
 </script>
 
 <!-- Template – unchanged -->
-<div class="player">
+<div class="player" class:player-disabled={!$settings.enablePlayer}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div role="progressbar" class="progress-bar" onclick={seek}>
+    <div
+        role="progressbar"
+        class="progress-bar"
+        onclick={$settings.enablePlayer ? seek : undefined}
+    >
         <div
             class="progress"
             style={`width: ${duration ? (currentTime / duration) * 100 : 0}%`}
@@ -248,14 +249,22 @@
 
     <div class="controls">
         <div class="filename" title={audioFile?.name || "No file loaded"}>
+            {#if !$settings.enablePlayer}
+                <span class="player-disabled-badge">Player Disabled</span>
+            {/if}
             {audioFile ? audioFile.name : "No file loaded"}
         </div>
 
         <button
             class="play-btn"
-            onclick={togglePlay}
-            disabled={!audioFile}
-            title={playing ? "Pause" : "Play"}
+            class:disabled={!$settings.enablePlayer || !audioFile}
+            onclick={$settings.enablePlayer ? togglePlay : undefined}
+            disabled={!$settings.enablePlayer || !audioFile}
+            title={!$settings.enablePlayer
+                ? "Player is disabled in settings"
+                : playing
+                  ? "Pause"
+                  : "Play"}
         >
             {#if playing}
                 <svg
@@ -304,8 +313,10 @@
                     max="1"
                     step="0.01"
                     value={volume}
-                    oninput={setVolume}
+                    oninput={$settings.enablePlayer ? setVolume : undefined}
+                    disabled={!$settings.enablePlayer}
                     class="volume-slider"
+                    class:disabled={!$settings.enablePlayer}
                     style={`--volume-percent: ${volume * 100}`}
                 />
             </div>
@@ -461,6 +472,35 @@
         /* Default - will be overridden by inline style */
     }
 
+    .player-disabled-badge {
+        background: #888;
+        color: white;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-right: 8px;
+        text-transform: uppercase;
+    }
+
+    .player-disabled .progress-bar {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    .player-disabled .progress {
+        background: #888;
+    }
+
+    .play-btn.disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+
+    .volume-slider.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
     /* Dark mode player styles */
     :global(body.dark) .player {
         background: #2d2d2d;
@@ -532,5 +572,14 @@
     :global(body.dark) .volume-slider::-moz-range-thumb {
         background: #ff9f4b;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    :global(body.dark) .player-disabled-badge {
+        background: #666;
+        color: #ccc;
+    }
+
+    :global(body.dark) .player-disabled .progress {
+        background: #666;
     }
 </style>

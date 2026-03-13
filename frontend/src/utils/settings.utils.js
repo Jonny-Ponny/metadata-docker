@@ -21,7 +21,8 @@ const defaultSettings = {
     folderScheme: "[[YYYY]] - [ALBUMARTIST] - [ALBUM]",          // Scheme for folders
     fileScheme: "[ALBUMARTIST] - [ALBUM] - [TRACK] - [TITLE]",   // Scheme for files
     replaceSpacesInFolders: false,                               // Setting for folders
-    replaceSpacesInFiles: false                                  // Setting for files
+    replaceSpacesInFiles: false,                                 // Setting for files
+    enablePlayer: true                                           // Player enabled by default
 };
 
 // Load settings from localStorage

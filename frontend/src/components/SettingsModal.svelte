@@ -8,7 +8,7 @@
 
     let { isOpen, onClose } = $props();
 
-    // Local state for form
+    // Local state for form - initialize from settings
     let localSettings = $state({ ...$settings });
 
     // Refs for input elements
@@ -67,7 +67,7 @@
     // Handle escape key to close
     function handleKeyDown(e) {
         if (e.key === "Escape" && isOpen) {
-            onClose();
+            handleCancel(); // Use handleCancel instead of direct onClose
         }
     }
 
@@ -86,7 +86,7 @@
     }
 
     function handleCancel() {
-        localSettings = { ...$settings };
+        localSettings = { ...$settings }; // Reset to saved settings
         onClose();
     }
 
@@ -136,6 +136,13 @@
         }, 0);
     }
 
+    // Reset local settings when modal opens
+    $effect(() => {
+        if (isOpen) {
+            localSettings = { ...$settings };
+        }
+    });
+
     // Variable descriptions
     const variableDescriptions = {
         TITLE: "Song title. Fundamental field that identifies the specific name of an individual piece of music",
@@ -153,12 +160,16 @@
 {#if isOpen}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="settings-modal-overlay" onclick={onClose}>
+    <div class="settings-modal-overlay" onclick={handleCancel}>
         <div class="settings-modal" onclick={handleModalClick}>
             <!-- Header -->
             <div class="settings-modal-header">
                 <h2>Settings</h2>
-                <button class="close-btn" onclick={onClose} title="Close (Esc)">
+                <button
+                    class="close-btn"
+                    onclick={handleCancel}
+                    title="Close (Esc)"
+                >
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                         <path
                             d="M15 5L5 15M5 5L15 15"
@@ -187,6 +198,19 @@
                         <p class="setting-description">
                             When enabled, pressing Delete while a file/folder is
                             selected will delete it immediately.
+                        </p>
+                    </div>
+                    <div class="setting-item">
+                        <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                bind:checked={localSettings.enablePlayer}
+                            />
+                            <span>Enable audio player</span>
+                        </label>
+                        <p class="setting-description">
+                            When disabled, audio files won't be loaded when
+                            selected.
                         </p>
                     </div>
                 </div>
@@ -360,7 +384,7 @@
         z-index: 10000;
         animation: fadeIn 0.2s ease;
         backdrop-filter: blur(3px);
-        overflow: hidden; /* Prevent overlay scroll */
+        overflow: hidden;
     }
 
     .settings-modal {
@@ -373,7 +397,7 @@
         flex-direction: column;
         animation: scaleIn 0.2s ease;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        overflow: hidden; /* Prevent modal scroll */
+        overflow: hidden;
     }
 
     .settings-modal-header {
@@ -383,7 +407,7 @@
         padding: 16px 24px;
         border-bottom: 1px solid #eee;
         background: #fafafa;
-        flex-shrink: 0; /* Prevent header from shrinking */
+        flex-shrink: 0;
     }
 
     .settings-modal-header h2 {
@@ -404,7 +428,7 @@
         justify-content: center;
         border-radius: 6px;
         transition: all 0.2s;
-        flex-shrink: 0; /* Prevent button from shrinking */
+        flex-shrink: 0;
     }
 
     .close-btn:hover {
@@ -500,8 +524,8 @@
         border-radius: 6px;
         font-size: 14px;
         font-family: monospace;
-        box-sizing: border-box; /* Critical for preventing overflow */
-        max-width: 100%; /* Ensure it doesn't exceed container */
+        box-sizing: border-box;
+        max-width: 100%;
     }
 
     .scheme-input:focus {
@@ -569,14 +593,14 @@
         padding: 4px 8px;
         border-radius: 4px;
         font-family: monospace;
-        word-break: break-all; /* Allow long text to wrap */
+        word-break: break-all;
         max-width: 100%;
     }
 
     .preview-scheme {
         color: #fd7d05;
         flex: 1;
-        min-width: 0; /* Allow flex item to shrink */
+        min-width: 0;
     }
 
     .preview-result {
@@ -610,7 +634,7 @@
         padding: 16px 24px;
         border-top: 1px solid #eee;
         background: #fafafa;
-        flex-shrink: 0; /* Prevent footer from shrinking */
+        flex-shrink: 0;
     }
 
     .cancel-btn {
