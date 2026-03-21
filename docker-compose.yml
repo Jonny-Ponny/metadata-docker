@@ -4,6 +4,7 @@ services:
     container_name: metadata-docker
     ports:
       - "8888:5000"                                 # Change 8888 to preferred port
+    restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
       - DEBUG=False
