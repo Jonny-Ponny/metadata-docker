@@ -24,7 +24,7 @@
     initAuth,
     logout,
     getAuthHeaders,
-    settings
+    settings,
   } from "./utils/index.js";
 
   import "./app.css";
@@ -998,6 +998,20 @@
       // If you want to also stop any playing audio through the player component
       if (playerComponent?.stop) {
         playerComponent.stop();
+      }
+    }
+  });
+
+  $effect(() => {
+    // When player becomes enabled and there's a selected file that's audio
+    if ($settings.enablePlayer && selectedFile) {
+      // Check if it's an audio file
+      const isAudio = selectedFile.match(
+        /\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i,
+      );
+
+      if (isAudio && (!audioFile || audioFile.originalName !== selectedFile)) {
+        loadAudioFile(selectedFile);
       }
     }
   });
