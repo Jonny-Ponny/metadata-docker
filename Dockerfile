@@ -5,7 +5,6 @@ WORKDIR /app/frontend
 # Copy package files and install dependencies
 COPY frontend/package*.json ./
 RUN npm install
-RUN npm audit fix
 
 # Copy the rest of the frontend source and build
 COPY frontend/ .
