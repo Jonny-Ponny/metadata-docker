@@ -51,7 +51,6 @@
 
     // ========== INITIALIZATION ==========
     function initializeFromLyrics() {
-
         let newUSLT = "";
         let newTimestamps = [];
 
@@ -459,7 +458,7 @@
             synchronizedLyrics: synchronizedLyricsText,
         });
         onClose();
-    }   
+    }
 
     function stopPropagation(e) {
         e.stopPropagation();
@@ -540,129 +539,135 @@
             <!-- Header - stays fixed -->
             <div class="modal-header">
                 <h2>Synced Lyrics Editor</h2>
-                <button
-                    class="close-btn"
-                    onclick={(e) => {
-                        e.stopPropagation();
-                        onClose();
-                    }}
-                    title="Close"
-                >
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                        <path
-                            d="M15 5L5 15M5 5L15 15"
+                <div class="header-actions">
+                    <!-- Edit Lyrics button -->
+                    <button
+                        class="header-btn"
+                        onclick={openEditModal}
+                        title="Edit lyrics"
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
                             stroke="currentColor"
                             stroke-width="2"
-                            stroke-linecap="round"
-                        />
-                    </svg>
-                </button>
-            </div>
+                        >
+                            <path
+                                d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                            />
+                            <path
+                                d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                            />
+                        </svg>
+                        <span>Edit</span>
+                    </button>
 
-            <!-- Toolbar - stays fixed -->
-            <div class="toolbar">
-                <button
-                    class="toolbar-btn"
-                    onclick={openEditModal}
-                    title="Edit lyrics"
-                >
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
+                    <!-- Copy LRC button (with timestamps) -->
+                    <button
+                        class="header-btn"
+                        onclick={copySynchronizedLyrics}
+                        title="Copy LRC format with timestamps"
                     >
-                        <path
-                            d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                        />
-                        <path
-                            d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                        />
-                    </svg>
-                    Edit
-                </button>
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <rect
+                                x="9"
+                                y="9"
+                                width="13"
+                                height="13"
+                                rx="2"
+                                ry="2"
+                            />
+                            <path
+                                d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                            />
+                        </svg>
+                        <span>Copy LRC</span>
+                    </button>
 
-                <button
-                    class="toolbar-btn"
-                    onclick={copySynchronizedLyrics}
-                    title="Copy LRC to clipboard"
-                >
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
+                    <!-- Copy Text button (unsynced only) -->
+                    <button
+                        class="header-btn"
+                        onclick={copyUnsyncedText}
+                        title="Copy lyrics without timestamps"
                     >
-                        <rect
-                            x="9"
-                            y="9"
-                            width="13"
-                            height="13"
-                            rx="2"
-                            ry="2"
-                        />
-                        <path
-                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                        />
-                    </svg>
-                    Copy LRC
-                </button>
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <rect
+                                x="9"
+                                y="9"
+                                width="13"
+                                height="13"
+                                rx="2"
+                                ry="2"
+                            />
+                            <path
+                                d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                            />
+                        </svg>
+                        <span>Copy Text</span>
+                    </button>
 
-                <!-- New button: Copy Unsynced Text -->
-                <button
-                    class="toolbar-btn"
-                    onclick={copyUnsyncedText}
-                    title="Copy unsynced lyrics without timestamps"
-                >
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
+                    <!-- Clear Timestamps button -->
+                    <button
+                        class="header-btn clear-timestamps"
+                        onclick={clearAllTimestamps}
+                        title="Clear all timestamps"
                     >
-                        <rect
-                            x="9"
-                            y="9"
-                            width="13"
-                            height="13"
-                            rx="2"
-                            ry="2"
-                        />
-                        <path
-                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                        />
-                    </svg>
-                    Copy Text
-                </button>
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                            />
+                            <line x1="10" y1="11" x2="10" y2="17" />
+                            <line x1="14" y1="11" x2="14" y2="17" />
+                        </svg>
+                        <span>Clear</span>
+                    </button>
 
-                <!-- Clear All Timestamps -->
-                <button
-                    class="toolbar-btn clear-timestamps-btn"
-                    onclick={clearAllTimestamps}
-                    title="Clear all timestamps"
-                >
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
+                    <button
+                        class="close-btn"
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            onClose();
+                        }}
+                        title="Close"
                     >
-                        <path
-                            d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                        />
-                        <line x1="10" y1="11" x2="10" y2="17" />
-                        <line x1="14" y1="11" x2="14" y2="17" />
-                    </svg>
-                    Clear Timestamps
-                </button>
+                        <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 20 20"
+                            fill="none"
+                        >
+                            <path
+                                d="M15 5L5 15M5 5L15 15"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <!-- Scrollable content area -->
@@ -686,6 +691,7 @@
                                             : ''}"
                                         id="modal-timestamp-{index}"
                                         data-line-index={index}
+                                        onclick={() => handleLineClick(index)}
                                         style="cursor: {timestamps[index] &&
                                         timestamps[index] !== '[--:--.--]'
                                             ? 'pointer'
@@ -697,18 +703,16 @@
                                             : "No timestamp available"}
                                     >
                                         <div class="timestamp-container">
-                                            <span
-                                                class="timestamp-value"
-                                                onclick={() =>
-                                                    handleLineClick(index)}
-                                            >
+                                            <span class="timestamp-value">
                                                 {timestamps[index] ||
                                                     "[--:--.--]"}
                                             </span>
                                             <button
                                                 class="timestamp-edit-btn"
-                                                onclick={() =>
-                                                    openTimestampEditor(index)}
+                                                onclick={(e) => {
+                                                    e.stopPropagation(); // Prevent seeking when clicking edit button
+                                                    openTimestampEditor(index);
+                                                }}
                                                 title="Edit timestamp"
                                             >
                                                 <svg
@@ -831,41 +835,46 @@
                 </div>
             </div>
 
-            <!-- Sync Button - stays fixed -->
-            <div class="insert-time-container">
-                <button
-                    class="insert-time-btn"
-                    onclick={insertCurrentTimeToNextLine}
-                    disabled={USLT === ""}
-                    title="Insert current playback time to next line"
-                >
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                    >
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <span>Synchronize line</span>
-                </button>
-            </div>
-
             <!-- Footer with Save and Cancel - stays fixed -->
             <div class="modal-footer">
-                <button
-                    class="btn btn-secondary"
-                    onclick={(e) => {
-                        e.stopPropagation();
-                        onClose();
-                    }}>Cancel</button
-                >
-                <button class="btn btn-primary" onclick={handleSave}
-                    >Save to File</button
-                >
+                <div class="footer-left">
+                    <!-- Empty div to balance the layout -->
+                </div>
+
+                <div class="footer-center">
+                    <button
+                        class="insert-time-btn"
+                        onclick={insertCurrentTimeToNextLine}
+                        disabled={USLT === ""}
+                        title="Insert current playback time to next line"
+                    >
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <span>Synchronize line</span>
+                    </button>
+                </div>
+
+                <div class="footer-right">
+                    <button
+                        class="btn btn-secondary"
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            onClose();
+                        }}>Cancel</button
+                    >
+                    <button class="btn btn-primary" onclick={handleSave}
+                        >Save to File</button
+                    >
+                </div>
             </div>
         </div>
     </div>
@@ -962,40 +971,6 @@
         width: 20px;
         height: 20px;
         display: block;
-    }
-
-    .toolbar {
-        padding: 12px 20px;
-        border-bottom: 2px solid #ddd;
-        background-color: #f8f9fa;
-        display: flex;
-        gap: 8px;
-        flex-shrink: 0;
-    }
-
-    .toolbar-btn {
-        background: transparent;
-        border: 1px solid #ddd;
-        color: #666;
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 13px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s;
-    }
-
-    .toolbar-btn:hover {
-        background: rgba(253, 125, 5, 0.1);
-        border-color: #fd7d05;
-        color: #fd7d05;
-    }
-
-    .toolbar-btn svg {
-        width: 16px;
-        height: 16px;
     }
 
     /* Scrollable content area */
@@ -1196,15 +1171,50 @@
         font-style: italic;
     }
 
-    /* Insert time button */
-    .insert-time-container {
-        padding: 12px 20px;
-        border-top: 1px solid #ddd;
-        border-bottom: 1px solid #ddd;
-        background: #f8f9fa;
+    .header-actions {
         display: flex;
-        justify-content: center;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .header-btn {
+        background: transparent;
+        border: 1px solid #ddd;
+        color: #666;
+        padding: 6px 12px;
+        height: 32px;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        transition: all 0.2s;
+    }
+
+    .header-btn svg {
+        width: 14px;
+        height: 14px;
         flex-shrink: 0;
+    }
+
+    .header-btn span {
+        white-space: nowrap;
+    }
+
+    .header-btn:hover {
+        background: rgba(253, 125, 5, 0.1);
+        border-color: #fd7d05;
+        color: #fd7d05;
+    }
+
+    .header-btn.clear-timestamps {
+        border-color: #ff4444;
+        color: #ff4444;
+    }
+
+    .header-btn.clear-timestamps:hover {
+        background: rgba(255, 68, 68, 0.1);
     }
 
     .insert-time-btn {
@@ -1220,11 +1230,12 @@
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s;
+        white-space: nowrap;
     }
 
     .insert-time-btn:hover:not(:disabled) {
         background-color: #ff5e00;
-        transform: translateY(-2px);
+        transform: translateY(-1px);
     }
 
     .insert-time-btn:disabled {
@@ -1240,12 +1251,31 @@
     .modal-footer {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
-        gap: 12px;
+        justify-content: space-between;
         padding: 16px 20px;
         border-top: 2px solid #ddd;
         background-color: #f0f0f0;
         flex-shrink: 0;
+    }
+
+    .footer-left,
+    .footer-right {
+        flex: 1;
+        display: flex;
+        gap: 12px;
+    }
+
+    .footer-left {
+        justify-content: flex-start;
+    }
+
+    .footer-right {
+        justify-content: flex-end;
+    }
+
+    .footer-center {
+        display: flex;
+        justify-content: center;
     }
 
     /* Button styles */
@@ -1296,17 +1326,6 @@
         }
     }
 
-    .clear-timestamps-btn {
-        border-color: #ff4444 !important;
-        color: #ff4444 !important;
-    }
-
-    .clear-timestamps-btn:hover {
-        background: rgba(255, 68, 68, 0.1) !important;
-        border-color: #ff4444 !important;
-        color: #ff4444 !important;
-    }
-
     /* Dark mode */
     :global(body.dark) .lyrics-modal {
         background: #2d2d2d;
@@ -1328,22 +1347,6 @@
     :global(body.dark) .close-btn:hover {
         color: #ff9f4b;
         background-color: rgba(255, 159, 75, 0.1);
-    }
-
-    :global(body.dark) .toolbar {
-        background-color: #3d3d3d;
-        border-bottom-color: #444;
-    }
-
-    :global(body.dark) .toolbar-btn {
-        border-color: #555;
-        color: #aaa;
-    }
-
-    :global(body.dark) .toolbar-btn:hover {
-        background: rgba(255, 159, 75, 0.1);
-        border-color: #ff9f4b;
-        color: #ff9f4b;
     }
 
     :global(body.dark) .space-parts {
@@ -1407,11 +1410,6 @@
         color: #808080;
     }
 
-    :global(body.dark) .insert-time-container {
-        background-color: #3d3d3d;
-        border-color: #444;
-    }
-
     :global(body.dark) .insert-time-btn {
         background-color: #ff9f4b;
         color: #1e1e1e;
@@ -1450,20 +1448,32 @@
         background-color: #ffb06f;
     }
 
-    /* Ensure player is interactive */
     :global(.player) {
         z-index: 10001 !important;
         pointer-events: auto !important;
     }
 
-    :global(body.dark) .clear-timestamps-btn {
-        border-color: #ff6b6b !important;
-        color: #ff6b6b !important;
+    :global(body.dark) .insert-time-btn:disabled svg {
+        stroke: #808080;
     }
 
-    :global(body.dark) .clear-timestamps-btn:hover {
-        background: rgba(255, 107, 107, 0.2) !important;
-        border-color: #ff6b6b !important;
-        color: #ff6b6b !important;
+    :global(body.dark) .header-btn {
+        border-color: #555;
+        color: #aaa;
+    }
+
+    :global(body.dark) .header-btn:hover {
+        background: rgba(255, 159, 75, 0.1);
+        border-color: #ff9f4b;
+        color: #ff9f4b;
+    }
+
+    :global(body.dark) .header-btn.clear-timestamps {
+        border-color: #ff6b6b;
+        color: #ff6b6b;
+    }
+
+    :global(body.dark) .header-btn.clear-timestamps:hover {
+        background: rgba(255, 107, 107, 0.2);
     }
 </style>
