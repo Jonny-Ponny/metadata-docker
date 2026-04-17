@@ -334,7 +334,7 @@ body {
 .logout-btn {
   background: transparent;
   border: 1px solid #fd7d05;
-  padding: 4px 10px;
+  padding: 6px 10px;
   cursor: pointer;
   border-radius: 4px;
   color: #fd7d05;
@@ -556,4 +556,42 @@ body.dark .settings-toggle {
 body.dark .settings-toggle:hover {
   background: #4a5568;
   /* Same as help-toggle hover dark mode */
+}
+
+
+/* Create folder button */
+.create-folder-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #666;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.create-folder-btn:hover {
+  background-color: #f0f0f0;
+  color: #fd7d05;
+}
+
+.create-folder-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Dark mode */
+body.dark .create-folder-btn {
+  border-color: #444;
+  color: #b0b0b0;
+}
+
+body.dark .create-folder-btn:hover {
+  background-color: #3d3d3d;
+  color: #ff9f4b;
 }
