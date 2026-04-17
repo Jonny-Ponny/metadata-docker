@@ -21,7 +21,9 @@ if [ ! -z "$PUID" ] && [ ! -z "$PGID" ]; then
     
     chown -R "$PUID":"$PGID" /app /music /logs
     echo "Starting gunicorn as user $USER_NAME..."
-    exec gosu "$USER_NAME" gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} --workers 1 --threads 8 app:app
+    exec gosu "$USER_NAME" env HOME=/app gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} \
+    --workers 1 --threads 8 app:app
+
 else
     echo "PUID/PGID not set, running as root"
     exec gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} --workers 1 --threads 8 app:app
