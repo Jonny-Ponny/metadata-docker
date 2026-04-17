@@ -49,9 +49,6 @@ log_info(f'PGID set to {PGID}')
 log_info(f'Music folder: {Path(MUSIC_FOLDER).absolute()}')
 log_info(f'Log folder:{Path(LOG_DIR).absolute()}')
 
-log_info(f'Login: {AUTH_USERNAME}')
-log_info(f'Password: {AUTH_PASSWORD}')
-
 # -------------------------AUTH------------------------- #
 
 # Token required decorator
