@@ -1,8 +1,9 @@
 <!-- src/components/MetadataEditor.svelte -->
 <script>
     import HoldButton from "./HoldButton.svelte";
+    import LyricsEditorModal from "./LRCEditor.svelte";
 
-    import { toast } from "../utils/index.js";
+    import { toast, processEditedLyrics } from "../utils/index.js";
 
     // Props
     let { filePath } = $props();
@@ -37,8 +38,8 @@
     let customFieldEditing = $state([]);
 
     let applyToSubfolders = $state(false); // false = current folder only, true = include subfolders
+    
     // Derived: filename from path
-
     let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
 
     let pictureEditing = $state(false);
@@ -48,11 +49,21 @@
     let showFullImage = $state(false);
 
     // Lyrics modal state
-    let lyricsModalOpen = $state(false);
     let lyricsModalType = $state("unsynced"); // 'unsynced' or 'synced'
     let lyricsModalContent = $state("");
 
     let applyDeleteToFolder = $state(false); // false = current file only, true = all files in folder
+
+    // Separate modals for synced and unsynced lyrics
+    let showSyncedLyricsModal = $state(false);
+    let showUnsyncedLyricsModal = $state(false);
+    let syncedLyricsData = $state({ lyrics: "", timestamps: [] });
+
+    // Track fields that have been edited but not saved
+    let dirtyFields = $state(new Set());
+
+    // Track original values
+    let originalMetadata = $state(null);
 
     // Field definitions for main and always‑visible other fields
     const mainFields = [
@@ -115,6 +126,9 @@
             if (showToast) {
                 toast.success(`Updated ${field} for this file`);
             }
+
+            // Clear dirty status for this field
+            markFieldClean(field);
 
             // Refresh metadata to show any changes
             await fetchMetadata(filePath);
@@ -252,7 +266,27 @@
 
             customFields = [];
 
-            // toast.success("Metadata loaded successfully", 3000);
+            // After setting metadata, store original values
+            originalMetadata = {
+                title: data.title || "",
+                album: data.album || "",
+                artist: data.artist || "",
+                albumArtist: data.albumArtist || "",
+                track: data.track?.toString() || "",
+                disk: data.disk?.toString() || "",
+                year: data.year?.toString() || "",
+                genre: data.genre || "",
+                comment: data.comment || "",
+                description: data.description || "",
+                lyrics: data.lyrics || "",
+                unsyncedLyrics: data.unsyncedLyrics || "",
+                otherFields: { ...other },
+                customFields: [...customFields],
+            };
+
+            // Clear dirty fields when new metadata loads
+            dirtyFields.clear();
+            dirtyFields = new Set(dirtyFields);
         } catch (error) {
             console.error("Error fetching metadata:", error);
             toast.error(`Failed to load metadata: ${error.message}`);
@@ -482,83 +516,6 @@
         }
     }
 
-    function openLyricsModal(type) {
-        lyricsModalType = type;
-        lyricsModalContent =
-            type === "synced" ? metadata.lyrics : metadata.unsyncedLyrics;
-
-        // Parse existing lyrics to extract timestamps if present
-        if (type === "synced" && metadata.lyrics) {
-            const result = processEditedLyrics(metadata.lyrics);
-            lyricsData = {
-                lyrics: result.text,
-                timestamps: result.timestamps,
-            };
-        } else {
-            lyricsData = {
-                lyrics:
-                    type === "synced"
-                        ? metadata.lyrics
-                        : metadata.unsyncedLyrics,
-                timestamps: [],
-            };
-        }
-
-        showLyricsModal = true;
-    }
-
-    function closeLyricsModal() {
-        lyricsModalOpen = false;
-    }
-
-    async function saveLyrics() {
-        const field =
-            lyricsModalType === "synced" ? "lyrics" : "unsyncedLyrics";
-
-        // Update local state
-        if (lyricsModalType === "synced") {
-            metadata.lyrics = lyricsModalContent;
-        } else {
-            metadata.unsyncedLyrics = lyricsModalContent;
-        }
-
-        // Save to file using existing function
-        await applyToFile(field, lyricsModalContent);
-
-        // Close modal
-        closeLyricsModal();
-    }
-
-    let showLyricsModal = $state(false);
-    let lyricsData = $state({ lyrics: "", timestamps: [] });
-
-    // Handle save from lyrics modal
-    async function handleLyricsSave(data) {
-        const field =
-            lyricsModalType === "synced" ? "lyrics" : "unsyncedLyrics";
-
-        // Update local state
-        if (lyricsModalType === "synced") {
-            metadata.lyrics = data.synchronizedLyrics || data.lyrics;
-        } else {
-            metadata.unsyncedLyrics = data.lyrics;
-        }
-
-        // Save to file
-        await applyToFile(field, data.synchronizedLyrics || data.lyrics);
-
-        // Close modal
-        showLyricsModal = false;
-    }
-
-    import { processEditedLyrics } from "../utils/index.js";
-    import LyricsEditorModal from "./LRCEditor.svelte";
-
-    // Separate modals for synced and unsynced lyrics
-    let showSyncedLyricsModal = $state(false);
-    let showUnsyncedLyricsModal = $state(false);
-    let syncedLyricsData = $state({ lyrics: "", timestamps: [] });
-
     function openSyncedLyricsModal() {
         // For synced lyrics, we need to parse timestamps
         if (metadata.lyrics) {
@@ -678,6 +635,9 @@
                 await handlePictureUpload(file, false, false);
             }
 
+            // Clear all dirty statuses
+            markAllClean();
+
             toast.success("All changes applied successfully");
         } catch (error) {
             console.error("Error applying all changes:", error);
@@ -731,6 +691,51 @@
             console.error("Error deleting field from folder:", error);
             toast.error(`Failed to delete from folder: ${error.message}`);
         }
+    }
+
+    // Mark field as dirty by comparing with original value
+    function trackChange(fieldName, newValue) {
+        if (!originalMetadata) return;
+        // Get the original value
+        let originalValue;
+
+        // Handle different field types
+        if (
+            mainFields.includes(fieldName) ||
+            textareaFields.includes(fieldName)
+        ) {
+            originalValue = originalMetadata?.[fieldName] || "";
+        } else if (fieldName in metadata.otherFields) {
+            originalValue = originalMetadata?.otherFields?.[fieldName] || "";
+        } else {
+            originalValue = originalMetadata?.[fieldName] || "";
+        }
+
+        // Compare with original value
+        if (newValue !== originalValue) {
+            dirtyFields.add(fieldName);
+        } else {
+            dirtyFields.delete(fieldName);
+        }
+        // Trigger reactivity
+        dirtyFields = new Set(dirtyFields);
+    }
+
+    // Check if a field has unsaved changes
+    function isFieldDirty(fieldName) {
+        return dirtyFields.has(fieldName);
+    }
+
+    // Clear dirty status after saving
+    function markFieldClean(fieldName) {
+        dirtyFields.delete(fieldName);
+        dirtyFields = new Set(dirtyFields);
+    }
+
+    // Clear all dirty statuses
+    function markAllClean() {
+        dirtyFields.clear();
+        dirtyFields = new Set(dirtyFields);
     }
 </script>
 
@@ -940,7 +945,12 @@
     <div class="fields-stack">
         {#each mainFields as field}
             {@const value = metadata[field]}
-            <div class="field" class:editing={editingFields.has(field)}>
+            {@const isDirty = dirtyFields.has(field)}
+            <div
+                class="field"
+                class:editing={editingFields.has(field)}
+                class:dirty={isDirty}
+            >
                 <label for={field}>
                     {field.charAt(0).toUpperCase() + field.slice(1)}
                 </label>
@@ -948,7 +958,13 @@
                     <input
                         type="text"
                         id={field}
-                        bind:value={metadata[field]}
+                        value={metadata[field]}
+                        oninput={(e) => {
+                            const oldValue = metadata[field];
+                            // @ts-ignore
+                            metadata[field] = e.target.value;
+                            trackChange(field, metadata[field]);
+                        }}
                         onfocus={() => startEditing(field)}
                         onblur={() => stopEditing(field)}
                         onkeydown={(e) => {
@@ -1077,14 +1093,25 @@
                 <!-- Textarea fields (comment, description) -->
                 {#each textareaFields as field}
                     {@const value = metadata[field]}
-                    <div class="field" class:editing={editingFields.has(field)}>
+                    {@const isDirty = dirtyFields.has(field)}
+                    <div
+                        class="field"
+                        class:editing={editingFields.has(field)}
+                        class:dirty={isDirty}
+                    >
                         <label for={field}>
                             {field.charAt(0).toUpperCase() + field.slice(1)}
                         </label>
                         <div class="input-wrapper">
                             <textarea
                                 id={field}
-                                bind:value={metadata[field]}
+                                value={metadata[field]}
+                                oninput={(e) => {
+                                    const oldValue = metadata[field];
+                                    // @ts-ignore
+                                    metadata[field] = e.target.value;
+                                    trackChange(field, metadata[field]);
+                                }}
                                 onfocus={() => startEditing(field)}
                                 onblur={() => stopEditing(field)}
                                 placeholder={field}
@@ -1183,13 +1210,20 @@
 
                 <!-- Other fields from metadata.otherFields -->
                 {#each Object.entries(metadata.otherFields || {}) as [key, value]}
-                    <div class="field">
+                    {@const isDirty = dirtyFields.has(key)}
+                    <div class="field" class:dirty={isDirty}>
                         <label for={key}>{key}</label>
                         <div class="input-wrapper">
                             <input
                                 type="text"
                                 id={key}
-                                bind:value={metadata.otherFields[key]}
+                                value={metadata.otherFields[key]}
+                                oninput={(e) => {
+                                    const oldValue = metadata.otherFields[key];
+                                    // @ts-ignore
+                                    metadata.otherFields[key] = e.target.value;
+                                    trackChange(key, metadata.otherFields[key]);
+                                }}
                                 onfocus={() => startEditing(key)}
                                 onblur={() => stopEditing(key)}
                                 onkeydown={(e) => {
@@ -2192,6 +2226,20 @@
         accent-color: #ff9f4b;
         width: 14px;
         height: 14px;
+    }
+
+    /* Dirty field indicator styles */
+    .field.dirty label {
+        position: relative;
+    }
+
+    .field.dirty label::after {
+        content: "●";
+        color: #fd7d05;
+        font-size: 12px;
+        margin-left: 6px;
+        display: inline-block;
+        animation: pulse 1.5s ease-in-out;
     }
 
     /* Dark mode adjustments */
