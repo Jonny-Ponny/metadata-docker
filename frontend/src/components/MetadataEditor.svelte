@@ -8,7 +8,7 @@
     // Props
     let { filePath } = $props();
 
-    // Reactive state for metadata (mock data for now)
+    // Reactive state for metadata
     let metadata = $state({
         title: "",
         album: "",

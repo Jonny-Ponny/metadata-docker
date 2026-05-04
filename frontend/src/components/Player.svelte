@@ -228,6 +228,32 @@
         return currentTime;
     }
 
+    function handleVolumeScroll(e) {
+        if (!$settings.enablePlayer) return;
+
+        e.preventDefault(); // Prevent page scrolling
+
+        // Adjust volume by 0.05 per scroll tick (you can adjust this value)
+        const delta = e.deltaY > 0 ? -0.05 : 0.05;
+        let newVolume = volume + delta;
+
+        // Clamp between 0 and 1
+        newVolume = Math.max(0, Math.min(1, newVolume));
+
+        if (newVolume !== volume) {
+            volume = newVolume;
+            if (audio) audio.volume = volume;
+
+            // Update the input element's value and style
+            const volumeInput = e.currentTarget;
+            volumeInput.value = volume;
+            volumeInput.style.setProperty(
+                "--volume-percent",
+                `${volume * 100}`,
+            );
+        }
+    }
+
     // Expose functions to parent
     export { seekToTime, stop, getCurrentTime };
 </script>
@@ -314,6 +340,7 @@
                     step="0.01"
                     value={volume}
                     oninput={$settings.enablePlayer ? setVolume : undefined}
+                    onwheel={$settings.enablePlayer ? handleVolumeScroll : undefined}
                     disabled={!$settings.enablePlayer}
                     class="volume-slider"
                     class:disabled={!$settings.enablePlayer}
