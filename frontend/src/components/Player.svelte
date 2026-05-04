@@ -13,6 +13,40 @@
     let waitingForMetadata = $state(false);
     let shouldAutoPlay = $state(false);
 
+    const VOLUME_STORAGE_KEY = "player-volume";
+
+    // Helper function to load saved volume
+    function loadSavedVolume() {
+        try {
+            const saved = localStorage.getItem(VOLUME_STORAGE_KEY);
+            if (saved !== null) {
+                const parsed = parseFloat(saved);
+                // Validate the value is between 0 and 1
+                if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+                    return parsed;
+                }
+            }
+        } catch (err) {
+            console.error(
+                "[Player] Failed to load volume from localStorage:",
+                err,
+            );
+        }
+        return 0.05; // Default value
+    }
+
+    // Helper function to save volume
+    function saveVolume(vol) {
+        try {
+            localStorage.setItem(VOLUME_STORAGE_KEY, vol.toString());
+        } catch (err) {
+            console.error(
+                "[Player] Failed to save volume to localStorage:",
+                err,
+            );
+        }
+    }
+
     // Helper to resolve a URL to an absolute string
     function resolveUrl(url) {
         try {
@@ -23,6 +57,7 @@
     }
 
     onMount(() => {
+        volume = loadSavedVolume();
         audio = new Audio();
         audio.volume = volume;
 
@@ -142,6 +177,9 @@
         volume = parseFloat(e.target.value);
         if (audio) audio.volume = volume;
         e.target.style.setProperty("--fill-percent", `${volume * 100}%`);
+
+        // Save to localStorage
+        saveVolume(volume);
     }
 
     function seekToTime(timeInSeconds) {
@@ -233,7 +271,7 @@
 
         e.preventDefault(); // Prevent page scrolling
 
-        // Adjust volume by 0.05 per scroll tick (you can adjust this value)
+        // Adjust volume by 0.05 per scroll tick
         const delta = e.deltaY > 0 ? -0.05 : 0.05;
         let newVolume = volume + delta;
 
@@ -251,6 +289,9 @@
                 "--volume-percent",
                 `${volume * 100}`,
             );
+
+            // Save to localStorage
+            saveVolume(volume);
         }
     }
 
@@ -340,7 +381,9 @@
                     step="0.01"
                     value={volume}
                     oninput={$settings.enablePlayer ? setVolume : undefined}
-                    onwheel={$settings.enablePlayer ? handleVolumeScroll : undefined}
+                    onwheel={$settings.enablePlayer
+                        ? handleVolumeScroll
+                        : undefined}
                     disabled={!$settings.enablePlayer}
                     class="volume-slider"
                     class:disabled={!$settings.enablePlayer}
