@@ -819,7 +819,7 @@ def delete_cover_art():
         from metadata_writer import delete_cover_art as delete_picture
         success = delete_picture(full_path)
 
-        log_info(f"Deleted cove art from {full_path}")
+        log_info(f"Deleted cover art from {full_path}")
         
         if success:
             # Get updated metadata to confirm deletion
