@@ -522,33 +522,6 @@
   function selectFile(path) {
     selectedFile = path;
     selectedFolder = null;
-
-    // Check if player is enabled in settings
-    const isPlayerEnabled = $settings.enablePlayer;
-
-    // Only load as audio if player is enabled AND it's an audio file
-    const isAudio = path.match(
-      /\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i,
-    );
-
-    if (isAudio && isPlayerEnabled) {
-      // Check if this is the same file that's currently playing
-      if (audioFile && audioFile.originalName === path) {
-        // Same file - optionally resume or just keep as is
-      } else {
-        // Different file - load the new audio
-        loadAudioFile(path);
-      }
-    } else if (isAudio && !isPlayerEnabled) {
-      // Player is disabled - clear any existing audio
-      if (audioFile) {
-        // Clean up previous blob URL if any
-        if (audioFile?.url?.startsWith("blob:")) {
-          URL.revokeObjectURL(audioFile.url);
-        }
-        audioFile = null;
-      }
-    }
   }
 
   async function loadAudioFile(filePath) {
@@ -1003,16 +976,31 @@
   });
 
   $effect(() => {
-    // When player becomes enabled and there's a selected file that's audio
+    // When selected file changes OR player enabled setting changes
     if ($settings.enablePlayer && selectedFile) {
       // Check if it's an audio file
       const isAudio = selectedFile.match(
         /\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i,
       );
 
-      if (isAudio && (!audioFile || audioFile.originalName !== selectedFile)) {
-        loadAudioFile(selectedFile);
+      if (isAudio) {
+        // Only load if it's a different file or audioFile is null
+        if (!audioFile || audioFile.originalName !== selectedFile) {
+          loadAudioFile(selectedFile);
+        }
+      } else if (audioFile) {
+        // Selected file is not audio but we have an audio file loaded - clear it
+        if (audioFile?.url?.startsWith("blob:")) {
+          URL.revokeObjectURL(audioFile.url);
+        }
+        audioFile = null;
       }
+    } else if (!$settings.enablePlayer && audioFile) {
+      // Player was disabled - clean up audio
+      if (audioFile?.url?.startsWith("blob:")) {
+        URL.revokeObjectURL(audioFile.url);
+      }
+      audioFile = null;
     }
   });
 </script>
