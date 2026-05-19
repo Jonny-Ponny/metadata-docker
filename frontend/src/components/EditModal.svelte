@@ -6,6 +6,8 @@
     onClose = () => {},
     onSave = (text) => {},
   } = $props();
+  
+  let textareaElement = $state(null);
 
   function handleClose() {
     onClose();
@@ -14,6 +16,16 @@
   function handleSave() {
     onSave(editingText);
   }
+
+  // Focus textarea when modal opens
+  $effect(() => {
+    if (show && textareaElement) {
+      // Small delay to ensure the DOM is fully rendered
+      setTimeout(() => {
+        textareaElement.focus();
+      }, 100);
+    }
+  });
 
   // Add event listener to prevent keyboard events from bubbling
   $effect(() => {
@@ -55,6 +67,7 @@
       </div>
       <div class="modal-body">
         <textarea
+          bind:this={textareaElement}
           bind:value={editingText}
           placeholder="Enter lyrics here. You can include timestamps like [00:00.00] at the beginning of lines..."
           class="edit-textarea"
