@@ -12,8 +12,10 @@
         sortConfig,
         settings,
         applyRenamingScheme,
+        toast,
+        getFolderSummary,
+        formatFileSize,
     } from "../utils/index.js";
-    import { toast } from "../utils/index.js";
 
     let {
         item,
@@ -39,6 +41,47 @@
         item.children
             ? sortItems(item.children, $sortConfig.by, $sortConfig.direction)
             : [],
+    );
+
+    // Calculate hint for folders
+    let folderSummaryText = $derived(
+        item.type === "directory"
+            ? (() => {
+                  // Get summary data for this folder
+                  const summary = getFolderSummary(item);
+
+                  // If folder is empty, show empty message
+                  if (!summary || summary.totalItems === 0) {
+                      return "Empty folder";
+                  }
+
+                  // Build the tooltip content line by line
+                  let lines = [];
+
+                  // Line 1: Total size (e.g., "1.2 GB")
+                  lines.push(formatFileSize(summary.totalSize));
+
+                  // Line 2: Folders count (only if there are subfolders)
+                  if (summary.folderCount > 0) {
+                      lines.push(`folders x${summary.folderCount}`);
+                  }
+
+                  // Lines 3+: File formats, sorted by count (highest first)
+                  const formats = Object.entries(summary.formatCounts);
+                  if (formats.length > 0) {
+                      // Sort formats by count (highest to lowest)
+                      formats.sort((a, b) => b[1] - a[1]);
+
+                      // Add each format to the tooltip (e.g., "flac x20")
+                      for (const [format, count] of formats) {
+                          lines.push(`${format.toLowerCase()} x${count}`);
+                      }
+                  }
+
+                  // Join all lines with newline characters for multi-line tooltip
+                  return lines.join("\n");
+              })()
+            : "", // Return empty string for files (non-folders)
     );
 
     let menuRef = $state(null);
@@ -414,6 +457,7 @@
             class:indented={level > 0}
             class:selected={item.path === selectedFolder}
             style="--level: {level}"
+            title={folderSummaryText}
             onclick={handleDirectoryClick}
             oncontextmenu={(e) => {
                 e.preventDefault();
