@@ -5,6 +5,7 @@ import jwt
 import datetime
 import zipfile
 import io
+import base64
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
@@ -616,7 +617,6 @@ def update_file_picture_endpoint():
         
         if success:
             # Get updated metadata to return new picture data
-            from metadata_extractor import extract_metadata
             metadata = extract_metadata(full_path)
             
             return jsonify({
@@ -767,7 +767,6 @@ def delete_metadata_field():
         # Check if it's a folder
         if os.path.isdir(full_path):
             # Delete field from all files in folder
-            from metadata_writer import delete_field_from_folder
             results = delete_field_from_folder(full_path, field, recursive)
             
             return jsonify({
@@ -782,8 +781,7 @@ def delete_metadata_field():
             if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
                 return jsonify({'error': 'Unsupported file format'}), 400
             
-            from metadata_writer import delete_metadata_field as delete_field
-            success = delete_field(full_path, field)
+            success = delete_metadata_field(full_path, field)
             
             if success:
                 return jsonify({'success': True, 'message': f'Deleted {field} from {os.path.basename(path)}'})
@@ -816,14 +814,12 @@ def delete_cover_art():
         if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
             return jsonify({'error': 'Unsupported file format'}), 400
         
-        from metadata_writer import delete_cover_art as delete_picture
-        success = delete_picture(full_path)
+        success = delete_cover_art(full_path)
 
         log_info(f"Deleted cover art from {full_path}")
         
         if success:
             # Get updated metadata to confirm deletion
-            from metadata_extractor import extract_metadata
             metadata = extract_metadata(full_path)
             
             return jsonify({
@@ -892,14 +888,12 @@ def save_cover_art_as_file():
         if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
             return jsonify({'error': 'Unsupported file format'}), 400
         
-        from metadata_extractor import extract_metadata
         metadata = extract_metadata(full_path)
         
         if not metadata.get('picture'):
             return jsonify({'error': 'No cover art found in file'}), 404
         
         # Extract image data from base64
-        import base64
         picture_data = metadata['picture']
         if picture_data.startswith('data:image'):
             # Format: data:image/jpeg;base64,/9j/4AAQ...
@@ -989,7 +983,6 @@ def get_logs():
             log_line = log.strip()
             
             # Try to match the pattern [timestamp] [level] message
-            import re
             match = re.match(r'\[(.*?)\] \[(.*?)\] (.*)', log_line)
             
             if match:
@@ -1068,8 +1061,7 @@ def apply_renaming_scheme():
             result = scheme_str
             
             # First, check if all variables in the scheme have values
-            import re
-            variables_in_scheme = re.findall(r'\[([^\]]+)\]', scheme_str)
+            variables_in_scheme = re.findall(r'\[([^\[\]]+)\]', scheme_str)
             
             missing_fields = []
             for var in variables_in_scheme:
@@ -1086,12 +1078,6 @@ def apply_renaming_scheme():
                         str(field_value).strip() != "" and
                         len(str(field_value).strip()) >= 4  # At least 4 chars for a year
                     )
-                elif field == 'track' and metadata.get('track'):
-                    has_value = True
-                elif field == 'disk' and metadata.get('disk'):
-                    has_value = True
-                elif field == 'releaseType' and metadata.get('releaseType'):
-                    has_value = True
                 elif metadata.get(field):
                     has_value = True
                 
@@ -1099,7 +1085,7 @@ def apply_renaming_scheme():
                     missing_fields.append(var)
             
             if missing_fields:
-                raise ValueError(f"Missing metadata fields: {', '.join(missing_fields)}. Please fill these fields first.")
+                raise ValueError(f"Missing metadata fields for variables: {', '.join(missing_fields)}. Please fill these fields first.")
             
             # Replace each variable with its value
             for var, field in variable_map.items():
@@ -1159,7 +1145,6 @@ def apply_renaming_scheme():
                 return jsonify({'error': 'No audio files found in folder to extract metadata'}), 400
             
             # Extract metadata from first file
-            from metadata_extractor import extract_metadata
             metadata = extract_metadata(first_audio)
             
             try:
@@ -1202,7 +1187,6 @@ def apply_renaming_scheme():
                 return jsonify({'error': 'Smart rename only works on audio files (MP3/FLAC)'}), 400
             
             # Extract metadata from the file itself
-            from metadata_extractor import extract_metadata
             metadata = extract_metadata(full_path)
             
             try:
