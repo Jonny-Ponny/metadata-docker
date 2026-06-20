@@ -17,3 +17,4 @@ services:
     volumes:
       - ~/path/to/your/music:/music                 # Library
       - ./logs:/logs                                # Logs
+      - ./addons:/app/addons                        # Addons

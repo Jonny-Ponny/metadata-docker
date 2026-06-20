@@ -25,3 +25,4 @@
 25. ~~Fix success toast appearing after cancelling rename with Escape (Edge)~~
 26. ~~Implement tag deletion for all audio in folder~~
 27. ~~Option to disable player and loading of audio file~~
+28. ~~Plugin Pattern~~

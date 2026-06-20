@@ -38,7 +38,7 @@
     let customFieldEditing = $state([]);
 
     let applyToSubfolders = $state(false); // false = current folder only, true = include subfolders
-    
+
     // Derived: filename from path
     let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
 
@@ -737,6 +737,21 @@
         dirtyFields.clear();
         dirtyFields = new Set(dirtyFields);
     }
+
+    function handleRefreshMetadata(e) {
+        if (e.detail.path === filePath) {
+            fetchMetadata(filePath);
+        }
+    }
+
+    $effect(() => {
+        window.addEventListener("refreshMetadata", handleRefreshMetadata);
+        return () =>
+            window.removeEventListener(
+                "refreshMetadata",
+                handleRefreshMetadata,
+            );
+    });
 </script>
 
 <div class="metadata-editor">

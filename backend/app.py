@@ -6,6 +6,7 @@ import datetime
 import zipfile
 import io
 import base64
+import re
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
@@ -13,6 +14,8 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from logger_config import log_info, log_error, log_warning, LOG_DIR
+
+from plugin_manager import PluginManager
 
 log_info("STARTING")
 app = Flask(__name__, static_folder='static', static_url_path='')
@@ -49,6 +52,12 @@ log_info(f'PGID set to {PGID}')
 
 log_info(f'Music folder: {Path(MUSIC_FOLDER).absolute()}')
 log_info(f'Log folder:{Path(LOG_DIR).absolute()}')
+
+# ------------------------ADDONS------------------------ #
+
+plugin_manager = PluginManager()
+plugin_manager.discover_plugins()
+
 
 # -------------------------AUTH------------------------- #
 
@@ -117,10 +126,16 @@ def login():
         'expires_in': TOKEN_EXPIRE_HOURS * 3600  # in seconds
     })
 
+# Sort filetree
+def natural_key(text):
+    """Convert text into a list of strings and numbers for natural sorting."""
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', text)]
+
 def build_tree(current_path, relative_path):
     items = []
     try:
-        for entry in os.listdir(current_path):
+        entries = sorted(os.listdir(current_path), key=natural_key)
+        for entry in entries:
             full = os.path.join(current_path, entry)
             rel = os.path.join(relative_path, entry).replace('\\', '/')
             if os.path.isdir(full):
@@ -1307,6 +1322,115 @@ def download_item():
     except Exception as e:
         log_error(f"Download error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+
+# Addon endpoints
+@app.route('/api/addons', methods=['GET'])
+@token_required
+def list_addons():
+    result = []
+    for fetcher_id, fetcher_cls in plugin_manager.fetchers.items():
+        # Check which methods are actually implemented (not NotImplementedError)
+        methods = []
+        instance = fetcher_cls()
+        
+        if not getattr(instance.search_albums, '_default_implementation', False):
+            methods.append('search_albums')
+        if not getattr(instance.fetch_album_metadata, '_default_implementation', False):
+            methods.append('fetch_album_metadata')
+        if not getattr(instance.search_songs, '_default_implementation', False):
+            methods.append('search_songs')
+        if not getattr(instance.fetch_song_metadata, '_default_implementation', False):
+            methods.append('fetch_song_metadata')
+
+        result.append({
+            "id": fetcher_cls.id,
+            "name": fetcher_cls.name,
+            "description": fetcher_cls.description,
+            "required_env_vars": getattr(fetcher_cls, 'required_env_vars', []),
+            "methods": methods
+        })
+    return jsonify({"fetchers": result})
+
+# Songs
+@app.route('/api/addons/<fetcher_id>/search_songs', methods=['GET'])
+@token_required
+def search_songs(fetcher_id):
+    query = request.args.get('query')
+    limit = request.args.get('limit', 5, type=int)
+
+    if not query:
+        return jsonify({"success": False, "error": "Missing 'query' parameter"}), 400
+
+    fetcher_cls = plugin_manager.get_fetcher(fetcher_id)
+    if not fetcher_cls:
+        return jsonify({"success": False, "error": f"Fetcher '{fetcher_id}' not found"}), 404
+
+    try:
+        instance = fetcher_cls()
+        results = instance.search_songs(query, limit)
+        return jsonify({"success": True, "results": results})
+    except NotImplementedError:
+        return jsonify({"success": False, "error": "Song search not supported by this fetcher"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/addons/<fetcher_id>/fetch_song/<song_id>', methods=['GET'])
+@token_required
+def fetch_song_metadata(fetcher_id, song_id):
+    fetcher_cls = plugin_manager.get_fetcher(fetcher_id)
+    if not fetcher_cls:
+        return jsonify({"success": False, "error": f"Fetcher '{fetcher_id}' not found"}), 404
+
+    try:
+        instance = fetcher_cls()
+        metadata = instance.fetch_song_metadata(song_id)
+        return jsonify({"success": True, "metadata": metadata})
+    except NotImplementedError:
+        return jsonify({"success": False, "error": "Fetch song metadata not supported"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# Albums
+@app.route('/api/addons/<fetcher_id>/search_albums', methods=['GET'])
+@token_required
+def search_albums(fetcher_id):
+    query = request.args.get('query')
+    limit = request.args.get('limit', 5, type=int)
+
+    if not query:
+        return jsonify({"success": False, "error": "Missing 'query' parameter"}), 400
+
+    fetcher_cls = plugin_manager.get_fetcher(fetcher_id)
+    if not fetcher_cls:
+        return jsonify({"success": False, "error": f"Fetcher '{fetcher_id}' not found"}), 404
+
+    try:
+        instance = fetcher_cls()
+        results = instance.search_albums(query, limit)
+        return jsonify({"success": True, "results": results})
+    except NotImplementedError:
+        return jsonify({"success": False, "error": "Album search not supported by this fetcher"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/addons/<fetcher_id>/fetch_album/<album_id>', methods=['GET'])
+@token_required
+def fetch_album_metadata(fetcher_id, album_id):
+    fetcher_cls = plugin_manager.get_fetcher(fetcher_id)
+    if not fetcher_cls:
+        return jsonify({"success": False, "error": f"Fetcher '{fetcher_id}' not found"}), 404
+
+    try:
+        instance = fetcher_cls()
+        metadata = instance.fetch_album_metadata(album_id)
+        return jsonify({"success": True, "metadata": metadata})
+    except NotImplementedError:
+        return jsonify({"success": False, "error": "Fetch album metadata not supported"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # Serve Svelte frontend

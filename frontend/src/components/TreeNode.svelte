@@ -4,6 +4,7 @@
     // @ts-ignore
     import Self from "./TreeNode.svelte";
     import HoldButton from "./HoldButton.svelte";
+    import MetadataFetcher from "./MetadataFetcher.svelte";
 
     import {
         contextMenu,
@@ -445,6 +446,20 @@
             contextMenu.update((curr) => ({ ...curr, isOpen: false }));
         }
     }
+
+    let showFetcher = $state(false);
+    let fetcherMode = $state("song");
+    let fetcherPath = $state("");
+    let fetcherIsFolder = $state(false);
+
+    function openFetcher(mode, path, isFolder) {
+        fetcherMode = mode;
+        fetcherPath = path;
+        fetcherIsFolder = isFolder;
+        showFetcher = true;
+        // close context menu
+        contextMenu.update((c) => ({ ...c, isOpen: false }));
+    }
 </script>
 
 {#if item.type === "directory"}
@@ -577,6 +592,10 @@
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleSmartRenameAllFiles}>
                         Smart Rename All Audio
+                    </li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={() => openFetcher("album", item.path, true)}>
+                        Fetch Album Metadata
                     </li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={() => onCopy(item.path)}>Copy</li>
@@ -744,6 +763,10 @@
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleSmartRename}>Smart Rename</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li onclick={() => openFetcher("song", item.path, false)}>
+                        Fetch Song Metadata
+                    </li>
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={() => onCopy(item.path)}>Copy</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={handleDownload}>Download</li>
@@ -769,6 +792,14 @@
         {/if}
     </li>
 {/if}
+
+<MetadataFetcher
+    isOpen={showFetcher}
+    onClose={() => (showFetcher = false)}
+    mode={fetcherMode}
+    targetPath={fetcherPath}
+    isFolder={fetcherIsFolder}
+/>
 
 <style>
     li {

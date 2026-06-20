@@ -552,7 +552,7 @@ def delete_field_from_folder(folder_path, field, recursive=False):
                     else:
                         failed += 1
                 except Exception as e:
-                    print(f"Error deleting field from {file_path}: {e}")
+                    log_error(f"Error deleting field from {file_path}: {e}")
                     failed += 1
         
         # If not recursive, break after first iteration

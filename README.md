@@ -20,9 +20,9 @@ App could be useful to anyone selfhosting their own music streaming service like
 - Image Viewer - View cover art and other images
 - Authentication - Simple login protection
 - Log Viewer - Monitor application logs
+- Addon support - fetch metadata from any source using addons
 
 ## Limitations:
-- No API/external metadata fetching is implemented at the moment
 - History is saved with logs, but there is no way to undo changes
 
 ## Quickstart
@@ -49,6 +49,7 @@ services:
     volumes:
       - ~/path/to/your/music:/music                 # Library
       - ./logs:/logs                                # Logs
+      - ./addons:/app/addons                        # Addons
 ```
 Change environment variables according to your preferences
 
@@ -81,6 +82,56 @@ Mount|Purpose
 |---|---|
 ~/path/to/your/music:/music|Your music library
 ./logs:/logs|Application logs
+./addons:/app/addons|Addon folder
+
+## Addons
+The app supports dynamically loaded metadata fetchers (addons) that let you pull track and album information from external services. You can install existing plugins or write your own.
+
+### Installing a Plugin
+Place the plugin file(s) inside the ```/addons``` directory.
+Supported layouts:
+```
+# In addons folder:
+addons:
+-addon1.py
+-addon1_requirements.txt(optional)
+
+# Or inside subfolder:
+addons:
+-addon1:
+--addon1.py
+--addon1_requirements.txt(optional)
+-addon2:
+--addon2.py
+--requirements.txt(optional)
+```
+If the plugin needs extra Python packages, add them to a ```*_requirements.txt``` file. The container will automatically install them on the next start.
+
+Restart the container - the plugin will be discovered and appear in the frontend's fetcher dropdown.
+
+### Writing Your Own Fetcher
+Subclass ```MetadataFetcher``` from ```addon_base.py``` and set the required attributes:
+```
+from addon_base import MetadataFetcher
+
+class MyFetcher(MetadataFetcher):
+    name = "My Service"
+    id = "my_service"
+    description = "Fetches metadata from My API"
+    required_env_vars = ["MY_API_KEY"]   # optional
+```
+
+Implement any of the four methods - you only need to override the ones you need:
+- ```search_songs(query, limit) → List[Dict]```
+- ```fetch_song_metadata(song_id) → Dict```
+- ```search_albums(query, limit) → List[Dict]```
+- ```fetch_album_metadata(album_id) → List[Dict]```
+
+Use environment variables for API keys - read them via ```os.getenv("MY_API_KEY")```. Key should be supplied by user in ```docker-compose.yml```.
+
+Add dependencies by creating a ```*_requirements.txt``` file next to your plugin or in a subfolder listing the required PyPI packages.
+
+For example check [MusicBrainz](https://github.com/Jonny-Ponny/md-musicbrainz-addon) addon.
 
 
 ## Troubleshooting
