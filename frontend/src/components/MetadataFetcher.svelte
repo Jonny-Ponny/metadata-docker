@@ -381,13 +381,29 @@
   }
 
   async function uploadCoverArt(filePath, pictureData) {
-    let base64 = pictureData;
-    if (!base64.startsWith("data:")) {
-      base64 = `data:image/jpeg;base64,${base64}`;
+    let blob;
+    if (pictureData.startsWith("data:")) {
+      // Base64 data URL
+      const response = await fetch(pictureData);
+      blob = await response.blob();
+    } else if (isImageUrl(pictureData)) {
+      // Regular image URL – fetch it
+      try {
+        const response = await fetch(pictureData);
+        if (!response.ok)
+          throw new Error(`Failed to fetch image: ${response.status}`);
+        blob = await response.blob();
+      } catch (e) {
+        toast.error(`Could not download cover art: ${e.message}`);
+        return;
+      }
+    } else {
+      toast.error("Unsupported image format");
+      return;
     }
-    const response = await fetch(base64);
-    const blob = await response.blob();
-    const file = new File([blob], "cover.jpg", { type: blob.type });
+    const file = new File([blob], "cover.jpg", {
+      type: blob.type || "image/jpeg",
+    });
     const formData = new FormData();
     formData.append("file", file);
     formData.append("path", filePath);
@@ -402,17 +418,28 @@
   }
 
   function displayValue(value) {
-    if (typeof value === "string" && value.startsWith("data:image"))
+    if (
+      typeof value === "string" &&
+      (value.startsWith("data:image") || isImageUrl(value))
+    )
       return "[Image]";
     if (typeof value === "object") return JSON.stringify(value);
     return String(value);
   }
+
   function isPictureField(key, value) {
     return (
       key === "picture" &&
       value &&
       typeof value === "string" &&
-      value.startsWith("data:image")
+      (value.startsWith("data:image") || isImageUrl(value))
+    );
+  }
+
+  function isImageUrl(value) {
+    return (
+      typeof value === "string" &&
+      (value.startsWith("http://") || value.startsWith("https://"))
     );
   }
 </script>
@@ -490,7 +517,7 @@
                     {result.year ? `(${result.year})` : ""}
                   {/if}
                 </div>
-                {#if result.coverart}
+                {#if result.coverart && (result.coverart.startsWith("data:image") || isImageUrl(result.coverart))}
                   <img src={result.coverart} alt="cover" class="result-cover" />
                 {:else}
                   <img
