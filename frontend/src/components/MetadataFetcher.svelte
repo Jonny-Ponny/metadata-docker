@@ -876,6 +876,7 @@
   .field-value {
     color: #555;
     word-break: break-word;
+    white-space: pre-wrap;
   }
   .field-preview-image {
     max-width: 80px;
