@@ -795,8 +795,9 @@ def delete_metadata_field():
             # Single file deletion (existing behavior)
             if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
                 return jsonify({'error': 'Unsupported file format'}), 400
-            
-            success = delete_metadata_field(full_path, field)
+
+            from metadata_writer import delete_metadata_field as delete_field
+            success = delete_field(full_path, field)
             
             if success:
                 return jsonify({'success': True, 'message': f'Deleted {field} from {os.path.basename(path)}'})
@@ -828,8 +829,9 @@ def delete_cover_art():
         # Only process mp3 and flac files
         if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
             return jsonify({'error': 'Unsupported file format'}), 400
-        
-        success = delete_cover_art(full_path)
+
+        from metadata_writer import delete_cover_art as delete_cover
+        success = delete_cover(full_path)
 
         log_info(f"Deleted cover art from {full_path}")
         
