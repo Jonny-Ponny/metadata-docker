@@ -4,6 +4,7 @@
         settings,
         saveSettings,
         ALLOWED_VARIABLES,
+        toast,
     } from "../utils/index.js";
 
     let { isOpen, onClose } = $props();
@@ -14,6 +15,12 @@
     // Refs for input elements
     let folderInputRef = $state(null);
     let fileInputRef = $state(null);
+
+    // Addon state
+    let addons = $state([]);
+    let addonsLoading = $state(false);
+    let addonsError = $state(null);
+    let addonsFetched = $state(false);
 
     // Mock data for preview
     const mockMetadata = {
@@ -155,6 +162,32 @@
         DISK: "Disk number (padded: 01, 02, etc.)",
         RELEASETYPE: "Release type (Album, EP, Single, etc.)",
     };
+
+    async function fetchAddons() {
+        if (addonsFetched || addonsLoading) return;
+        addonsLoading = true;
+        addonsError = null;
+        try {
+            const response = await fetch("/api/addons");
+            if (!response.ok)
+                throw new Error(`Failed to fetch addons (${response.status})`);
+            const data = await response.json();
+            addons = data.fetchers || [];
+            addonsFetched = true;
+        } catch (err) {
+            addonsError = err.message;
+            toast.error("Error fetching addons:" + err.message);
+        } finally {
+            addonsLoading = false;
+        }
+    }
+
+    // Trigger fetch when modal opens
+    $effect(() => {
+        if (isOpen && !addonsFetched && !addonsLoading) {
+            fetchAddons();
+        }
+    });
 </script>
 
 {#if isOpen}
@@ -355,6 +388,106 @@
                         be replaced. Any other text, brackets, or symbols will stay
                         exactly as written.
                     </p>
+                </div>
+                <!-- Loaded Addons Section -->
+                <div class="settings-section addon-section">
+                    <details class="addon-details">
+                        <summary class="addon-summary">
+                            <span class="summary-label">
+                                Loaded Addons
+                                <span class="addon-count-badge">
+                                    {addons.length}
+                                </span>
+                            </span>
+                            <span class="summary-chevron">
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                >
+                                    <path
+                                        d="M9 18l6-6-6-6"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+                            </span>
+                        </summary>
+
+                        <p class="section-description">
+                            These addons are currently loaded and available for
+                            searching/retrieving album and song information:
+                        </p>
+
+                        {#if addonsLoading}
+                            <p class="addon-loading">Loading addons…</p>
+                        {:else if addonsError}
+                            <p class="addon-error">Error: {addonsError}</p>
+                        {:else if addons.length === 0}
+                            <p class="addon-empty">No addons loaded.</p>
+                        {:else}
+                            <div class="addon-list">
+                                {#each addons as addon}
+                                    <div class="addon-item">
+                                        <div class="addon-header">
+                                            <span class="addon-name"
+                                                >{addon.name}</span
+                                            >
+                                            <span class="addon-id"
+                                                >({addon.id})</span
+                                            >
+                                        </div>
+                                        {#if addon.description}
+                                            <div class="addon-description">
+                                                {addon.description}
+                                            </div>
+                                        {/if}
+                                        <div class="addon-details-grid">
+                                            <div class="addon-methods">
+                                                <strong
+                                                    >Supported methods</strong
+                                                >
+                                                <ul>
+                                                    {#if addon.methods && addon.methods.length}
+                                                        {#each addon.methods as method}
+                                                            <li>{method}</li>
+                                                        {/each}
+                                                    {:else}
+                                                        <li class="none">
+                                                            None
+                                                        </li>
+                                                    {/if}
+                                                </ul>
+                                            </div>
+                                            <div class="addon-env">
+                                                <strong
+                                                    >Environment variables</strong
+                                                >
+                                                <ul>
+                                                    {#if addon.required_env_vars && addon.required_env_vars.length}
+                                                        {#each addon.required_env_vars as env}
+                                                            <li>
+                                                                <code
+                                                                    >{env}</code
+                                                                >
+                                                            </li>
+                                                        {/each}
+                                                    {:else}
+                                                        <li class="none">
+                                                            None
+                                                        </li>
+                                                    {/if}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
+                    </details>
                 </div>
             </div>
 
@@ -691,6 +824,176 @@
         }
     }
 
+    .addon-section {
+        margin-bottom: 20px;
+    }
+
+    .addon-details summary {
+        list-style: none;
+    }
+    .addon-details summary::-webkit-details-marker {
+        display: none;
+    }
+    .addon-details summary::marker {
+        content: "";
+    }
+
+    .addon-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        background: #f5f5f5;
+        border-radius: 6px;
+        cursor: pointer;
+        user-select: none;
+        transition:
+            background 0.2s,
+            border-color 0.2s;
+        border: 1px solid transparent;
+    }
+
+    .addon-summary:hover {
+        background: #ececec;
+        border-color: #ddd;
+    }
+
+    .summary-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .addon-count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #fd7d05;
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 20px;
+        padding: 0 8px;
+        min-width: 20px;
+        height: 20px;
+        line-height: 20px;
+    }
+
+    .summary-chevron {
+        display: flex;
+        align-items: center;
+        color: #888;
+        transition: transform 0.25s ease;
+    }
+
+    .addon-details[open] .summary-chevron {
+        transform: rotate(90deg);
+    }
+
+    .addon-loading,
+    .addon-error,
+    .addon-empty {
+        font-size: 14px;
+        color: #666;
+        padding: 12px 0 4px 0;
+    }
+    .addon-error {
+        color: #d32f2f;
+    }
+
+    .addon-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    .addon-item {
+        background: #fafafa;
+        border-radius: 8px;
+        padding: 14px 16px;
+        border-left: 3px solid #fd7d05;
+        transition: background 0.2s;
+    }
+
+    .addon-item:hover {
+        background: #f0f0f0;
+    }
+
+    .addon-header {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+    }
+
+    .addon-name {
+        font-weight: 600;
+        font-size: 15px;
+        color: #333;
+    }
+
+    .addon-id {
+        font-size: 12px;
+        color: #888;
+        font-family: monospace;
+    }
+
+    .addon-description {
+        font-size: 13px;
+        color: #555;
+        margin: 4px 0 10px 0;
+        line-height: 1.4;
+    }
+
+    .addon-details-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px 24px;
+        font-size: 13px;
+        color: #555;
+    }
+
+    .addon-details-grid strong {
+        display: block;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 4px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .addon-details-grid ul {
+        margin: 0;
+        padding: 0 0 0 18px;
+        list-style-type: disc;
+    }
+
+    .addon-details-grid li {
+        line-height: 1.6;
+    }
+
+    .addon-details-grid li.none {
+        list-style: none;
+        margin-left: -18px;
+        color: #999;
+        font-style: italic;
+    }
+
+    .addon-details-grid code {
+        background: #f0f0f0;
+        padding: 0 4px;
+        border-radius: 3px;
+        font-size: 12px;
+        color: #fd7d05;
+        font-family: monospace;
+    }
+
     /* Dark mode */
     :global(body.dark) .settings-modal {
         background: #2d2d2d;
@@ -784,5 +1087,60 @@
 
     :global(body.dark) .settings-content::-webkit-scrollbar-thumb:hover {
         background: #666;
+    }
+
+    :global(body.dark) .addon-summary {
+        background: #3d3d3d;
+        border-color: transparent;
+    }
+    :global(body.dark) .addon-summary:hover {
+        background: #484848;
+        border-color: #555;
+    }
+    :global(body.dark) .summary-label {
+        color: #e0e0e0;
+    }
+    :global(body.dark) .addon-count-badge {
+        background: #ff9f4b;
+        color: #1e1e1e;
+    }
+    :global(body.dark) .summary-chevron {
+        color: #aaa;
+    }
+    :global(body.dark) .addon-item {
+        background: #383838;
+        border-left-color: #ff9f4b;
+    }
+    :global(body.dark) .addon-item:hover {
+        background: #404040;
+    }
+    :global(body.dark) .addon-name {
+        color: #e0e0e0;
+    }
+    :global(body.dark) .addon-id {
+        color: #aaa;
+    }
+    :global(body.dark) .addon-description {
+        color: #ccc;
+    }
+    :global(body.dark) .addon-details-grid {
+        color: #ccc;
+    }
+    :global(body.dark) .addon-details-grid strong {
+        color: #ddd;
+    }
+    :global(body.dark) .addon-details-grid code {
+        background: #444;
+        color: #ff9f4b;
+    }
+    :global(body.dark) .addon-details-grid li.none {
+        color: #888;
+    }
+    :global(body.dark) .addon-loading,
+    :global(body.dark) .addon-empty {
+        color: #aaa;
+    }
+    :global(body.dark) .addon-error {
+        color: #ef9a9a;
     }
 </style>

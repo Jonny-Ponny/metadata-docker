@@ -827,6 +827,7 @@
   .result-item.selected {
     background: rgba(253, 125, 5, 0.1);
     border-left: 3px solid #fd7d05;
+    border-radius: 3px;
   }
   .result-cover {
     width: 40px;
@@ -1104,5 +1105,8 @@
   }
   :global(body.dark) .apply-btn:hover {
     background: #e08a3a;
+  }
+  :global(body.dark) .results-list {
+    border: 1px solid #555;
   }
 </style>

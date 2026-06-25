@@ -20,7 +20,7 @@ App could be useful to anyone selfhosting their own music streaming service like
 - Image Viewer - View cover art and other images
 - Authentication - Simple login protection
 - Log Viewer - Monitor application logs
-- Addon support - fetch metadata from any source using addons
+- Addon support - Fetch metadata from any source using addons
 
 ## Limitations:
 - History is saved with logs, but there is no way to undo changes
