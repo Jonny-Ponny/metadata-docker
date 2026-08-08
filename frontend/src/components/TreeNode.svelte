@@ -622,38 +622,60 @@
     {@const filename = item.path.split(/[\\/]/).pop()}
     <!-- Get format from file extension -->
     {@const fileExt = filename.split(".").pop().toLowerCase()}
+
+    {@const isAudio =
+        item.file_type === "audio" ||
+        [
+            ".mp3",
+            ".flac",
+            ".wav",
+            ".aac",
+            ".ogg",
+            ".m4a",
+            ".wma",
+            ".opus",
+            ".ape",
+            ".dsf",
+            ".dff",
+        ].includes("." + fileExt)}
     {@const isImage =
         item.file_type === "image" ||
         [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"].includes(
             "." + fileExt,
         )}
+    {@const isText =
+        item.file_type === "text" || [".txt", ".lrc"].includes("." + fileExt)}
+
     {@const format = (() => {
-        if (isImage) {
-            const imageFormatMap = {
-                jpg: "JPG",
-                jpeg: "JPEG",
-                png: "PNG",
-                gif: "GIF",
-                bmp: "BMP",
-                webp: "WEBP",
-            };
-            return imageFormatMap[fileExt] || fileExt.toUpperCase();
-        } else {
-            const audioFormatMap = {
-                mp3: "MP3",
-                flac: "FLAC",
-                wav: "WAV",
-                aac: "AAC",
-                ogg: "OGG",
-                m4a: "M4A",
-                wma: "WMA",
-                opus: "OPUS",
-                ape: "APE",
-                dsf: "DSF",
-                dff: "DFF",
-            };
-            return audioFormatMap[fileExt] || fileExt.toUpperCase();
-        }
+        const audioFormatMap = {
+            mp3: "MP3",
+            flac: "FLAC",
+            wav: "WAV",
+            aac: "AAC",
+            ogg: "OGG",
+            m4a: "M4A",
+            wma: "WMA",
+            opus: "OPUS",
+            ape: "APE",
+            dsf: "DSF",
+            dff: "DFF",
+        };
+        const imageFormatMap = {
+            jpg: "JPG",
+            jpeg: "JPEG",
+            png: "PNG",
+            gif: "GIF",
+            bmp: "BMP",
+            webp: "WEBP",
+        };
+        const textFormatMap = {
+            txt: "TXT",
+            lrc: "LRC",
+        };
+        if (isAudio) return audioFormatMap[fileExt] || fileExt.toUpperCase();
+        if (isImage) return imageFormatMap[fileExt] || fileExt.toUpperCase();
+        if (isText) return textFormatMap[fileExt] || fileExt.toUpperCase();
+        return fileExt.toUpperCase();
     })()}
 
     <li>
@@ -736,9 +758,13 @@
             {:else}
                 <span class="name">{filename}</span>
                 <span class="file-info">
-                    <span class="format" class:image-format={isImage}
-                        >{format}</span
+                    <span
+                        class="format"
+                        class:image-format={isImage}
+                        class:text-format={isText}
                     >
+                        {format}
+                    </span>
                     <span class="size"
                         >({(item.size / 1024).toFixed(0)} KB)</span
                     >
@@ -761,11 +787,18 @@
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={startRename}>Rename</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                    <li onclick={handleSmartRename}>Smart Rename</li>
+                    {#if isAudio}
+                        <li onclick={handleSmartRename}>Smart Rename</li>
+                    {/if}
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                    <li onclick={() => openFetcher("song", item.path, false)}>
-                        Fetch Song Metadata
-                    </li>
+                    {#if isAudio}
+                        <li
+                            onclick={() =>
+                                openFetcher("song", item.path, false)}
+                        >
+                            Fetch Song Metadata
+                        </li>
+                    {/if}
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <li onclick={() => onCopy(item.path)}>Copy</li>
                     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -939,6 +972,11 @@
         padding: 0;
     }
 
+    .file .format.text-format {
+        background: rgba(0, 200, 0, 0.15);
+        color: #2e7d32;
+    }
+
     /* Dark mode overrides */
     :global(body.dark) .directory .name,
     :global(body.dark) .file .name {
@@ -998,5 +1036,10 @@
     :global(body.dark) .file .format.image-format {
         background: rgba(100, 100, 255, 0.2);
         color: #8888ff;
+    }
+
+    :global(body.dark) .file .format.text-format {
+        background: rgba(0, 200, 0, 0.2);
+        color: #66bb6a;
     }
 </style>
