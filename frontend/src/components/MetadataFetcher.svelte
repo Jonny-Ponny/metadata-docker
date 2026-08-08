@@ -29,6 +29,11 @@
   let isApplying = $state(false);
   let queryInput = $state(null);
 
+  let allFields = $state(new Set()); // all available fields
+  let globalSelectedFields = $state(new Set()); // which fields are selected globally
+
+  let globalFieldsExpanded = $state(true);
+
   const placeholderImage =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23e0e0e0'/%3E%3Ccircle cx='20' cy='20' r='12' fill='none' stroke='%23aaaaaa' stroke-width='2'/%3E%3Ccircle cx='20' cy='20' r='4' fill='%23aaaaaa'/%3E%3Ccircle cx='20' cy='20' r='1.5' fill='%23e0e0e0'/%3E%3C/svg%3E";
 
@@ -199,6 +204,21 @@
               return;
             }
             autoMatchFilesToTracks(tracks);
+
+            // Compute union of all field keys from all tracks
+            const allKeys = new Set();
+            tracks.forEach((t) =>
+              Object.keys(t).forEach((k) => allKeys.add(k)),
+            );
+            allFields = allKeys;
+            globalSelectedFields = new Set(allKeys); // start with all selected
+
+            // Initialize each file's field set to the global selection
+            fileFieldSets = folderFiles.map(
+              () => new Set(globalSelectedFields),
+            );
+            fileEnabled = folderFiles.map(() => true);
+
             fileEnabled = folderFiles.map(() => true);
             fileFieldSets = folderFiles.map((file, idx) => {
               const assign = fileAssignments.find((a) => a.fileIndex === idx);
@@ -259,7 +279,7 @@
     if (assign && assign.trackIndex !== null) {
       const track = fetchedTracks[assign.trackIndex];
       if (track) {
-        fileFieldSets[fileIndex] = new Set(Object.keys(track));
+        fileFieldSets[fileIndex] = new Set(globalSelectedFields);
       } else {
         fileFieldSets[fileIndex] = new Set();
       }
@@ -442,6 +462,24 @@
       (value.startsWith("http://") || value.startsWith("https://"))
     );
   }
+
+  function toggleGlobalField(field) {
+    if (globalSelectedFields.has(field)) {
+      globalSelectedFields.delete(field);
+    } else {
+      globalSelectedFields.add(field);
+    }
+    globalSelectedFields = new Set(globalSelectedFields);
+    // Apply to all files
+    for (let i = 0; i < fileFieldSets.length; i++) {
+      fileFieldSets[i] = new Set(globalSelectedFields);
+    }
+    fileFieldSets = [...fileFieldSets];
+  }
+
+  function toggleGlobalFields() {
+    globalFieldsExpanded = !globalFieldsExpanded;
+  }
 </script>
 
 {#if isOpen}
@@ -561,6 +599,32 @@
           {#if isFolder}
             <!-- Batch mode -->
             <div class="batch-container">
+              <!-- Global field selection -->
+              <div class="global-fields">
+                <div class="global-header" onclick={toggleGlobalFields}>
+                  <h4>Global filter</h4>
+                  <span class="toggle-icon"
+                    >{globalFieldsExpanded ? "▼" : "▶"}</span
+                  >
+                </div>
+                {#if globalFieldsExpanded}
+                  <div class="fields-list">
+                    {#each Array.from(allFields) as field}
+                      <div class="field-item">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={globalSelectedFields.has(field)}
+                            onchange={() => toggleGlobalField(field)}
+                          />
+                          {field}:
+                        </label>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+              <!-- File cards -->
               <h3>Files in folder</h3>
               <div class="file-cards">
                 {#each folderFiles as file, fileIndex}
@@ -1021,6 +1085,32 @@
       transform: scale(1);
     }
   }
+  
+  .global-fields {
+    margin-bottom: 20px;
+    padding: 12px;
+    background: #f5f5f5;
+    border-radius: 6px;
+  }
+  .global-fields h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #555;
+  }
+  .global-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+  }
+  .global-header h4 {
+    margin: 0;
+  }
+  .toggle-icon {
+    font-size: 14px;
+    color: #888;
+  }
 
   /* Dark mode */
   :global(body.dark) .modal-container {
@@ -1108,5 +1198,14 @@
   }
   :global(body.dark) .results-list {
     border: 1px solid #555;
+  }
+  :global(body.dark) .global-fields {
+    background: #3d3d3d;
+  }
+  :global(body.dark) .global-fields h4 {
+    color: #aaa;
+  }
+  :global(body.dark) .toggle-icon {
+    color: #aaa;
   }
 </style>

@@ -26,3 +26,6 @@
 26. ~~Implement tag deletion for all audio in folder~~
 27. ~~Option to disable player and loading of audio file~~
 28. ~~Plugin Pattern~~
+29. MetadataFetcher filter
+30. Support for text files(txt, lrc), text editor
+31. Undo feature
