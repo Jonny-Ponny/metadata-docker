@@ -12,6 +12,7 @@
   import HelpModal from "./components/HelpModal.svelte";
   import LogViewer from "./components/LogViewer.svelte";
   import SettingsModal from "./components/SettingsModal.svelte";
+  import TextEditor from "./components/TextEditor.svelte";
 
   import {
     sortItems,
@@ -1284,6 +1285,8 @@
           <h3>
             {#if selectedFile && selectedFile.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)}
               Image Viewer
+            {:else if selectedFile && selectedFile.match(/\.(txt|lrc)$/i)}
+              Text Editor
             {:else if selectedFile}
               Metadata Editor
             {:else}
@@ -1295,6 +1298,8 @@
         <div class="panel-content">
           {#if selectedFile && selectedFile.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)}
             <ImageViewer filePath={selectedFile} />
+          {:else if selectedFile && selectedFile.match(/\.(txt|lrc)$/i)}
+            <TextEditor filePath={selectedFile} />
           {:else if selectedFile}
             <MetadataEditor filePath={selectedFile} />
           {:else}

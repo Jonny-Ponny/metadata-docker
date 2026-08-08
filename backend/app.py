@@ -175,6 +175,18 @@ def build_tree(current_path, relative_path):
                         'created': stat.st_ctime,
                         'modified': stat.st_mtime
                     })
+
+                elif entry.lower().endswith(('.txt', '.lrc')):
+                    stat = os.stat(full)
+                    items.append({
+                        'name': entry,
+                        'type': 'file',
+                        'file_type': 'text',
+                        'path': rel,
+                        'size': stat.st_size,
+                        'created': stat.st_ctime,
+                        'modified': stat.st_mtime
+                    })
         
     except PermissionError:
         pass
@@ -1323,6 +1335,65 @@ def download_item():
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         log_error(f"Download error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Read text file content
+# GET /api/text?path=<file_path>
+@app.route('/api/text', methods=['GET'])
+@token_required
+def get_text_file():
+    file_path = request.args.get('path')
+    if not file_path:
+        return jsonify({'error': 'Missing path parameter'}), 400
+
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+
+        # Restrict to text files
+        if not full_path.lower().endswith(('.txt', '.lrc')):
+            return jsonify({'error': 'Not a text file'}), 400
+
+        with open(full_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        return jsonify({'content': content})
+
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Write to text file
+# POST /api/text/save
+@app.route('/api/text/save', methods=['POST'])
+@token_required
+def save_text_file():
+    data = request.get_json()
+    file_path = data.get('path')
+    content = data.get('content')
+
+    if not file_path or content is None:
+        return jsonify({'error': 'Missing path or content'}), 400
+
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+
+        if not full_path.lower().endswith(('.txt', '.lrc')):
+            return jsonify({'error': 'Not a text file'}), 400
+
+        with open(full_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        log_info(f"Updated text file: {full_path}")
+        return jsonify({'success': True})
+
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
