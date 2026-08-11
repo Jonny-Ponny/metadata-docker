@@ -2,3 +2,4 @@ Flask
 mutagen
 gunicorn
 pyjwt
+requests

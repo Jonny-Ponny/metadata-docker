@@ -2,7 +2,7 @@
 <script>
     import { onMount } from "svelte";
 
-    let { isOpen, onClose } = $props();
+    let { isOpen, onClose, currentVersion, updateAvailable, latestVersion } = $props();
 
     // Track which tab is active
     let activeTab = $state("basics"); // 'basics' or 'tags'
@@ -747,7 +747,7 @@
             <!-- Footer -->
             <div class="help-modal-footer">
                 <div class="footer-info">
-                    <span class="version">Version 1.0.0</span>
+                    <span class="version">{currentVersion || 'Loading…'}</span>
                     <span class="separator">•</span>
                     <a
                         href="https://github.com/Jonny-Ponny/metadata-docker"

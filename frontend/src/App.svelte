@@ -90,6 +90,11 @@
 
   let showSettingsModal = $state(false);
 
+  // Version
+  let currentVersion = $state(null);
+  let latestVersion = $state(null);
+  let updateAvailable = $state(false);
+
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
     e.preventDefault();
@@ -910,6 +915,22 @@
     logout();
   }
 
+  async function checkVersion() {
+    try {
+      const res = await fetch("/api/version");
+      if (!res.ok) return;
+      const data = await res.json();
+      currentVersion = data.current_version;
+      latestVersion = data.latest_version;
+      updateAvailable = data.update_available;
+      if (data.update_available) {
+        toast.show("Update available, check GitHub for more info", "info", 10000);
+      }
+    } catch (e) {
+      console.warn("Version check failed:", e);
+    }
+  }
+
   onMount(() => {
     initAuth();
 
@@ -934,6 +955,8 @@
 
     window.addEventListener("refreshFileTree", loadFileTree);
     scrollSelectedIntoView();
+
+    checkVersion();
 
     return () => {
       window.fetch = originalFetch; // Restore original fetch
@@ -1336,7 +1359,13 @@
       bind:this={playerComponent}
     />
   </div>
-  <HelpModal isOpen={showHelpModal} onClose={() => (showHelpModal = false)} />
+  <HelpModal
+    isOpen={showHelpModal}
+    onClose={() => (showHelpModal = false)}
+    currentVersion={currentVersion}
+    updateAvailable={updateAvailable}
+    latestVersion={latestVersion}
+  />
   <LogViewer isOpen={showLogViewer} onClose={() => (showLogViewer = false)} />
   <SettingsModal
     isOpen={showSettingsModal}

@@ -7,6 +7,7 @@ import zipfile
 import io
 import base64
 import re
+import requests
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
@@ -58,6 +59,47 @@ log_info(f'Log folder:{Path(LOG_DIR).absolute()}')
 plugin_manager = PluginManager()
 plugin_manager.discover_plugins()
 
+# ---------------------VERSION CHECK---------------------#
+
+APP_VERSION = 'v1.0.0'
+GITHUB_REPO_OWNER = 'Jonny-Ponny'
+GITHUB_REPO_NAME = 'metadata-docker'
+
+def check_update(current: str, pulled: str) -> bool:
+    # Strip 'v' or 'V' and split by '.'
+    curr_parts = [int(x) for x in current.lower().lstrip('v').split('.')]
+    pull_parts = [int(x) for x in pulled.lower().lstrip('v').split('.')]
+    
+    if pull_parts > curr_parts:
+        log_info('Version: Update available, check GitHub for more info')
+        log_info(f'https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases')
+        return True
+    
+    log_info('Version: Up to date')
+    return False
+
+try:
+    url = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/latest"
+    response = requests.get(url, timeout=5)
+    if response.status_code == 200:
+        data = response.json()
+        LATEST_VER = data.get('tag_name', '')
+        if LATEST_VER:
+            update_available = check_update(APP_VERSION, LATEST_VER)
+        else:
+            log_warning("GitHub release tag_name is empty")
+    else:
+        log_warning(f"GitHub API returned {response.status_code}")
+except Exception as e:
+    log_error(f"Failed to check for updates: {e}")
+
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    return jsonify({
+        'current_version': APP_VERSION,
+        'latest_version': LATEST_VER,
+        'update_available': update_available
+    })
 
 # -------------------------AUTH------------------------- #
 
