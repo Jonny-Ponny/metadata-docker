@@ -4,6 +4,7 @@
         settings,
         saveSettings,
         ALLOWED_VARIABLES,
+        OVERVIEW_FIELD_NAMES,
         toast,
     } from "../utils/index.js";
 
@@ -188,6 +189,23 @@
             fetchAddons();
         }
     });
+
+    // Helper to toggle a field in overviewFields
+    function toggleOverviewField(field) {
+        const index = localSettings.overviewFields.indexOf(field);
+        if (index >= 0) {
+            localSettings.overviewFields = localSettings.overviewFields.filter(
+                (f) => f !== field,
+            );
+        } else {
+            localSettings.overviewFields = [
+                ...localSettings.overviewFields,
+                field,
+            ];
+        }
+        // Trigger reactivity
+        localSettings = { ...localSettings };
+    }
 </script>
 
 {#if isOpen}
@@ -387,6 +405,33 @@
                         <strong>Note:</strong> Only the variables shown above will
                         be replaced. Any other text, brackets, or symbols will stay
                         exactly as written.
+                    </p>
+                </div>
+                <!-- FolderOverview section -->
+                <div class="settings-section">
+                    <h3>Folder Overview Fields</h3>
+                    <p class="section-description">
+                        Select which metadata fields should be checked in the
+                        folder overview. Only the selected fields will be
+                        reported as missing.
+                    </p>
+                    <div class="field-checkboxes">
+                        {#each OVERVIEW_FIELD_NAMES as field}
+                            <label class="field-checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={localSettings.overviewFields.includes(
+                                        field,
+                                    )}
+                                    onchange={() => toggleOverviewField(field)}
+                                />
+                                <span>{field}</span>
+                            </label>
+                        {/each}
+                    </div>
+                    <p class="note">
+                        <strong>Note:</strong> Only these fields will be considered
+                        when checking files in a folder.
                     </p>
                 </div>
                 <!-- Loaded Addons Section -->
@@ -994,6 +1039,31 @@
         font-family: monospace;
     }
 
+    .field-checkboxes {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin: 8px 0 12px;
+    }
+
+    .field-checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #333;
+        cursor: pointer;
+        user-select: none;
+        padding: 2px 0;
+    }
+
+    .field-checkbox-label input[type="checkbox"] {
+        accent-color: #fd7d05;
+        width: 14px;
+        height: 14px;
+        cursor: pointer;
+    }
+
     /* Dark mode */
     :global(body.dark) .settings-modal {
         background: #2d2d2d;
@@ -1142,5 +1212,8 @@
     }
     :global(body.dark) .addon-error {
         color: #ef9a9a;
+    }
+    :global(body.dark) .field-checkbox-label {
+        color: #e0e0e0;
     }
 </style>

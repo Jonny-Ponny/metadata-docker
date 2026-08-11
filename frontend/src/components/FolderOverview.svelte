@@ -1,5 +1,7 @@
 <!-- src/components/FolderOverview.svelte -->
 <script>
+    import { settings, OVERVIEW_FIELD_NAMES } from "../utils/index.js";
+
     let { folderPath, audioFiles } = $props();
 
     let files = $derived(Array.isArray(audioFiles) ? audioFiles : []);
@@ -8,18 +10,13 @@
     let error = $state(null);
     let fileResults = $state({});
 
-    const MAIN_FIELDS = [
-        "title",
-        "album",
-        "artist",
-        "albumArtist",
-        "track",
-        "disk",
-        "year",
-        "genre",
-        "unsyncedLyrics",
-        "lyrics",
-    ];
+    // Get the fields that should be checked from settings
+    const activeFields = $derived(
+        Array.isArray($settings.overviewFields) &&
+            $settings.overviewFields.length > 0
+            ? $settings.overviewFields
+            : OVERVIEW_FIELD_NAMES, // fallback to all fields
+    );
 
     $effect(() => {
         if (folderPath && files.length > 0) {
@@ -44,7 +41,7 @@
             const file = filesCopy[index++];
             try {
                 const meta = await fetchMetadata(file.path);
-                const missing = MAIN_FIELDS.filter((f) => {
+                const missing = activeFields.filter((f) => {
                     const val = meta[f];
                     return (
                         val === undefined ||
@@ -113,7 +110,7 @@
         <div class="summary">
             {#if missingFiles.length === 0 && errorCount === 0}
                 <p class="all-complete">
-                    All files have all main metadata fields
+                    All files have selected metadata fields
                 </p>
             {:else}
                 <p class="missing-count">

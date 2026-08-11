@@ -15,6 +15,20 @@ export const ALLOWED_VARIABLES = {
     'RELEASETYPE': 'releaseType',    // Release type (album, ep, etc.)
 };
 
+// All field names used in the folder overview
+export const OVERVIEW_FIELD_NAMES = [
+    'title',
+    'album',
+    'artist',
+    'albumArtist',
+    'track',
+    'disk',
+    'year',
+    'genre',
+    'unsyncedLyrics',
+    'lyrics',
+];
+
 // Default settings
 const defaultSettings = {
     allowDeleteKey: true,
@@ -22,7 +36,8 @@ const defaultSettings = {
     fileScheme: "[ALBUMARTIST] - [ALBUM] - [TRACK] - [TITLE]",   // Scheme for files
     replaceSpacesInFolders: false,                               // Setting for folders
     replaceSpacesInFiles: false,                                 // Setting for files
-    enablePlayer: true                                           // Player enabled by default
+    enablePlayer: true,                                          // Player enabled by default
+    overviewFields: [...OVERVIEW_FIELD_NAMES]                    // All fields selected by default
 };
 
 // Load settings from localStorage
