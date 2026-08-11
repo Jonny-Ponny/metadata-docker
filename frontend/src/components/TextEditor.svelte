@@ -1,3 +1,4 @@
+<!-- src/components/TextEditor.svelte -->
 <script>
     import { toast } from "../utils/index.js";
 

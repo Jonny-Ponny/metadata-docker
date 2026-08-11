@@ -13,6 +13,7 @@
   import LogViewer from "./components/LogViewer.svelte";
   import SettingsModal from "./components/SettingsModal.svelte";
   import TextEditor from "./components/TextEditor.svelte";
+  import FolderOverview from "./components/FolderOverview.svelte";
 
   import {
     sortItems,
@@ -94,6 +95,31 @@
   let currentVersion = $state(null);
   let latestVersion = $state(null);
   let updateAvailable = $state(false);
+
+  let showFolderOverview = $state(false);
+
+  // Compute audio files in the selected folder (non‑recursive)
+  function getAudioFilesInFolder() {
+    if (!selectedFolder) return [];
+    // Find the folder node in the tree
+    function findNode(nodes, path) {
+      for (const node of nodes) {
+        if (node.path === path) return node;
+        if (node.children) {
+          const found = findNode(node.children, path);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    const folderNode = findNode(treeData, selectedFolder);
+    if (!folderNode) return [];
+    return folderNode.children
+      .filter((child) => child.type === "file" && child.file_type === "audio")
+      .map((child) => ({ path: child.path, name: child.name }));
+  }
+
+  let audioFilesInFolder = $derived(getAudioFilesInFolder());
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
@@ -924,7 +950,11 @@
       latestVersion = data.latest_version;
       updateAvailable = data.update_available;
       if (data.update_available) {
-        toast.show("Update available, check GitHub for more info", "info", 10000);
+        toast.show(
+          "Update available, check GitHub for more info",
+          "info",
+          10000,
+        );
       }
     } catch (e) {
       console.warn("Version check failed:", e);
@@ -1312,10 +1342,34 @@
               Text Editor
             {:else if selectedFile}
               Metadata Editor
+            {:else if selectedFolder && !selectedFile}
+              Folder Overview
             {:else}
               File Viewer
             {/if}
           </h3>
+          {#if selectedFolder && !selectedFile}
+            <button
+              class="toggle-overview-btn"
+              class:active={showFolderOverview}
+              onclick={() => (showFolderOverview = !showFolderOverview)}
+              title="Toggle folder metadata overview"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+              </svg>
+            </button>
+          {/if}
         </div>
 
         <div class="panel-content">
@@ -1325,6 +1379,11 @@
             <TextEditor filePath={selectedFile} />
           {:else if selectedFile}
             <MetadataEditor filePath={selectedFile} />
+          {:else if selectedFolder && showFolderOverview}
+            <FolderOverview
+              folderPath={selectedFolder}
+              audioFiles={audioFilesInFolder}
+            />
           {:else}
             <div class="empty-state">
               <svg
@@ -1362,9 +1421,9 @@
   <HelpModal
     isOpen={showHelpModal}
     onClose={() => (showHelpModal = false)}
-    currentVersion={currentVersion}
-    updateAvailable={updateAvailable}
-    latestVersion={latestVersion}
+    {currentVersion}
+    {updateAvailable}
+    {latestVersion}
   />
   <LogViewer isOpen={showLogViewer} onClose={() => (showLogViewer = false)} />
   <SettingsModal

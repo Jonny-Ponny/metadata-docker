@@ -595,3 +595,39 @@ body.dark .create-folder-btn:hover {
   background-color: #3d3d3d;
   color: #ff9f4b;
 }
+
+.toggle-overview-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #888;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.toggle-overview-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #fd7d05;
+}
+
+.toggle-overview-btn.active {
+  color: #fd7d05;
+  background: rgba(253, 125, 5, 0.1);
+}
+
+body.dark .toggle-overview-btn {
+  color: #aaa;
+}
+
+body.dark .toggle-overview-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ff9f4b;
+}
+
+body.dark .toggle-overview-btn.active {
+  color: #ff9f4b;
+  background: rgba(255, 159, 75, 0.15);
+}
