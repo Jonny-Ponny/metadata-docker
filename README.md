@@ -29,7 +29,7 @@ App could be useful to anyone selfhosting their own music streaming service like
 
 Using docker-compose.yml:
 
-```
+```yaml
 services:
   app:
     image: oneandonlyjonnyponny/metadata-docker:latest
@@ -38,8 +38,6 @@ services:
       - "8888:5000"                                 # Change 8888 to preferred port
     restart: unless-stopped
     environment:
-      - PYTHONUNBUFFERED=1
-      - DEBUG=False
       - AUTH_USERNAME=USERNAME                      # Login
       - AUTH_PASSWORD=PASSWORD                      # Plain text password
       - TOKEN_EXPIRE_HOURS=24                       # Optional
