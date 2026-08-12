@@ -409,7 +409,7 @@
                 </div>
                 <!-- FolderOverview section -->
                 <div class="settings-section">
-                    <h3>Folder Overview Fields</h3>
+                    <h3>Folder Overview</h3>
                     <p class="section-description">
                         Select which metadata fields should be checked in the
                         folder overview. Only the selected fields will be
@@ -433,6 +433,19 @@
                         <strong>Note:</strong> Only these fields will be considered
                         when checking files in a folder.
                     </p>
+                    <div class="setting-item">
+                        <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                bind:checked={localSettings.recursiveOverview}
+                            />
+                            <span>Recursive overview</span>
+                        </label>
+                        <p class="setting-description">
+                            When enabled, the folder overview will scan
+                            subfolders. May be slower.
+                        </p>
+                    </div>
                 </div>
                 <!-- Loaded Addons Section -->
                 <div class="settings-section addon-section">

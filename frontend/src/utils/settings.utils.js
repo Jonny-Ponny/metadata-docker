@@ -38,7 +38,8 @@ const defaultSettings = {
     replaceSpacesInFolders: false,                               // Setting for folders
     replaceSpacesInFiles: false,                                 // Setting for files
     enablePlayer: true,                                          // Player enabled by default
-    overviewFields: [...OVERVIEW_FIELD_NAMES]                    // All fields selected by default
+    overviewFields: [...OVERVIEW_FIELD_NAMES],                   // All fields selected by default
+    recursiveOverview: false                                     // Recursive overview flag
 };
 
 // Load settings from localStorage

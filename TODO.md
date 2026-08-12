@@ -29,6 +29,6 @@
 29. ~~MetadataFetcher filter~~
 30. ~~Support for text files(txt, lrc), text editor~~
 31. ~~Version check~~
-32. Folder overview(quick summary for missing main fields)
+32. ~~Folder overview(quick summary for missing main fields)~~
 33. Undo feature
 34. Support more audio file formats

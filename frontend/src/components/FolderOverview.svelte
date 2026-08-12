@@ -131,7 +131,11 @@
                     {#each missingFiles as file}
                         <li>
                             <div class="file-entry">
-                                <span class="file-name">{file.name}</span>
+                                <span class="file-path">
+                                    <span class="file-name"
+                                        >{file.relativePath}</span
+                                    >
+                                </span>
                                 <ul class="missing-list">
                                     {#each file.missingFields as field}
                                         <li>{field}</li>

@@ -98,10 +98,40 @@
 
   let showFolderOverview = $state(false);
 
-  // Compute audio files in the selected folder (non‑recursive)
+  function collectAudioFilesRecursively(node, basePath = node.path) {
+    const result = [];
+    const limit = 500; // safety limit
+
+    function walk(currentNode, currentRelativePath = "") {
+      if (result.length >= limit) return;
+
+      if (currentNode.type === "file" && currentNode.file_type === "audio") {
+        const relPath = currentRelativePath || currentNode.name;
+        result.push({
+          path: currentNode.path,
+          name: currentNode.name,
+          relativePath: relPath,
+        });
+      }
+
+      if (currentNode.type === "directory" && currentNode.children) {
+        for (const child of currentNode.children) {
+          if (result.length >= limit) break;
+          const childRelPath = currentRelativePath
+            ? `${currentRelativePath}/${child.name}`
+            : child.name;
+          walk(child, childRelPath);
+        }
+      }
+    }
+
+    walk(node, "");
+    return result;
+  }
+
   function getAudioFilesInFolder() {
     if (!selectedFolder) return [];
-    // Find the folder node in the tree
+
     function findNode(nodes, path) {
       for (const node of nodes) {
         if (node.path === path) return node;
@@ -112,11 +142,28 @@
       }
       return null;
     }
+
     const folderNode = findNode(treeData, selectedFolder);
     if (!folderNode) return [];
+
+    if ($settings.recursiveOverview) {
+      const files = collectAudioFilesRecursively(folderNode);
+      if (files.length >= 500) {
+        toast.warning(
+          "Folder overview limited to 500 files. Some subfolders may be incomplete.",
+        );
+      }
+      return files;
+    }
+
+    // Non‑recursive: direct children only, relativePath is just the filename
     return folderNode.children
       .filter((child) => child.type === "file" && child.file_type === "audio")
-      .map((child) => ({ path: child.path, name: child.name }));
+      .map((child) => ({
+        path: child.path,
+        name: child.name,
+        relativePath: child.name,
+      }));
   }
 
   let audioFilesInFolder = $derived(getAudioFilesInFolder());
