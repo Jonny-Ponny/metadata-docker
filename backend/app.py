@@ -66,7 +66,10 @@ APP_VERSION = 'v1.0.1'
 GITHUB_REPO_OWNER = 'Jonny-Ponny'
 GITHUB_REPO_NAME = 'metadata-docker'
 
-CACHE_TTL_SECONDS = 3600  # 1 hour
+CACHE_TTL_SECONDS = int(os.getenv('CACHE_TTL_SECONDS', '3600'))
+CACHE_TTL_SECONDS = CACHE_TTL_SECONDS if CACHE_TTL_SECONDS > 0 else 3600
+
+DISABLE_VERSION_CHECK = os.getenv('DISABLE_VERSION_CHECK', 'False').lower() in ('true', '1', 'yes', 'on')
 
 # Cache for version info
 _version_cache = {
@@ -85,6 +88,14 @@ def _compare_versions(current: str, pulled: str) -> bool:
 def get_version_info():
     """Return current and latest version info, refreshing cache if stale."""
     global _version_cache
+
+    # If version check is disabled, return base info without fetching
+    if DISABLE_VERSION_CHECK:
+        return {
+            'current': APP_VERSION,
+            'latest': None,
+            'update_available': False
+        }
 
     now = time.time()
     # Return cached data if still fresh
