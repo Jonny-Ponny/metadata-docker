@@ -27,6 +27,7 @@ export const OVERVIEW_FIELD_NAMES = [
     'genre',
     'unsyncedLyrics',
     'lyrics',
+    'picture',
 ];
 
 // Default settings
