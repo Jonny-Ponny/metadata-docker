@@ -8,6 +8,7 @@ import io
 import base64
 import re
 import requests
+import time
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
@@ -65,40 +66,93 @@ APP_VERSION = 'v1.0.1'
 GITHUB_REPO_OWNER = 'Jonny-Ponny'
 GITHUB_REPO_NAME = 'metadata-docker'
 
-def check_update(current: str, pulled: str) -> bool:
+CACHE_TTL_SECONDS = 3600  # 1 hour
+
+# Cache for version info
+_version_cache = {
+    'latest': None,
+    'update_available': False,
+    'timestamp': 0
+}
+
+def _compare_versions(current: str, pulled: str) -> bool:
+    """Return True if pulled version is newer than current."""
     # Strip 'v' or 'V' and split by '.'
     curr_parts = [int(x) for x in current.lower().lstrip('v').split('.')]
     pull_parts = [int(x) for x in pulled.lower().lstrip('v').split('.')]
-    
-    if pull_parts > curr_parts:
-        log_info('Version: Update available, check GitHub for more info')
-        log_info(f'https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases')
-        return True
-    
-    log_info('Version: Up to date')
-    return False
+    return pull_parts > curr_parts
 
-try:
-    url = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/latest"
-    response = requests.get(url, timeout=5)
-    if response.status_code == 200:
-        data = response.json()
-        LATEST_VER = data.get('tag_name', '')
-        if LATEST_VER:
-            update_available = check_update(APP_VERSION, LATEST_VER)
+def get_version_info():
+    """Return current and latest version info, refreshing cache if stale."""
+    global _version_cache
+
+    now = time.time()
+    # Return cached data if still fresh
+    if _version_cache['timestamp'] and (now - _version_cache['timestamp'] < CACHE_TTL_SECONDS):
+        return {
+            'current': APP_VERSION,
+            'latest': _version_cache['latest'],
+            'update_available': _version_cache['update_available']
+        }
+
+    # Cache expired or empty – fetch from GitHub
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/latest"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            latest = data.get('tag_name', '')
+            if latest:
+                update_available = _compare_versions(APP_VERSION, latest)
+                _version_cache = {
+                    'latest': latest,
+                    'update_available': update_available,
+                    'timestamp': now
+                }
+                if update_available:
+                    log_info('Version: Update available, check GitHub for more info')
+                else:
+                    log_info('Version: Up to date')
+            else:
+                log_warning("GitHub release tag_name is empty")
+                _version_cache['timestamp'] = now
+                return {
+                    'current': APP_VERSION,
+                    'latest': _version_cache.get('latest'),
+                    'update_available': False
+                }
         else:
-            log_warning("GitHub release tag_name is empty")
-    else:
-        log_warning(f"GitHub API returned {response.status_code}")
-except Exception as e:
-    log_error(f"Failed to check for updates: {e}")
+            log_warning(f"GitHub API returned {response.status_code}")
+            _version_cache['timestamp'] = now
+            return {
+                'current': APP_VERSION,
+                'latest': _version_cache.get('latest'),
+                'update_available': False
+            }
+    except Exception as e:
+        log_error(f"Failed to check for updates: {e}")
+        _version_cache['timestamp'] = now
+        return {
+            'current': APP_VERSION,
+            'latest': _version_cache.get('latest'),
+            'update_available': False
+        }
+
+    return {
+        'current': APP_VERSION,
+        'latest': _version_cache['latest'],
+        'update_available': _version_cache['update_available']
+    }
+
+get_version_info()
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
+    info = get_version_info()
     return jsonify({
-        'current_version': APP_VERSION,
-        'latest_version': LATEST_VER,
-        'update_available': update_available
+        'current_version': info['current'],
+        'latest_version': info['latest'],
+        'update_available': info['update_available']
     })
 
 # -------------------------AUTH------------------------- #
