@@ -5,6 +5,7 @@
         saveSettings,
         ALLOWED_VARIABLES,
         OVERVIEW_FIELD_NAMES,
+        FIELD_METADATA,
         toast,
     } from "../utils/index.js";
 
@@ -417,7 +418,13 @@
                     </p>
                     <div class="field-checkboxes">
                         {#each OVERVIEW_FIELD_NAMES as field}
-                            <label class="field-checkbox-label">
+                            {@const meta = FIELD_METADATA[field]}
+                            {@const label = meta?.label || field}
+                            {@const description = meta?.description || ""}
+                            <label
+                                class="field-checkbox-label"
+                                title={description}
+                            >
                                 <input
                                     type="checkbox"
                                     checked={localSettings.overviewFields.includes(
@@ -425,7 +432,7 @@
                                     )}
                                     onchange={() => toggleOverviewField(field)}
                                 />
-                                <span>{field}</span>
+                                <span>{label}</span>
                             </label>
                         {/each}
                     </div>

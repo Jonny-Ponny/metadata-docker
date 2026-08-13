@@ -1,6 +1,12 @@
 <!-- src/components/FolderOverview.svelte -->
 <script>
-    import { settings, OVERVIEW_FIELD_NAMES } from "../utils/index.js";
+    import {
+        settings,
+        OVERVIEW_FIELD_NAMES,
+        FIELD_METADATA,
+        getFieldLabel,
+        getFieldDescription,
+    } from "../utils/index.js";
 
     let { folderPath, audioFiles } = $props();
 
@@ -138,7 +144,7 @@
                                 </span>
                                 <ul class="missing-list">
                                     {#each file.missingFields as field}
-                                        <li>{field}</li>
+                                        <li title={getFieldDescription(field)}>{getFieldLabel(field)}</li>
                                     {/each}
                                 </ul>
                             </div>

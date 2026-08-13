@@ -1,4 +1,4 @@
-// src/utils/folderSummary.js
+// src/utils/folderSummary.utils.js
 
 /**
  * Recursively count folders, files, and calculate total size
