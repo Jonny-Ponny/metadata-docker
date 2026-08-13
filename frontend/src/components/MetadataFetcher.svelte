@@ -37,6 +37,8 @@
   const placeholderImage =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23e0e0e0'/%3E%3Ccircle cx='20' cy='20' r='12' fill='none' stroke='%23aaaaaa' stroke-width='2'/%3E%3Ccircle cx='20' cy='20' r='4' fill='%23aaaaaa'/%3E%3Ccircle cx='20' cy='20' r='1.5' fill='%23e0e0e0'/%3E%3C/svg%3E";
 
+  const LAST_ADDON_KEY = "md_lastAddonId";
+
   // ---------- Helper functions ----------
   async function getAudioFilesInFolder(folderPath) {
     try {
@@ -77,15 +79,28 @@
       const all = data.fetchers || [];
       const method = mode === "song" ? "search_songs" : "search_albums";
       addons = all.filter((a) => a.methods && a.methods.includes(method));
+
       if (addons.length > 0) {
-        selectedAddonId = addons[0].id;
+        const storedId = localStorage.getItem(LAST_ADDON_KEY);
+        if (storedId && addons.some((a) => a.id === storedId)) {
+          selectedAddonId = storedId;
+        } else {
+          selectedAddonId = addons[0].id;
+        }
       } else {
+        selectedAddonId = "";
         toast.warning(`No addon supports ${method}`);
       }
     } catch (e) {
       toast.error(`Failed to load addons: ${e.message}`);
     }
   }
+
+  $effect(() => {
+    if (selectedAddonId) {
+      localStorage.setItem(LAST_ADDON_KEY, selectedAddonId);
+    }
+  });
 
   async function prefillQuery() {
     let filePath = targetPath;
@@ -1085,7 +1100,7 @@
       transform: scale(1);
     }
   }
-  
+
   .global-fields {
     margin-bottom: 20px;
     padding: 12px;
