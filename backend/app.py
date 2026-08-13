@@ -62,7 +62,7 @@ plugin_manager.discover_plugins()
 
 # ---------------------VERSION CHECK---------------------#
 
-APP_VERSION = 'v1.0.1'
+APP_VERSION = 'v1.0.2'
 GITHUB_REPO_OWNER = 'Jonny-Ponny'
 GITHUB_REPO_NAME = 'metadata-docker'
 
