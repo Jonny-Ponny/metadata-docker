@@ -1191,6 +1191,14 @@ def apply_renaming_scheme():
             'DISK': 'disk',
             'RELEASETYPE': 'releaseType',
         }
+
+        def extract_year_regex(date_val):
+            if not date_val:
+                return None
+            
+            # Matches a 4-digit year (1800-2099) bounded by non-digit characters
+            match = re.search(r'(?<!\d)(?:18|19|20)\d{2}(?!\d)', str(date_val))
+            return match.group(0) if match else None
         
         def generate_name_from_scheme(scheme_str, metadata):
             """Generate new name from scheme and metadata."""
@@ -1199,23 +1207,20 @@ def apply_renaming_scheme():
             # First, check if all variables in the scheme have values
             variables_in_scheme = re.findall(r'\[([^\[\]]+)\]', scheme_str)
             
+            # Process year value once
+            extracted_year = extract_year_regex(metadata.get('year'))
+            
             missing_fields = []
             for var in variables_in_scheme:
                 if var not in variable_map:
                     continue  # Skip unknown variables (they'll remain as-is)
                 
                 field = variable_map[var]
-                field_value = metadata.get(field)
-                has_value = False
                 
                 if field == 'year':
-                    has_value = (
-                        field_value is not None and 
-                        str(field_value).strip() != "" and
-                        len(str(field_value).strip()) >= 4  # At least 4 chars for a year
-                    )
-                elif metadata.get(field):
-                    has_value = True
+                    has_value = extracted_year is not None
+                else:
+                    has_value = bool(metadata.get(field))
                 
                 if not has_value:
                     missing_fields.append(var)
@@ -1226,21 +1231,13 @@ def apply_renaming_scheme():
             # Replace each variable with its value
             for var, field in variable_map.items():
                 value = ''
-                if field == 'year' and metadata.get('year'):
-                    # Extract just the year from date
-                    value = str(metadata['year'])[:4]
+                if field == 'year':
+                    value = extracted_year
                 elif field == 'track' and metadata.get('track'):
-                    # Pad track number with leading zero
-                    track = str(metadata['track'])
-                    # Handle format like "5/12"
-                    if '/' in track:
-                        track = track.split('/')[0]
+                    track = str(metadata['track']).split('/')[0]
                     value = track.zfill(2)
                 elif field == 'disk' and metadata.get('disk'):
-                    # Pad disk number with leading zero
-                    disk = str(metadata['disk'])
-                    if '/' in disk:
-                        disk = disk.split('/')[0]
+                    disk = str(metadata['disk']).split('/')[0]
                     value = disk.zfill(2)
                 elif field == 'releaseType' and metadata.get('releaseType'):
                     value = str(metadata['releaseType'])
