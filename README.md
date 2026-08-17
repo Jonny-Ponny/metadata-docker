@@ -129,7 +129,7 @@ Use environment variables for API keys - read them via ```os.getenv("MY_API_KEY"
 
 Add dependencies by creating a ```*_requirements.txt``` file next to your plugin or in a subfolder listing the required PyPI packages.
 
-For example check [MusicBrainz](https://github.com/Jonny-Ponny/md-musicbrainz-addon), [VocaDB](https://github.com/Jonny-Ponny/md-vocadb-addon) or [LrcLib](https://github.com/Jonny-Ponny/md-lrclib-addon) addons.
+For example check [MusicBrainz](https://github.com/Jonny-Ponny/md-musicbrainz-addon), [VocaDB](https://github.com/Jonny-Ponny/md-vocadb-addon), [LrcLib](https://github.com/Jonny-Ponny/md-lrclib-addon) or [Genius](https://github.com/Jonny-Ponny/md-genius-addon) addons.
 
 
 ## Troubleshooting
