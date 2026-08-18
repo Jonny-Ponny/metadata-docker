@@ -1551,26 +1551,31 @@ def save_text_file():
 def list_addons():
     result = []
     for fetcher_id, fetcher_cls in plugin_manager.fetchers.items():
-        # Check which methods are actually implemented (not NotImplementedError)
-        methods = []
-        instance = fetcher_cls()
-        
-        if not getattr(instance.search_albums, '_default_implementation', False):
-            methods.append('search_albums')
-        if not getattr(instance.fetch_album_metadata, '_default_implementation', False):
-            methods.append('fetch_album_metadata')
-        if not getattr(instance.search_songs, '_default_implementation', False):
-            methods.append('search_songs')
-        if not getattr(instance.fetch_song_metadata, '_default_implementation', False):
-            methods.append('fetch_song_metadata')
+        try:
+            # Check which methods are actually implemented (not NotImplementedError)
+            methods = []
+            instance = fetcher_cls()
+            
+            if not getattr(instance.search_albums, '_default_implementation', False):
+                methods.append('search_albums')
+            if not getattr(instance.fetch_album_metadata, '_default_implementation', False):
+                methods.append('fetch_album_metadata')
+            if not getattr(instance.search_songs, '_default_implementation', False):
+                methods.append('search_songs')
+            if not getattr(instance.fetch_song_metadata, '_default_implementation', False):
+                methods.append('fetch_song_metadata')
 
-        result.append({
-            "id": fetcher_cls.id,
-            "name": fetcher_cls.name,
-            "description": fetcher_cls.description,
-            "required_env_vars": getattr(fetcher_cls, 'required_env_vars', []),
-            "methods": methods
-        })
+            result.append({
+                "id": fetcher_cls.id,
+                "name": fetcher_cls.name,
+                "description": fetcher_cls.description,
+                "required_env_vars": getattr(fetcher_cls, 'required_env_vars', []),
+                "methods": methods
+            })
+        except Exception as e:
+            log_error(f"Fetcher '{fetcher_id}' failed to initialize: {e}")
+            # Skip fetcher if any exception raised
+            continue
     return jsonify({"fetchers": result})
 
 # Songs
