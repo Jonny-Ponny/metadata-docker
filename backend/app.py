@@ -766,6 +766,49 @@ def update_file_picture_endpoint():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# POST /api/metadata/picture/url
+# Update cover art for a single file using a remote URL
+@app.route('/api/metadata/picture/url', methods=['POST'])
+@token_required
+def update_file_picture_from_url_endpoint():
+    data = request.get_json() or {}
+    image_url = data.get('url')
+    file_path = data.get('path')
+    
+    if not image_url or not file_path:
+        return jsonify({'error': 'Missing url or path parameter'}), 400
+    
+    try:
+        full_path = safe_path(file_path)
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # 1. Fetch image using requests (handles user-agent and connection pool)
+        headers = {'User-Agent': f'metadata-docker/{APP_VERSION}'}
+        response = requests.get(image_url, headers=headers, timeout=10)
+        response.raise_for_status() # Raises HTTPError for 4xx/5xx responses
+        
+        # 2. Extract image bytes and auto-detect MIME type directly from response
+        image_data = response.content
+        mime_type = response.headers.get('Content-Type', 'image/jpeg').split(';')[0]
+
+        # 3. Apply coverart
+        success = update_file_picture(full_path, image_data, mime_type)
+        
+        if success:
+            metadata = extract_metadata(full_path)
+            return jsonify({
+                'success': True, 
+                'message': f'Updated cover art for {os.path.basename(file_path)}',
+                'picture': metadata.get('picture')
+            })
+        return jsonify({'error': 'Failed to update cover art'}), 500
+            
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Failed to download image: {str(e)}'}), 502
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # POST /api/metadata/picture/folder
 # Update cover art for all files in a folder
 @app.route('/api/metadata/picture/folder', methods=['POST'])

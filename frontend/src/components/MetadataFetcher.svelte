@@ -416,40 +416,37 @@
   }
 
   async function uploadCoverArt(filePath, pictureData) {
-    let blob;
+    // 1. If it's a Base64 data URL, convert and upload as file
     if (pictureData.startsWith("data:")) {
-      // Base64 data URL
       const response = await fetch(pictureData);
-      blob = await response.blob();
-    } else if (isImageUrl(pictureData)) {
-      // Regular image URL – fetch it
-      try {
-        const response = await fetch(pictureData);
-        if (!response.ok)
-          throw new Error(`Failed to fetch image: ${response.status}`);
-        blob = await response.blob();
-      } catch (e) {
-        toast.error(`Could not download cover art: ${e.message}`);
-        return;
-      }
-    } else {
-      toast.error("Unsupported image format");
+      const blob = await response.blob();
+      const file = new File([blob], "cover.jpg", {
+        type: blob.type || "image/jpeg",
+      });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("path", filePath);
+
+      const uploadRes = await fetch("/api/metadata/picture/file", {
+        method: "POST",
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error("Failed to update cover art");
       return;
     }
-    const file = new File([blob], "cover.jpg", {
-      type: blob.type || "image/jpeg",
-    });
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("path", filePath);
-    const uploadRes = await fetch("/api/metadata/picture/file", {
-      method: "POST",
-      body: formData,
-    });
-    if (!uploadRes.ok) {
-      const error = await uploadRes.text();
-      throw new Error(`Failed to update cover art: ${error}`);
+
+    // 2. If it's a remote URL, bypass browser fetch and let server handle download
+    if (isImageUrl(pictureData)) {
+      const uploadRes = await fetch("/api/metadata/picture/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: filePath, url: pictureData }),
+      });
+      if (!uploadRes.ok) throw new Error("Failed to update cover art from URL");
+      return;
     }
+
+    toast.error("Unsupported image format");
   }
 
   function displayValue(value) {
