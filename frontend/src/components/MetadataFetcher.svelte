@@ -937,6 +937,7 @@
     gap: 8px;
     padding: 4px 0;
     font-size: 14px;
+    align-items: flex-start;
   }
   .field-item label {
     display: flex;
