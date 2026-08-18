@@ -34,6 +34,28 @@
 
   let globalFieldsExpanded = $state(true);
 
+  // Presets for global field selection
+  const PRESETS = [
+    { label: "All", fields: [] },
+    { label: "None", fields: [] },
+    {
+      label: "Main fields",
+      fields: [
+        "title",
+        "album",
+        "artist",
+        "albumArtist",
+        "track",
+        "disk",
+        "year",
+        "genre",
+        "picture",
+      ],
+    },
+    { label: "Coverart only", fields: ["picture"] },
+    { label: "Lyrics only", fields: ["lyrics", "unsyncedLyrics"] },
+  ];
+
   const placeholderImage =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23e0e0e0'/%3E%3Ccircle cx='20' cy='20' r='12' fill='none' stroke='%23aaaaaa' stroke-width='2'/%3E%3Ccircle cx='20' cy='20' r='4' fill='%23aaaaaa'/%3E%3Ccircle cx='20' cy='20' r='1.5' fill='%23e0e0e0'/%3E%3C/svg%3E";
 
@@ -492,6 +514,54 @@
   function toggleGlobalFields() {
     globalFieldsExpanded = !globalFieldsExpanded;
   }
+
+  function applyPreset(preset) {
+    let fields;
+    if (preset.label === "All") {
+      fields = new Set(allFields);
+    } else if (preset.label === "None") {
+      fields = new Set();
+    } else {
+      // Only include fields that actually exist in the fetched tracks
+      fields = new Set(preset.fields.filter((f) => allFields.has(f)));
+    }
+    globalSelectedFields = fields;
+    // Apply to all file cards
+    for (let i = 0; i < fileFieldSets.length; i++) {
+      fileFieldSets[i] = new Set(globalSelectedFields);
+    }
+    fileFieldSets = [...fileFieldSets];
+  }
+
+  function applySongPreset(preset) {
+    if (!fetchedSong) return;
+    let fields;
+    if (preset.label === "All") {
+      fields = new Set(Object.keys(fetchedSong));
+    } else if (preset.label === "None") {
+      fields = new Set();
+    } else {
+      // Only include fields that exist on the fetched song
+      fields = new Set(
+        preset.fields.filter((f) => fetchedSong.hasOwnProperty(f)),
+      );
+    }
+    songFields = fields;
+  }
+
+  function applySingleTrackPreset(preset) {
+    const track = fetchedTracks[selectedTrackIndex];
+    if (!track) return;
+    let fields;
+    if (preset.label === "All") {
+      fields = new Set(Object.keys(track));
+    } else if (preset.label === "None") {
+      fields = new Set();
+    } else {
+      fields = new Set(preset.fields.filter((f) => track.hasOwnProperty(f)));
+    }
+    singleFileFields = fields;
+  }
 </script>
 
 {#if isOpen}
@@ -587,6 +657,16 @@
         {:else if mode === "song" && fetchedSong}
           <div class="metadata-preview">
             <h3>Song Metadata</h3>
+            <div class="presets">
+              {#each PRESETS as preset}
+                <button
+                  class="preset-btn"
+                  onclick={() => applySongPreset(preset)}
+                >
+                  {preset.label}
+                </button>
+              {/each}
+            </div>
             <div class="fields-list">
               {#each Object.entries(fetchedSong) as [key, value]}
                 <div class="field-item">
@@ -620,6 +700,16 @@
                   >
                 </div>
                 {#if globalFieldsExpanded}
+                  <div class="presets">
+                    {#each PRESETS as preset}
+                      <button
+                        class="preset-btn"
+                        onclick={() => applyPreset(preset)}
+                      >
+                        {preset.label}
+                      </button>
+                    {/each}
+                  </div>
                   <div class="fields-list">
                     {#each Array.from(allFields) as field}
                       <div class="field-item">
@@ -724,6 +814,16 @@
             </div>
             <div class="metadata-preview">
               <h3>Track Metadata</h3>
+              <div class="presets">
+                {#each PRESETS as preset}
+                  <button
+                    class="preset-btn"
+                    onclick={() => applySingleTrackPreset(preset)}
+                  >
+                    {preset.label}
+                  </button>
+                {/each}
+              </div>
               <div class="fields-list">
                 {#each Object.entries(fetchedTracks[selectedTrackIndex]) as [key, value]}
                   <div class="field-item">
@@ -1125,6 +1225,26 @@
     color: #888;
   }
 
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+  }
+  .preset-btn {
+    background: #e8e8e8;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .preset-btn:hover {
+    background: #d0d0d0;
+  }
+
   /* Dark mode */
   :global(body.dark) .modal-container {
     background: #2d2d2d;
@@ -1220,5 +1340,13 @@
   }
   :global(body.dark) .toggle-icon {
     color: #aaa;
+  }
+  :global(body.dark) .preset-btn {
+    background: #3d3d3d;
+    border-color: #555;
+    color: #e0e0e0;
+  }
+  :global(body.dark) .preset-btn:hover {
+    background: #555;
   }
 </style>
