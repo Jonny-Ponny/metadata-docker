@@ -1301,6 +1301,14 @@ def apply_renaming_scheme():
             result = re.sub(r'[<>:"/\\|?*]', '', result)
             
             return result
+
+        def _same_path(path1, path2):
+            if os.path.abspath(path1) == os.path.abspath(path2):
+                return True
+            try:
+                return os.path.exists(path1) and os.path.exists(path2) and os.path.samefile(path1, path2)
+            except OSError:
+                return False
         
         if is_folder:
             # Handle folder rename
@@ -1335,6 +1343,14 @@ def apply_renaming_scheme():
             # Rename folder
             parent = os.path.dirname(full_path)
             new_path = os.path.join(parent, new_name)
+
+            # If it already matches the scheme, do not rename
+            if _same_path(new_path, full_path):
+                return jsonify({
+                    'success': True,
+                    'newPath': os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/'),
+                    'newName': os.path.basename(full_path)
+                })
             
             # Handle duplicates
             if os.path.exists(new_path):
@@ -1381,7 +1397,15 @@ def apply_renaming_scheme():
             # Rename file
             parent = os.path.dirname(full_path)
             new_path = os.path.join(parent, new_name)
-            
+
+            # If it already matches the scheme, do not rename
+            if _same_path(new_path, full_path):
+                return jsonify({
+                    'success': True,
+                    'newPath': os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/'),
+                    'newName': os.path.basename(full_path)
+                })
+
             # Handle duplicates
             if os.path.exists(new_path):
                 base, ext = os.path.splitext(new_path)
@@ -1389,7 +1413,7 @@ def apply_renaming_scheme():
                 while os.path.exists(new_path):
                     new_path = f'{base} ({counter}){ext}'
                     counter += 1
-            
+
             os.rename(full_path, new_path)
             
             log_info(f"Smart renamed file {full_path} to {new_path}")
