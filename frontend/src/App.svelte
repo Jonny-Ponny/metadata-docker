@@ -104,6 +104,8 @@
 
   let showFolderOverview = $state(false);
 
+  let isTextDrag = $state(false);
+
   function collectAudioFilesRecursively(node, basePath = node.path) {
     const result = [];
     const limit = 500; // safety limit
@@ -176,6 +178,7 @@
 
   // ========== DRAG AND DROP HANDLERS ==========
   function handleDragEnter(e) {
+    if (isTextDrag) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -189,12 +192,17 @@
   }
 
   function handleDragOver(e) {
+    if (isTextDrag) return;
     e.preventDefault();
     e.stopPropagation();
 
     // Determine if this is an internal drag (our custom data type present)
     const types = e.dataTransfer.types;
     const isInternal = types.includes("application/x-music-player-item");
+    const hasFiles = types.includes("Files");
+
+    // Ignore anything that is neither an internal move nor a file upload
+    if (!isInternal && !hasFiles) return;
 
     // Set drop effect: move for internal, copy for external uploads
     e.dataTransfer.dropEffect = isInternal ? "move" : "copy";
@@ -234,6 +242,7 @@
   }
 
   function handleDragLeave(e) {
+    if (isTextDrag) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -259,8 +268,14 @@
   }
 
   function handleDrop(e) {
+    if (isTextDrag) return;
     e.preventDefault();
     e.stopPropagation();
+
+    const types = e.dataTransfer.types;
+    const isInternal = types.includes("application/x-music-player-item");
+    const hasFiles = types.includes("Files");
+    if (!isInternal && !hasFiles) return;
 
     // Clear the expansion timer
     if (hoverTimer) {
@@ -1025,6 +1040,21 @@
     }
   }
 
+  function handleDocumentDragStart(e) {
+    const el = e.target;
+    isTextDrag = !!(
+      el &&
+      (el.tagName === "INPUT" ||
+        el.tagName === "TEXTAREA" ||
+        el.isContentEditable ||
+        (el.closest && el.closest('input, textarea, [contenteditable="true"]')))
+    );
+  }
+
+  function handleDocumentDragEnd() {
+    isTextDrag = false;
+  }
+
   onMount(() => {
     initAuth();
 
@@ -1052,9 +1082,14 @@
 
     checkVersion();
 
+    document.addEventListener("dragstart", handleDocumentDragStart);
+    document.addEventListener("dragend", handleDocumentDragEnd);
+
     return () => {
       window.fetch = originalFetch; // Restore original fetch
       window.removeEventListener("refreshFileTree", loadFileTree);
+      document.removeEventListener("dragstart", handleDocumentDragStart);
+      document.removeEventListener("dragend", handleDocumentDragEnd);
     };
   });
 
