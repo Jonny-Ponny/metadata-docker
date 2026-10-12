@@ -1,5 +1,7 @@
 # ---- Stage 1: Build the Svelte frontend ----
-FROM node:current-alpine3.23 AS frontend-builder
+# FROM node:current-alpine3.23 AS frontend-builder
+# Changed for armv7 support
+FROM node:20-bookworm-slim AS frontend-builder
 WORKDIR /app/frontend
 
 # Copy package files and install dependencies
