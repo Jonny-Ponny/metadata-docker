@@ -1211,10 +1211,14 @@
                                         </svg>
                                     </button>
                                     <!-- Folder button -->
-                                    <button
-                                        class="icon-btn"
-                                        onclick={() =>
+                                    <HoldButton
+                                        variant="icon"
+                                        duration={800}
+                                        onConfirm={() =>
                                             applyToFolder(field, value)}
+                                        title={applyToSubfolders
+                                            ? "Hold to apply to all files in folder (including subfolders)"
+                                            : "Hold to apply to all files in folder (same level only)"}
                                     >
                                         <!-- Folder icon SVG -->
                                         <svg
@@ -1230,7 +1234,7 @@
                                                 fill-opacity="0.9"
                                             />
                                         </svg>
-                                    </button>
+                                    </HoldButton>
                                 </div>
                             {/if}
                         </div>
