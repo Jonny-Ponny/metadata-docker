@@ -32,7 +32,7 @@ Using docker-compose.yml:
 ```yaml
 services:
   app:
-    image: oneandonlyjonnyponny/metadata-docker:latest
+    image: ghcr.io/jonny-ponny/metadata-docker:latest
     container_name: metadata-docker
     ports:
       - "8888:5000"                                 # Change 8888 to preferred port
