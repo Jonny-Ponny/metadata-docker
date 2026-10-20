@@ -47,7 +47,7 @@
         "albumArtist",
         "track",
         "disk",
-        "year",
+        "date",
         "genre",
         "picture",
       ],
@@ -632,7 +632,9 @@
                     <strong>{result.title}</strong> - {result.artist}
                   {:else}
                     <strong>{result.title}</strong> - {result.artist}
-                    {result.year ? `(${result.year})` : ""}
+                    {result.date || result.year
+                      ? `(${result.date || result.year})`
+                      : ""}
                   {/if}
                 </div>
                 {#if result.coverart && (result.coverart.startsWith("data:image") || isImageUrl(result.coverart))}

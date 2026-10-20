@@ -10,7 +10,7 @@ export const ALLOWED_VARIABLES = {
     'ALBUM': 'album',
     'ARTIST': 'artist',
     'ALBUMARTIST': 'albumArtist',
-    'YYYY': 'year',                  // Will extract just the year from date
+    'YYYY': 'date',                  // Will extract just the year from date
     'TRACK': 'track',
     'DISK': 'disk',                  // Disk number
     'RELEASETYPE': 'releaseType',    // Release type (album, ep, etc.)
@@ -24,7 +24,7 @@ export const OVERVIEW_FIELD_NAMES = [
     'albumArtist',
     'track',
     'disk',
-    'year',
+    'date',
     'genre',
     'unsyncedLyrics',
     'lyrics',
@@ -58,16 +58,21 @@ function loadSettings() {
         const saved = localStorage.getItem("appSettings");
         if (saved) {
             const parsed = JSON.parse(saved);
+            // Migrate the old "year" overview field to the renamed "date" field.
+            if (Array.isArray(parsed.overviewFields)) {
+                parsed.overviewFields = [
+                    ...new Set(
+                        parsed.overviewFields.map((field) =>
+                            field === "year" ? "date" : field,
+                        ),
+                    ),
+                ];
+            }
             // Merge with defaults to ensure all fields exist
             return {
                 ...defaultSettings,
                 ...parsed
             };
-            // Ensure all color keys are present
-            for (const key of Object.keys(defaultColors)) {
-                if (!(key in merged)) merged[key] = defaultColors[key];
-            }
-            return merged;
         }
     } catch (e) {
         console.error("Failed to load settings:", e);

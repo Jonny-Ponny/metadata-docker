@@ -1229,7 +1229,7 @@ def apply_renaming_scheme():
             'ALBUM': 'album',
             'ARTIST': 'artist',
             'ALBUMARTIST': 'albumArtist',
-            'YYYY': 'year',  # Will extract just the year
+            'YYYY': 'date',  # Will extract just the year from date
             'TRACK': 'track',
             'DISK': 'disk',
             'RELEASETYPE': 'releaseType',
@@ -1250,8 +1250,8 @@ def apply_renaming_scheme():
             # First, check if all variables in the scheme have values
             variables_in_scheme = re.findall(r'\[([^\[\]]+)\]', scheme_str)
             
-            # Process year value once
-            extracted_year = extract_year_regex(metadata.get('year'))
+            # Process date value once
+            extracted_year = extract_year_regex(metadata.get('date'))
             
             missing_fields = []
             for var in variables_in_scheme:
@@ -1260,7 +1260,7 @@ def apply_renaming_scheme():
                 
                 field = variable_map[var]
                 
-                if field == 'year':
+                if field == 'date':
                     has_value = extracted_year is not None
                 else:
                     has_value = bool(metadata.get(field))
@@ -1274,7 +1274,7 @@ def apply_renaming_scheme():
             # Replace each variable with its value
             for var, field in variable_map.items():
                 value = ''
-                if field == 'year':
+                if field == 'date':
                     value = extracted_year
                 elif field == 'track' and metadata.get('track'):
                     track = str(metadata['track']).split('/')[0]
@@ -1569,6 +1569,16 @@ def save_text_file():
 
 
 
+# Addons historically returned release dates under "year". The main metadata
+# field is now "date", so keep old addons working without writing a YEAR tag.
+def _normalize_addon_metadata(metadata):
+    if not isinstance(metadata, dict):
+        return metadata
+    normalized = dict(metadata)
+    if 'year' in normalized and not normalized.get('date'):
+        normalized['date'] = normalized.pop('year')
+    return normalized
+
 # Addon endpoints
 @app.route('/api/addons', methods=['GET'])
 @token_required
@@ -1619,6 +1629,7 @@ def search_songs(fetcher_id):
     try:
         instance = fetcher_cls()
         results = instance.search_songs(query, limit)
+        results = [_normalize_addon_metadata(result) for result in results]
         return jsonify({"success": True, "results": results})
     except NotImplementedError:
         return jsonify({"success": False, "error": "Song search not supported by this fetcher"}), 400
@@ -1635,7 +1646,7 @@ def fetch_song_metadata(fetcher_id, song_id):
     try:
         instance = fetcher_cls()
         metadata = instance.fetch_song_metadata(song_id)
-        return jsonify({"success": True, "metadata": metadata})
+        return jsonify({"success": True, "metadata": _normalize_addon_metadata(metadata)})
     except NotImplementedError:
         return jsonify({"success": False, "error": "Fetch song metadata not supported"}), 400
     except Exception as e:
@@ -1659,6 +1670,7 @@ def search_albums(fetcher_id):
     try:
         instance = fetcher_cls()
         results = instance.search_albums(query, limit)
+        results = [_normalize_addon_metadata(result) for result in results]
         return jsonify({"success": True, "results": results})
     except NotImplementedError:
         return jsonify({"success": False, "error": "Album search not supported by this fetcher"}), 400
@@ -1675,6 +1687,10 @@ def fetch_album_metadata(fetcher_id, album_id):
     try:
         instance = fetcher_cls()
         metadata = instance.fetch_album_metadata(album_id)
+        if isinstance(metadata, list):
+            metadata = [_normalize_addon_metadata(track) for track in metadata]
+        else:
+            metadata = _normalize_addon_metadata(metadata)
         return jsonify({"success": True, "metadata": metadata})
     except NotImplementedError:
         return jsonify({"success": False, "error": "Fetch album metadata not supported"}), 400

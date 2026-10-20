@@ -34,3 +34,4 @@
 34. Support more audio file formats
 35. ~~Key binds for LRC editor(quick actions)~~
 36. ~~CSS variables~~
+37. ~~year -> date, rename main field~~

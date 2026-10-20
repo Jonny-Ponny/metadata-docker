@@ -31,11 +31,18 @@
         album: "悪巫山戯",
         artist: "鬱P",
         albumArtist: "鬱P",
-        year: "2013",
+        date: "2013-08-07",
         track: "12",
         disk: "1",
         releaseType: "Album",
     };
+
+    function extractYear(value) {
+        const match = String(value ?? "").match(
+            /(?<!\d)(?:18|19|20)\d{2}(?!\d)/,
+        );
+        return match ? match[0] : "";
+    }
 
     // Generate preview from scheme
     function getPreview(scheme, isFile = false) {
@@ -48,7 +55,7 @@
         preview = preview.replace(/\[ALBUM\]/g, mockMetadata.album);
         preview = preview.replace(/\[ARTIST\]/g, mockMetadata.artist);
         preview = preview.replace(/\[ALBUMARTIST\]/g, mockMetadata.albumArtist);
-        preview = preview.replace(/\[YYYY\]/g, mockMetadata.year);
+        preview = preview.replace(/\[YYYY\]/g, extractYear(mockMetadata.date));
         preview = preview.replace(/\[TRACK\]/g, mockMetadata.track);
         preview = preview.replace(
             /\[DISK\]/g,

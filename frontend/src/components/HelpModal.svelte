@@ -348,10 +348,13 @@
                                         ></tr
                                     >
                                     <tr
-                                        ><td
-                                            ><code>TYER</code> /
-                                            <code>TDRC</code></td
-                                        ><td>Year/Date (YYYY or YYYY-MM-DD)</td
+                                        ><td><code>TDRC</code></td><td
+                                            >Date (YYYY or YYYY-MM-DD)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>TYER</code></td><td
+                                            >Year</td
                                         ></tr
                                     >
                                     <tr
@@ -567,10 +570,13 @@
                                         ></tr
                                     >
                                     <tr
-                                        ><td
-                                            ><code>DATE</code> /
-                                            <code>YEAR</code></td
-                                        ><td>Year/Date (YYYY or YYYY-MM-DD)</td
+                                        ><td><code>DATE</code></td><td
+                                            >Date (YYYY or YYYY-MM-DD)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>YEAR</code></td><td
+                                            >Year</td
                                         ></tr
                                     >
                                     <tr
@@ -748,7 +754,9 @@
                         </div>
 
                         <p class="note">
-                            <strong>Note:</strong> You can add custom fields using
+                            <strong>Note:</strong> The main <strong>Date</strong> field
+                            maps to <code>TDRC</code> for MP3 and <code>DATE</code>
+                            for FLAC. You can add custom fields using
                             the "+ Add new field" button. These will be saved as
                             appropriate tags based on the file format.
                         </p>

@@ -15,7 +15,7 @@ FIELD_MAPPING = {
         'albumArtist': 'TPE2',
         'track': 'TRCK',
         'disk': 'TPOS',
-        'year': 'TDRC',
+        'date': 'TDRC',
         'genre': 'TCON',
         'comment': 'COMM',
         'composer': 'TCOM',
@@ -30,7 +30,7 @@ FIELD_MAPPING = {
         'albumArtist': 'ALBUMARTIST',
         'track': 'TRACKNUMBER',
         'disk': 'DISCNUMBER',
-        'year': 'DATE',
+        'date': 'DATE',
         'genre': 'GENRE',
         'comment': 'COMMENT',
         'description': 'DESCRIPTION',
@@ -401,7 +401,7 @@ def delete_mp3_field(file_path, field):
             tags.delall('USLT')
         elif field == 'lyrics':
             tags.delall('SYLT')
-        elif field == 'year':
+        elif field == 'date':
             tags.delall('TDRC')
         elif field in FIELD_MAPPING['mp3']:
             frame_id = FIELD_MAPPING['mp3'][field]

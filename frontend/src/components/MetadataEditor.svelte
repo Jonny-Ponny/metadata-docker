@@ -15,7 +15,7 @@
         artist: "",
         track: "",
         disk: "",
-        year: "",
+        date: "",
         genre: "",
         comment: "",
         description: "",
@@ -73,7 +73,7 @@
         "albumArtist",
         "track",
         "disk",
-        "year",
+        "date",
         "genre",
     ];
 
@@ -202,7 +202,7 @@
                 "albumArtist",
                 "track",
                 "disk",
-                "year",
+                "date",
                 "genre",
             ];
             const specialFields = [
@@ -253,7 +253,7 @@
                 albumArtist: data.albumArtist || "",
                 track: data.track?.toString() || "",
                 disk: data.disk?.toString() || "",
-                year: data.year?.toString() || "",
+                date: data.date?.toString() || "",
                 genre: data.genre || "",
                 comment: data.comment || "",
                 description: data.description || "",
@@ -274,7 +274,7 @@
                 albumArtist: data.albumArtist || "",
                 track: data.track?.toString() || "",
                 disk: data.disk?.toString() || "",
-                year: data.year?.toString() || "",
+                date: data.date?.toString() || "",
                 genre: data.genre || "",
                 comment: data.comment || "",
                 description: data.description || "",

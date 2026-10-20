@@ -107,7 +107,7 @@ def extract_metadata(filepath):
 
     result = {
         'title': '', 'album': '', 'artist': '', 'albumArtist': '', 'track': '', 'disk': '',
-        'year': '', 'genre': '', 'comment': '', 'description': '',
+        'date': '', 'genre': '', 'comment': '', 'description': '',
         'lyrics': '', 'unsyncedLyrics': '', 'composer': '', 'publisher': '', 'releaseType': '',
         'customFields': []          # list of {name, value} for truly unknown tags
     }
@@ -120,7 +120,7 @@ def extract_metadata(filepath):
         'albumArtist': ['TPE2', 'ALBUMARTIST'],
         'track': ['TRCK', 'TRACKNUMBER'],
         'disk': ['TPOS', 'DISCNUMBER'],
-        'year': ['TDRC', 'DATE'],
+        'date': ['TDRC', 'DATE'],
         'genre': ['TCON', 'GENRE'],
         'comment': ['COMM', 'COMMENT'],
         'description': ['DESCRIPTION'],

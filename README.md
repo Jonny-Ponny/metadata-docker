@@ -127,6 +127,8 @@ Implement any of the four methods - you only need to override the ones you need:
 
 Use environment variables for API keys - read them via ```os.getenv("MY_API_KEY")```. Key should be supplied by user in ```docker-compose.yml```.
 
+Return release dates under the ```date``` key (mapped to TDRC for MP3 and DATE for FLAC). For backwards compatibility, addons returning ```year``` have that value treated as ```date```.
+
 Add dependencies by creating a ```*_requirements.txt``` file next to your plugin or in a subfolder listing the required PyPI packages.
 
 For example check [MusicBrainz](https://github.com/Jonny-Ponny/md-musicbrainz-addon), [VocaDB](https://github.com/Jonny-Ponny/md-vocadb-addon), [LrcLib](https://github.com/Jonny-Ponny/md-lrclib-addon) or [Genius](https://github.com/Jonny-Ponny/md-genius-addon) addons.
