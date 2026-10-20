@@ -21,8 +21,8 @@ export const FIELD_METADATA = {
     label: 'Track Number',
     description: 'The track number on the album',
   },
-  disk: {
-    label: 'Disk',
+  diskNumber: {
+    label: 'Disk Number',
     description: 'The disc number',
   },
   date: {

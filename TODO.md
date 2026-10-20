@@ -34,7 +34,7 @@
 34. Support more audio file formats
 35. ~~Key binds for LRC editor(quick actions)~~
 36. ~~CSS variables~~
-38. Resolve main fields collisions
+38. ~~Resolve main fields collisions~~
 39. Fix dark mode buttons css
 40. MetadataFetcher multiline for long filenames
 41. Download notifications

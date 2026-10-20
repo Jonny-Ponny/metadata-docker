@@ -12,7 +12,7 @@ export const ALLOWED_VARIABLES = {
     'ALBUMARTIST': 'albumArtist',
     'YYYY': 'date',                  // Will extract just the year from date
     'TRACK': 'trackNumber',
-    'DISK': 'disk',                  // Disk number
+    'DISK': 'diskNumber',            // Disk number
     'RELEASETYPE': 'releaseType',    // Release type (album, ep, etc.)
 };
 
@@ -23,7 +23,7 @@ export const OVERVIEW_FIELD_NAMES = [
     'artist',
     'albumArtist',
     'trackNumber',
-    'disk',
+    'diskNumber',
     'date',
     'genre',
     'unsyncedLyrics',
@@ -60,7 +60,11 @@ function loadSettings() {
             const parsed = JSON.parse(saved);
             // Migrate old overview field names to the renamed fields.
             if (Array.isArray(parsed.overviewFields)) {
-                const renames = { year: "date", track: "trackNumber" };
+                const renames = {
+                    year: "date",
+                    track: "trackNumber",
+                    disk: "diskNumber",
+                };
                 parsed.overviewFields = [
                     ...new Set(
                         parsed.overviewFields.map(

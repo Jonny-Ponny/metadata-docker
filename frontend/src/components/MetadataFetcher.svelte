@@ -46,7 +46,7 @@
         "artist",
         "albumArtist",
         "trackNumber",
-        "disk",
+        "diskNumber",
         "date",
         "genre",
         "picture",
