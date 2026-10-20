@@ -1336,8 +1336,28 @@
     :global(body.dark) .color-picker-item .color-label {
         color: #bbb;
     }
+
+    :global(body.dark) .variable-tag {
+        border-color: var(--color-primary-dark);
+        color: var(--color-primary-dark);
+    }
+
+    :global(body.dark) .variable-tag:hover {
+        background: var(--color-primary-transparent-dark);
+    }
+
+    :global(body.dark) .save-btn {
+        background: var(--color-primary-dark);
+        color: #1e1e1e;
+    }
+
+    :global(body.dark) .save-btn:hover {
+        background: var(--color-primary-dark-focus);
+    }
+
     :global(body.dark) .reset-colors-btn {
         background: var(--color-primary-dark);
+        color: #1e1e1e;
     }
     :global(body.dark) .reset-colors-btn:hover {
         background: var(--color-primary-dark-focus);

@@ -2312,6 +2312,19 @@
         border-color: #444;
     }
 
+    :global(body.dark) .collapse-toggle {
+        color: var(--color-primary-dark);
+    }
+
+    :global(body.dark) .add-field-btn {
+        border-color: var(--color-primary-dark);
+        color: var(--color-primary-dark);
+    }
+
+    :global(body.dark) .add-field-btn:hover {
+        background: var(--color-primary-transparent-dark);
+    }
+
     :global(body.dark) .action-btn {
         border-color: var(--color-primary-dark);
         color: var(--color-primary-dark);
@@ -2360,7 +2373,7 @@
 
     :global(body.dark) .modal-close-btn:hover {
         background: rgba(0, 0, 0, 0.1);
-        color: var(--color-primary);
+        color: var(--color-primary-dark);
         border-color: rgba(255, 255, 255, 0.4);
         transform: scale(1.05);
     }

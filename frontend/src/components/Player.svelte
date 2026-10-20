@@ -590,12 +590,12 @@
     }
 
     :global(body.dark) .play-btn {
-        background: var(--color-primary);
+        background: var(--color-primary-dark);
         color: #1e1e1e; /* Dark text on orange button for contrast */
     }
 
     :global(body.dark) .play-btn:hover:not(:disabled) {
-        background: var(--color-primary-dark);
+        background: var(--color-primary-dark-focus);
     }
 
     :global(body.dark) .play-btn:disabled {

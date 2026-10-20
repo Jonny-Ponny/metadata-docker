@@ -435,7 +435,7 @@
 
     :global(body.dark) .modal-close-btn:hover {
         background: rgba(0, 0, 0, 0.1);
-        color: var(--color-primary);
+        color: var(--color-primary-dark);
         transform: scale(1.05);
         border-color: rgba(255, 255, 255, 0.4);
     }

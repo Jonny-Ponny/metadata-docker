@@ -266,4 +266,11 @@
     :global(body.dark) .error-note {
         color: #aaa;
     }
+    :global(body.dark) .refresh-btn {
+        border-color: var(--color-primary-dark);
+        color: var(--color-primary-dark);
+    }
+    :global(body.dark) .refresh-btn:hover {
+        background: var(--color-primary-transparent-dark);
+    }
 </style>

@@ -247,6 +247,15 @@ body {
   background: var(--color-primary-focus);
 }
 
+body.dark .retry-btn {
+  background: var(--color-primary-dark);
+  color: #1e1e1e;
+}
+
+body.dark .retry-btn:hover {
+  background: var(--color-primary-dark-focus);
+}
+
 /* Drag and drop styles */
 .container.dragging {
   cursor: copy !important;
@@ -550,13 +559,13 @@ body.dark .status {
 }
 
 body.dark .theme-toggle {
-  background: var(--color-primary);
+  background: var(--color-primary-dark);
   color: #1e1e1e;
   min-width: 70px;
 }
 
 body.dark .theme-toggle:hover {
-  background: var(--color-primary-dark);
+  background: var(--color-primary-dark-focus);
 }
 
 body.dark .help-toggle {

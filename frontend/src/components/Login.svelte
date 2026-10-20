@@ -223,6 +223,18 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  /* Dark mode buttons use the dark primary accent pair */
+  .dark .theme-toggle,
+  .dark button[type="submit"] {
+    background: var(--color-primary-dark);
+    color: #1e1e1e;
+  }
+
+  .dark .theme-toggle:hover,
+  .dark button[type="submit"]:hover:not(:disabled) {
+    background: var(--color-primary-dark-focus);
+  }
   
   .error-message {
     background: #fee;
