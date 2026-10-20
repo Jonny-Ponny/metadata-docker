@@ -45,7 +45,7 @@
         "album",
         "artist",
         "albumArtist",
-        "track",
+        "trackNumber",
         "disk",
         "date",
         "genre",
@@ -280,6 +280,10 @@
     }
   }
 
+  function getTrackNumber(track) {
+    return track.trackNumber ?? track.track;
+  }
+
   function autoMatchFilesToTracks(tracks) {
     if (!folderFiles.length || !tracks.length) {
       fileAssignments = [];
@@ -289,8 +293,12 @@
       a.name.localeCompare(b.name, undefined, { numeric: true }),
     );
     const sortedTracks = [...tracks].sort((a, b) => {
-      const aTrack = a.track ? parseInt(a.track) : Infinity;
-      const bTrack = b.track ? parseInt(b.track) : Infinity;
+      const aTrack = getTrackNumber(a)
+        ? parseInt(getTrackNumber(a))
+        : Infinity;
+      const bTrack = getTrackNumber(b)
+        ? parseInt(getTrackNumber(b))
+        : Infinity;
       return aTrack - bTrack;
     });
     const mapping = folderFiles.map((file, idx) => ({
@@ -758,7 +766,9 @@
                         <option value="">Skip</option>
                         {#each fetchedTracks as t, idx}
                           <option value={idx}>
-                            {t.track ? `Track ${t.track}: ` : ""}{t.title ||
+                            {getTrackNumber(t)
+                              ? `Track ${getTrackNumber(t)}: `
+                              : ""}{t.title ||
                               "Untitled"}
                           </option>
                         {/each}
@@ -806,7 +816,9 @@
               <select bind:value={selectedTrackIndex}>
                 {#each fetchedTracks as track, idx}
                   <option value={idx}>
-                    {track.track ? `Track ${track.track}: ` : ""}{track.title ||
+                    {getTrackNumber(track)
+                      ? `Track ${getTrackNumber(track)}: `
+                      : ""}{track.title ||
                       "Untitled"}
                   </option>
                 {/each}

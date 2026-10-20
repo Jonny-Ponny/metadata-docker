@@ -3,7 +3,7 @@
     import HoldButton from "./HoldButton.svelte";
     import LyricsEditorModal from "./LRCEditor.svelte";
 
-    import { toast, processEditedLyrics } from "../utils/index.js";
+    import { toast, processEditedLyrics, getFieldLabel } from "../utils/index.js";
 
     // Props
     let { filePath } = $props();
@@ -13,7 +13,7 @@
         title: "",
         album: "",
         artist: "",
-        track: "",
+        trackNumber: "",
         disk: "",
         date: "",
         genre: "",
@@ -71,7 +71,7 @@
         "album",
         "artist",
         "albumArtist",
-        "track",
+        "trackNumber",
         "disk",
         "date",
         "genre",
@@ -200,7 +200,7 @@
                 "album",
                 "artist",
                 "albumArtist",
-                "track",
+                "trackNumber",
                 "disk",
                 "date",
                 "genre",
@@ -251,7 +251,7 @@
                 album: data.album || "",
                 artist: data.artist || "",
                 albumArtist: data.albumArtist || "",
-                track: data.track?.toString() || "",
+                trackNumber: data.trackNumber?.toString() || "",
                 disk: data.disk?.toString() || "",
                 date: data.date?.toString() || "",
                 genre: data.genre || "",
@@ -272,7 +272,7 @@
                 album: data.album || "",
                 artist: data.artist || "",
                 albumArtist: data.albumArtist || "",
-                track: data.track?.toString() || "",
+                trackNumber: data.trackNumber?.toString() || "",
                 disk: data.disk?.toString() || "",
                 date: data.date?.toString() || "",
                 genre: data.genre || "",
@@ -981,7 +981,7 @@
                 class:dirty={isDirty}
             >
                 <label for={field}>
-                    {field.charAt(0).toUpperCase() + field.slice(1)}
+                    {getFieldLabel(field)}
                 </label>
                 <div class="input-wrapper">
                     <input

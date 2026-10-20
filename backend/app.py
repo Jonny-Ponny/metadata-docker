@@ -1230,7 +1230,7 @@ def apply_renaming_scheme():
             'ARTIST': 'artist',
             'ALBUMARTIST': 'albumArtist',
             'YYYY': 'date',  # Will extract just the year from date
-            'TRACK': 'track',
+            'TRACK': 'trackNumber',
             'DISK': 'disk',
             'RELEASETYPE': 'releaseType',
         }
@@ -1276,8 +1276,8 @@ def apply_renaming_scheme():
                 value = ''
                 if field == 'date':
                     value = extracted_year
-                elif field == 'track' and metadata.get('track'):
-                    track = str(metadata['track']).split('/')[0]
+                elif field == 'trackNumber' and metadata.get('trackNumber'):
+                    track = str(metadata['trackNumber']).split('/')[0]
                     value = track.zfill(2)
                 elif field == 'disk' and metadata.get('disk'):
                     disk = str(metadata['disk']).split('/')[0]
@@ -1569,14 +1569,16 @@ def save_text_file():
 
 
 
-# Addons historically returned release dates under "year". The main metadata
-# field is now "date", so keep old addons working without writing a YEAR tag.
+# Addons historically returned release dates under "year" and track numbers
+# under "track". The main fields are now "date" and "trackNumber", so keep old
+# addons working without writing YEAR/TRACK tags.
 def _normalize_addon_metadata(metadata):
     if not isinstance(metadata, dict):
         return metadata
     normalized = dict(metadata)
-    if 'year' in normalized and not normalized.get('date'):
-        normalized['date'] = normalized.pop('year')
+    for legacy, current in (('year', 'date'), ('track', 'trackNumber')):
+        if legacy in normalized and not normalized.get(current):
+            normalized[current] = normalized.pop(legacy)
     return normalized
 
 # Addon endpoints

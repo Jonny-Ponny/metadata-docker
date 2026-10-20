@@ -32,7 +32,7 @@
         artist: "鬱P",
         albumArtist: "鬱P",
         date: "2013-08-07",
-        track: "12",
+        trackNumber: "12",
         disk: "1",
         releaseType: "Album",
     };
@@ -56,7 +56,7 @@
         preview = preview.replace(/\[ARTIST\]/g, mockMetadata.artist);
         preview = preview.replace(/\[ALBUMARTIST\]/g, mockMetadata.albumArtist);
         preview = preview.replace(/\[YYYY\]/g, extractYear(mockMetadata.date));
-        preview = preview.replace(/\[TRACK\]/g, mockMetadata.track);
+        preview = preview.replace(/\[TRACK\]/g, mockMetadata.trackNumber);
         preview = preview.replace(
             /\[DISK\]/g,
             mockMetadata.disk.padStart(2, "0"),

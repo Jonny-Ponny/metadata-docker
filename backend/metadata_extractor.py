@@ -106,7 +106,7 @@ def extract_metadata(filepath):
     sample_rate = get_sample_rate(audio)
 
     result = {
-        'title': '', 'album': '', 'artist': '', 'albumArtist': '', 'track': '', 'disk': '',
+        'title': '', 'album': '', 'artist': '', 'albumArtist': '', 'trackNumber': '', 'disk': '',
         'date': '', 'genre': '', 'comment': '', 'description': '',
         'lyrics': '', 'unsyncedLyrics': '', 'composer': '', 'publisher': '', 'releaseType': '',
         'customFields': []          # list of {name, value} for truly unknown tags
@@ -118,7 +118,7 @@ def extract_metadata(filepath):
         'album': ['TALB', 'ALBUM'],
         'artist': ['TPE1', 'ARTIST'],
         'albumArtist': ['TPE2', 'ALBUMARTIST'],
-        'track': ['TRCK', 'TRACKNUMBER'],
+        'trackNumber': ['TRCK', 'TRACKNUMBER'],
         'disk': ['TPOS', 'DISCNUMBER'],
         'date': ['TDRC', 'DATE'],
         'genre': ['TCON', 'GENRE'],

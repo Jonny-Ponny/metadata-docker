@@ -565,6 +565,11 @@
                                         ></tr
                                     >
                                     <tr
+                                        ><td><code>TRACK</code></td><td
+                                            >Track</td
+                                        ></tr
+                                    >
+                                    <tr
                                         ><td><code>DISCNUMBER</code></td><td
                                             >Disc number (e.g., "1" or "1/2")</td
                                         ></tr
@@ -756,7 +761,8 @@
                         <p class="note">
                             <strong>Note:</strong> The main <strong>Date</strong> field
                             maps to <code>TDRC</code> for MP3 and <code>DATE</code>
-                            for FLAC. You can add custom fields using
+                            for FLAC. <strong>Track Number</strong> maps to
+                            <code>TRCK</code>/<code>TRACKNUMBER</code>. You can add custom fields using
                             the "+ Add new field" button. These will be saved as
                             appropriate tags based on the file format.
                         </p>

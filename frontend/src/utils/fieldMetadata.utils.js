@@ -17,8 +17,8 @@ export const FIELD_METADATA = {
     label: 'Album Artist',
     description: 'Specific field used to identify the primary artist or group responsible for an entire album. It is separate from the standard Artist (or Track Artist) tag, which identifies the performer(s) on an individual song',
   },
-  track: {
-    label: 'Track',
+  trackNumber: {
+    label: 'Track Number',
     description: 'The track number on the album',
   },
   disk: {
