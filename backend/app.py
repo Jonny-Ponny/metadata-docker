@@ -1432,19 +1432,13 @@ def apply_renaming_scheme():
         return jsonify({'error': str(e)}), 500
 
 
-# POST /api/download
-# Download a file or folder as a ZIP archive
-@app.route('/api/download', methods=['POST'])
-@token_required
-def download_item():
-    """Download a file or folder as a ZIP archive."""
-    data = request.get_json()
-    path = data.get('path')
-    is_folder = data.get('isFolder', False)
-    
-    if not path:
-        return jsonify({'error': 'Missing path'}), 400
-    
+# Download tokens are short-lived so they can be used in a native browser
+# download URL without exposing the long-lived auth token.
+DOWNLOAD_TOKEN_EXPIRE_SECONDS = 120
+
+
+def _send_download(path, is_folder):
+    """Build the download response for a file or folder."""
     try:
         full_path = safe_path(path)
         if not os.path.exists(full_path):
@@ -1507,6 +1501,87 @@ def download_item():
     except Exception as e:
         log_error(f"Download error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# POST /api/download-token
+# Create a short-lived token for a native browser download
+@app.route('/api/download-token', methods=['POST'])
+@token_required
+def create_download_token():
+    """Create a short-lived token authorizing one file/folder download."""
+    data = request.get_json(silent=True) or {}
+    path = data.get('path')
+    is_folder = bool(data.get('isFolder', False))
+
+    if not path:
+        return jsonify({'error': 'Missing path'}), 400
+
+    try:
+        full_path = safe_path(path)
+        if not os.path.exists(full_path):
+            return jsonify({'error': 'Path not found'}), 404
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+    except Exception as e:
+        log_error(f'Download token error: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+    filename = os.path.basename(os.path.normpath(path)) or 'download'
+    if is_folder:
+        filename = f'{filename}.zip'
+
+    token = jwt.encode({
+        'username': AUTH_USERNAME,
+        'scope': 'download',
+        'path': path,
+        'isFolder': is_folder,
+        'exp': datetime.datetime.now() + datetime.timedelta(seconds=DOWNLOAD_TOKEN_EXPIRE_SECONDS)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+
+    return jsonify({
+        'token': token,
+        'filename': filename,
+        'expires_in': DOWNLOAD_TOKEN_EXPIRE_SECONDS
+    })
+
+
+# GET /api/download?token=<short-lived-download-token>
+# Allows the browser to handle the download natively
+@app.route('/api/download', methods=['GET'])
+def download_item_with_token():
+    """Download a file or folder using a short-lived download token."""
+    token = request.args.get('token')
+    if not token:
+        return jsonify({'error': 'Token is missing'}), 401
+
+    try:
+        data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Download link has expired'}), 401
+    except Exception:
+        return jsonify({'error': 'Token is invalid'}), 401
+
+    if data.get('scope') != 'download' or not data.get('path'):
+        return jsonify({'error': 'Token is invalid'}), 401
+
+    return _send_download(data['path'], bool(data.get('isFolder', False)))
+
+
+# POST /api/download
+# Download a file or folder as a ZIP archive
+@app.route('/api/download', methods=['POST'])
+@token_required
+def download_item():
+    """Download a file or folder as a ZIP archive."""
+    data = request.get_json(silent=True) or {}
+    path = data.get('path')
+    is_folder = data.get('isFolder', False)
+
+    if not path:
+        return jsonify({'error': 'Missing path'}), 400
+
+    return _send_download(path, bool(is_folder))
+
 
 # Read text file content
 # GET /api/text?path=<file_path>

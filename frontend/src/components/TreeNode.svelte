@@ -387,18 +387,27 @@
     }
 
     async function handleDownload() {
-        try {
-            const isFolder = item.type === "directory";
+        // Close the context menu immediately so the click has visible feedback.
+        contextMenu.update((curr) => ({ ...curr, isOpen: false }));
 
-            // Make API call to download endpoint
-            const response = await fetch("/api/download", {
+        const isFolder = item.type === "directory";
+        const fallbackName = isFolder ? `${item.name}.zip` : item.name;
+        const preparingToast = toast.info(
+            `Preparing download: ${fallbackName}`,
+            15000,
+        );
+
+        try {
+            // Get a short-lived token so the browser can handle the download
+            // natively.
+            const response = await fetch("/api/download-token", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                     path: item.path,
-                    isFolder: isFolder,
+                    isFolder,
                 }),
             });
 
@@ -407,43 +416,28 @@
                 throw new Error(error || "Download failed");
             }
 
-            // Get the filename from Content-Disposition header or create one
-            const contentDisposition = response.headers.get(
-                "Content-Disposition",
-            );
-            let filename = isFolder ? `${item.name}.zip` : item.name;
+            const data = await response.json();
+            const filename = data.filename || fallbackName;
+            const url = `/api/download?token=${encodeURIComponent(data.token)}`;
 
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(
-                    /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/,
-                );
-                if (filenameMatch && filenameMatch[1]) {
-                    filename = filenameMatch[1].replace(/['"]/g, "");
-                }
-            }
-
-            // Convert response to blob
-            const blob = await response.blob();
-
-            // Create download link
-            const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
             a.download = filename;
+            a.rel = "noopener";
             document.body.appendChild(a);
             a.click();
-
-            // Cleanup
-            window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            toast.success(`Download started: ${filename}`);
+            toast.remove(preparingToast);
+            toast.success(
+                isFolder
+                    ? `Download requested: ${filename} (preparing archive)`
+                    : `Download started: ${filename}`,
+            );
         } catch (error) {
+            toast.remove(preparingToast);
             toast.error(`Download failed: ${error.message}`);
             console.error("Download error:", error);
-        } finally {
-            // Close context menu
-            contextMenu.update((curr) => ({ ...curr, isOpen: false }));
         }
     }
 
