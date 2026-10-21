@@ -48,7 +48,10 @@
             try {
                 const meta = await fetchMetadata(file.path);
                 const missing = activeFields.filter((f) => {
-                    const val = meta[f];
+                    const val =
+                        f === "picture"
+                            ? meta.picture || meta.hasPicture
+                            : meta[f];
                     return (
                         val === undefined ||
                         val === null ||
@@ -74,7 +77,7 @@
 
     async function fetchMetadata(path) {
         const res = await fetch(
-            `/api/metadata?path=${encodeURIComponent(path)}`,
+            `/api/metadata?path=${encodeURIComponent(path)}&includePicture=false`,
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();

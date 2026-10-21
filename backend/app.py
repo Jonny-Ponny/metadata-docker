@@ -360,7 +360,7 @@ def list_files():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# GET /api/metadata?path=<file_path>
+# GET /api/metadata?path=<file_path>&includePicture=<bool>
 # Fetch all metadata for a specific file
 @app.route('/api/metadata', methods=['GET'])
 @token_required
@@ -368,13 +368,14 @@ def get_metadata():
     file_path = request.args.get('path')
     if not file_path:
         return jsonify({'error': 'Missing path parameter'}), 400
+    include_picture = request.args.get('includePicture', 'true').lower() != 'false'
 
     try:
         full_path = safe_path(file_path)
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
 
-        metadata = extract_metadata(full_path)
+        metadata = extract_metadata(full_path, include_picture=include_picture)
         if metadata is None:
             return jsonify({'error': 'Could not read metadata (unsupported format?)'}), 500
 

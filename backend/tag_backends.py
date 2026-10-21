@@ -258,15 +258,18 @@ class TagBackend:
     supports_synced_lyrics = False
     picture_storage = ''
 
-    def extract(self, audio):
+    def extract(self, audio, include_picture=True):
         result = empty_metadata()
         if audio.tags is not None:
             self.read_tags(audio, result)
 
         picture = self.get_picture(audio)
         if picture:
-            image_data, mime = picture
-            result['picture'] = _picture_uri(image_data, mime)
+            if include_picture:
+                image_data, mime = picture
+                result['picture'] = _picture_uri(image_data, mime)
+            else:
+                result['hasPicture'] = True
         return result
 
     def read_tags(self, audio, result):

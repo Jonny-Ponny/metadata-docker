@@ -9,7 +9,7 @@ from mutagen import File
 from tag_backends import backend_for
 
 
-def extract_metadata(filepath):
+def extract_metadata(filepath, include_picture=True):
     """Return the canonical metadata payload for *filepath*, or None."""
     audio = File(filepath, easy=False)
     if audio is None:
@@ -19,4 +19,4 @@ def extract_metadata(filepath):
     if backend is None:
         return None
 
-    return backend.extract(audio)
+    return backend.extract(audio, include_picture=include_picture)
