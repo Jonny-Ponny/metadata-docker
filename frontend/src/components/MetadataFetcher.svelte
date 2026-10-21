@@ -1,6 +1,10 @@
 <!-- src/components/MetadataFetcher.svelte -->
 <script>
-  import { toast } from "../utils/index.js";
+  import {
+    toast,
+    getFieldLabel,
+    getFieldDescription,
+  } from "../utils/index.js";
 
   let { isOpen, onClose, mode, targetPath, isFolder = false } = $props();
 
@@ -678,13 +682,13 @@
             <div class="fields-list">
               {#each Object.entries(fetchedSong) as [key, value]}
                 <div class="field-item">
-                  <label>
+                  <label title={getFieldDescription(key) || undefined}>
                     <input
                       type="checkbox"
                       checked={songFields.has(key)}
                       onchange={() => toggleSingleField(key)}
                     />
-                    {key}:
+                    {getFieldLabel(key)}:
                   </label>
                   {#if isPictureField(key, value)}
                     <img src={value} alt="cover" class="field-preview-image" />
@@ -721,13 +725,13 @@
                   <div class="fields-list">
                     {#each Array.from(allFields) as field}
                       <div class="field-item">
-                        <label>
+                        <label title={getFieldDescription(field) || undefined}>
                           <input
                             type="checkbox"
                             checked={globalSelectedFields.has(field)}
                             onchange={() => toggleGlobalField(field)}
                           />
-                          {field}:
+                          {getFieldLabel(field)}:
                         </label>
                       </div>
                     {/each}
@@ -779,13 +783,13 @@
                       <div class="file-fields">
                         {#each Object.entries(track) as [key, value]}
                           <div class="field-item">
-                            <label>
+                            <label title={getFieldDescription(key) || undefined}>
                               <input
                                 type="checkbox"
                                 checked={fields.has(key)}
                                 onchange={() => toggleFileField(fileIndex, key)}
                               />
-                              {key}:
+                              {getFieldLabel(key)}:
                             </label>
                             {#if isPictureField(key, value)}
                               <img
@@ -839,13 +843,13 @@
               <div class="fields-list">
                 {#each Object.entries(fetchedTracks[selectedTrackIndex]) as [key, value]}
                   <div class="field-item">
-                    <label>
+                    <label title={getFieldDescription(key) || undefined}>
                       <input
                         type="checkbox"
                         checked={singleFileFields.has(key)}
                         onchange={() => toggleSingleField(key)}
                       />
-                      {key}:
+                      {getFieldLabel(key)}:
                     </label>
                     {#if isPictureField(key, value)}
                       <img
