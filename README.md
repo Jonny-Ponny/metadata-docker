@@ -67,6 +67,45 @@ Access the web interface at http://your-server:8888 (or your configured port)
 
 Use your auth credentials from docker-compose.yml
 
+## Verifying the image
+
+GHCR images are built by GitHub Actions from this repo and get a signed build-provenance attestation, so you can check an image really came from here and not from a manual push.
+
+You need the [GitHub CLI](https://cli.github.com/):
+
+```bash
+docker login ghcr.io   # gh reads the image digest from the registry
+
+gh attestation verify oci://ghcr.io/jonny-ponny/metadata-docker:latest \
+  --repo Jonny-Ponny/metadata-docker \
+  --signer-workflow Jonny-Ponny/metadata-docker/.github/workflows/container-release.yml
+```
+
+For a release tag, add `--source-ref refs/tags/v1.0.3` and use the matching image tag (`1.0.3`). On older `gh` versions, drop `--signer-workflow` and keep `--repo`.
+
+Successful verification means the image was built by this repo's workflow. Anything else (no attestation, another workflow or repo) means it was not.
+
+To pin the exact image you run, use its digest:
+
+```bash
+docker buildx imagetools inspect ghcr.io/jonny-ponny/metadata-docker:latest
+# Digest: sha256:...
+```
+
+```yaml
+image: ghcr.io/jonny-ponny/metadata-docker@sha256:...
+```
+
+This proves origin, not safety. If you don't trust the maintainer, build it yourself:
+
+```bash
+git clone https://github.com/Jonny-Ponny/metadata-docker.git
+cd metadata-docker
+docker build -t metadata-docker .
+```
+
+See [SECURITY.md](SECURITY.md).
+
 ## Environment Variables
 Variable|Description|Default
 |---|---|---|
