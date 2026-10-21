@@ -48,6 +48,7 @@ app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
 MUSIC_FOLDER = os.getenv('MUSIC_FOLDER', '/music')
+MUSIC_ROOT = os.path.abspath(MUSIC_FOLDER)
 
 log_info(f'Debug set to {DEBUG}')
 log_info(f'PUID set to {PUID}')
@@ -301,14 +302,38 @@ def build_tree(current_path, relative_path):
 
     return items
 
+def _is_within(base_path, candidate_path):
+    """Return True when *candidate_path* is *base_path* or lives below it.
+
+    Uses ``commonpath`` instead of ``startswith`` so a sibling such as
+    ``/music-other`` is not treated as being inside ``/music``.
+    """
+    try:
+        return os.path.commonpath([base_path, candidate_path]) == base_path
+    except ValueError:
+        # Different drives on Windows cannot share a common path.
+        return False
+
+
 def safe_path(file_path):
-    """Resolve and validate path against BASE_DIR if configured."""
-    if MUSIC_FOLDER:
-        full_path = os.path.abspath(os.path.join(MUSIC_FOLDER, file_path.lstrip('/')))
-        if not full_path.startswith(MUSIC_FOLDER):
-            raise PermissionError('Access denied: path outside base directory')
-        return full_path
-    return file_path
+    """Resolve a user-supplied path and keep it inside the music folder.
+
+    Leading slashes are ignored so both ``/album/song.mp3`` and
+    ``album/song.mp3`` refer to the library root. Raises ``PermissionError``
+    when the resolved path would escape ``MUSIC_FOLDER``.
+    """
+    if not MUSIC_FOLDER:
+        return file_path
+
+    if file_path is None or '\0' in str(file_path):
+        raise PermissionError('Access denied: invalid path')
+
+    full_path = os.path.abspath(
+        os.path.join(MUSIC_ROOT, str(file_path).lstrip('/'))
+    )
+    if not _is_within(MUSIC_ROOT, full_path):
+        raise PermissionError('Access denied: path outside base directory')
+    return full_path
 
 # -------------------------API ENDPOINTS------------------------- #
 
@@ -457,40 +482,34 @@ def upload_file():
     
     file = request.files['file']
     target_path = request.form.get('targetPath', '')
-    original_filename = request.form.get('originalFilename', file.filename)
+    original_filename = request.form.get('originalFilename') or file.filename
     
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     
-    # Determine target directory
-    if target_path:
-        # Handle nested paths (for folders)
-        target_dir = os.path.join(MUSIC_FOLDER, target_path)
-    else:
-        target_dir = MUSIC_FOLDER
-    
-    # Ensure target directory exists
+    # Resolve the destination through safe_path so a crafted targetPath
+    # (e.g. "../outside" or "/etc") cannot write outside the library.
+    try:
+        target_dir = safe_path(target_path)
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
+
+    if os.path.exists(target_dir) and not os.path.isdir(target_dir):
+        return jsonify({'error': 'Upload target is not a folder'}), 400
+
     os.makedirs(target_dir, exist_ok=True)
-    
-    # Check if this is a directory upload (multiple files with same base path)
-    if hasattr(file, 'webkitRelativePath') and file.webkitRelativePath:
-        # This is from a folder upload, preserve the full relative path
-        rel_path = file.webkitRelativePath
-        path_parts = rel_path.split('/')
-        
-        # Remove filename from path
-        path_parts.pop()
-        
-        if path_parts:
-            # Create subdirectories
-            subdir = os.path.join(*path_parts)
-            target_dir = os.path.join(target_dir, subdir)
-            os.makedirs(target_dir, exist_ok=True)
-    
-    filename = original_filename.replace('/', '_').replace('\\', '_').replace('\0', '')
-    
+
+    # Keep only the base name - a client-supplied filename must never be able
+    # to change the destination directory.
+    filename = os.path.basename(str(original_filename).replace('\\', '/'))
+    filename = filename.replace('\0', '')
+    if filename in ('', '.', '..'):
+        return jsonify({'error': 'Invalid filename'}), 400
+
     # Build the full file path
     file_path = os.path.join(target_dir, filename)
+    if not _is_within(target_dir, file_path):
+        return jsonify({'error': 'Invalid filename'}), 400
     
     # Handle duplicate filenames
     counter = 1
@@ -570,10 +589,16 @@ def rename_item():
 
         # Build new full path: same parent directory + new name
         parent = os.path.dirname(full_old)
-        full_new = os.path.join(parent, new_name)
 
-        # Prevent directory traversal in the new name
-        if not full_new.startswith(MUSIC_FOLDER):
+        # Prevent directory traversal in the new name: it must be a bare
+        # filename, not a path.
+        if not isinstance(new_name, str) or '\0' in new_name or '/' in new_name or '\\' in new_name:
+            return jsonify({'error': 'Invalid new name'}), 400
+        if new_name in ('.', '..'):
+            return jsonify({'error': 'Invalid new name'}), 400
+
+        full_new = os.path.join(parent, new_name)
+        if not _is_within(MUSIC_ROOT, full_new):
             return jsonify({'error': 'Invalid new name'}), 400
 
         os.rename(full_old, full_new)
@@ -645,7 +670,7 @@ def move_item():
         new_full = os.path.join(dest_full, os.path.basename(source_full))
 
         # Prevent directory traversal
-        if not new_full.startswith(MUSIC_FOLDER):
+        if not _is_within(MUSIC_ROOT, new_full):
             return jsonify({'error': 'Invalid destination'}), 400
 
         # If source is a directory, ensure destination is not inside source
