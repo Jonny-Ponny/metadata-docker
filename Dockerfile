@@ -34,6 +34,12 @@ COPY --from=frontend-builder /app/frontend/dist/ ./static/
 # Create directories that might need permission changes
 RUN mkdir -p /music /logs
 
+# Run as an unprivileged user by default. Override PUID/PGID to match your host
+# user, or set both to 0 to keep running as root (not recommended).
+ENV PUID=1000 \
+    PGID=1000 \
+    CONTAINER_PORT=5000
+
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
@@ -41,4 +47,10 @@ RUN chmod +x /entrypoint.sh
 RUN ls -la /entrypoint.sh
 
 EXPOSE $CONTAINER_PORT
+
+# The app must answer its unauthenticated health endpoint for the container to
+# be considered healthy. Give addon dependency installs time to finish at boot.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 \
+    CMD wget -q -O /dev/null "http://127.0.0.1:${CONTAINER_PORT:-5000}/api/ping" || exit 1
+
 ENTRYPOINT ["/entrypoint.sh"]

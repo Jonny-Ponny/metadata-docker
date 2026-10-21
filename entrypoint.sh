@@ -74,31 +74,39 @@ else
 fi
 
 # User/Group setup
+# Default to an unprivileged user so the container does not run as root unless
+# explicitly asked to (PUID=0 and PGID=0).
+PUID="${PUID:-1000}"
+PGID="${PGID:-1000}"
 
-if [ ! -z "$PUID" ] && [ ! -z "$PGID" ]; then
-    echo "Setting user to PUID:$PUID and PGID:$PGID"
-    
-    if getent group "$PGID" > /dev/null 2>&1; then
-        GROUP_NAME=$(getent group "$PGID" | cut -d: -f1)
-    else
-        GROUP_NAME="appgroup"
-        addgroup -g "$PGID" "$GROUP_NAME"
-    fi
-    
-    if getent passwd "$PUID" > /dev/null 2>&1; then
-        USER_NAME=$(getent passwd "$PUID" | cut -d: -f1)
-        usermod -g "$GROUP_NAME" "$USER_NAME"
-    else
-        USER_NAME="appuser"
-        adduser -u "$PUID" -G "$GROUP_NAME" -D -H "$USER_NAME"
-    fi
-    
-    chown -R "$PUID":"$PGID" /app /music /logs
-    echo "Starting gunicorn as user $USER_NAME..."
-    exec gosu "$USER_NAME" env HOME=/app gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} \
-    --workers 1 --threads 8 app:app
-
-else
-    echo "PUID/PGID not set, running as root"
+if [ "$PUID" = "0" ] && [ "$PGID" = "0" ]; then
+    echo "PUID/PGID set to 0, running as root"
     exec gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} --workers 1 --threads 8 app:app
 fi
+
+echo "Setting user to PUID:$PUID and PGID:$PGID"
+
+if getent group "$PGID" > /dev/null 2>&1; then
+    GROUP_NAME=$(getent group "$PGID" | cut -d: -f1)
+else
+    GROUP_NAME="appgroup"
+    addgroup -g "$PGID" "$GROUP_NAME"
+fi
+
+if getent passwd "$PUID" > /dev/null 2>&1; then
+    USER_NAME=$(getent passwd "$PUID" | cut -d: -f1)
+    usermod -g "$GROUP_NAME" "$USER_NAME"
+else
+    USER_NAME="appuser"
+    adduser -u "$PUID" -G "$GROUP_NAME" -D -H "$USER_NAME"
+fi
+
+# Change ownership so the unprivileged user can read/write the library, logs and
+# addons. Do not fail the start if a mount is read-only or otherwise restricted;
+# the app may still work with existing permissions.
+for dir in /app /music /logs; do
+    chown -R "$PUID":"$PGID" "$dir" || echo "WARNING: could not change ownership of $dir, continuing"
+done
+echo "Starting gunicorn as user $USER_NAME..."
+exec gosu "$USER_NAME" env HOME=/app gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} \
+--workers 1 --threads 8 app:app

@@ -21,6 +21,7 @@ App could be useful to anyone selfhosting their own music streaming service like
 - Authentication - Simple login protection
 - Log Viewer - Monitor application logs
 - Addon support - Fetch metadata from any source using addons
+- Container healthcheck and non-root execution by default
 
 ## Limitations:
 - History is saved with logs, but there is no way to undo changes
@@ -70,10 +71,12 @@ DEBUG|Enable debug mode|False
 AUTH_USERNAME|Login username|admin
 AUTH_PASSWORD|Login password|admin
 TOKEN_EXPIRE_HOURS|JWT token expiry|24
-PUID|User ID for file permissions|0
-PGID|Group ID for file permissions|0
+PUID|User ID for file permissions|1000
+PGID|Group ID for file permissions|1000
 
-Make sure user/group ID has proper file permissions
+Make sure user/group ID has proper file permissions. The container runs as an unprivileged user by default; set `PUID`/`PGID` to match the owner of your music folder, or set both to `0` to run as root (not recommended).
+
+The image also defines a `HEALTHCHECK` that polls `/api/ping`, so `docker ps` reports the container as healthy once the app and its addon dependencies are ready.
 
 ## Volume Mounts
 Mount|Purpose
@@ -261,12 +264,12 @@ For reference check working examples.
 
 ### Permission Issues
 If you encounter permission errors accessing your music files:
-- Verify PUID/PGID match your host user/group
+- Verify PUID/PGID match your host user/group (the container defaults to `1000:1000`)
 - Check folder permissions: `ls -la /path/to/your/music`
 - Ensure your user has read/write access
 
 ### Can't Access Web Interface
-- Verify the container is running: `docker ps`
+- Verify the container is running and healthy: `docker ps` (see the `STATUS` column)
 - Check logs: `docker logs metadata-docker`
 - Ensure selected port (default 8888) isn't blocked by firewall
 
