@@ -65,6 +65,9 @@ plugin_manager.discover_plugins()
 # ---------------------VERSION CHECK---------------------#
 
 APP_VERSION = 'v1.0.4'
+# Commit the image was built from, set at build time (see Dockerfile). Lets
+# users compare a running container against the build-provenance attestation.
+APP_GIT_SHA = os.getenv('APP_GIT_SHA', 'unknown')
 GITHUB_REPO_OWNER = 'Jonny-Ponny'
 GITHUB_REPO_NAME = 'metadata-docker'
 
@@ -165,7 +168,8 @@ def get_version():
     return jsonify({
         'current_version': info['current'],
         'latest_version': info['latest'],
-        'update_available': info['update_available']
+        'update_available': info['update_available'],
+        'git_sha': APP_GIT_SHA
     })
 
 # -------------------------AUTH------------------------- #

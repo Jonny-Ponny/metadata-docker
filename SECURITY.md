@@ -8,7 +8,7 @@ Only the latest release (`vX.Y.Z` tag) and the current `latest` image get fixes.
 
 Images are built by GitHub Actions in [`.github/workflows/container-release.yml`](.github/workflows/container-release.yml) and get a signed build-provenance attestation. See the [README](README.md#verifying-the-image) for the verification command.
 
-What it proves: the image was built by this repo's workflow from a specific commit. An image pushed by hand or with a stolen token has no valid attestation and fails verification.
+What it proves: the image was built by this repo's workflow from a specific commit. An image pushed by hand or with a stolen token has no valid attestation and fails verification. The same commit is stored in the `org.opencontainers.image.revision` label and shown in the app's Help footer, so you can match a running container to the attestation.
 
 What it doesn't prove:
 

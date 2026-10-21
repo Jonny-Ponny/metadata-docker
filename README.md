@@ -85,7 +85,9 @@ For a release tag, add `--source-ref refs/tags/v1.0.4` and use the matching imag
 
 Successful verification means the image was built by this repo's workflow. Anything else (no attestation, another workflow or repo) means it was not.
 
-To pin the exact image you run, use its digest:
+The commit is also stored on the image and shown in the app.
+
+Tags like `latest` move with every push to `main`; digests don't. To pin the exact image you run, use its digest:
 
 ```bash
 docker buildx imagetools inspect ghcr.io/jonny-ponny/metadata-docker:latest

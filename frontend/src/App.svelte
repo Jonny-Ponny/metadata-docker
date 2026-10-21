@@ -101,6 +101,7 @@
   let currentVersion = $state(null);
   let latestVersion = $state(null);
   let updateAvailable = $state(false);
+  let gitSha = $state(null);
 
   let showFolderOverview = $state(false);
 
@@ -1028,6 +1029,7 @@
       currentVersion = data.current_version;
       latestVersion = data.latest_version;
       updateAvailable = data.update_available;
+      gitSha = data.git_sha || null;
       if (data.update_available) {
         toast.show(
           "Update available, check GitHub for more info",
@@ -1523,6 +1525,7 @@
     {currentVersion}
     {updateAvailable}
     {latestVersion}
+    {gitSha}
   />
   <LogViewer isOpen={showLogViewer} onClose={() => (showLogViewer = false)} />
   <SettingsModal

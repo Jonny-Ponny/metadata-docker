@@ -2,7 +2,7 @@
 <script>
     import { onMount } from "svelte";
 
-    let { isOpen, onClose, currentVersion, updateAvailable, latestVersion } = $props();
+    let { isOpen, onClose, currentVersion, updateAvailable, latestVersion, gitSha } = $props();
 
     // Track which tab is active
     let activeTab = $state("basics"); // 'basics' or 'tags'
@@ -890,6 +890,18 @@
             <div class="help-modal-footer">
                 <div class="footer-info">
                     <span class="version">{currentVersion || 'Loading…'}</span>
+                    {#if gitSha && gitSha !== "unknown"}
+                        <span class="separator">•</span>
+                        <a
+                            href="https://github.com/Jonny-Ponny/metadata-docker/commit/{gitSha}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="commit-link"
+                            title="Built from commit {gitSha}"
+                        >
+                            {gitSha.slice(0, 7)}
+                        </a>
+                    {/if}
                     <span class="separator">•</span>
                     <a
                         href="https://github.com/Jonny-Ponny/metadata-docker"
@@ -1254,6 +1266,17 @@
         color: #888;
     }
 
+    .commit-link {
+        color: #888;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        text-decoration: none;
+    }
+
+    .commit-link:hover {
+        color: #555;
+        text-decoration: underline;
+    }
+
     .separator {
         color: #ccc;
     }
@@ -1410,6 +1433,14 @@
 
     :global(body.dark) .version {
         color: #888;
+    }
+
+    :global(body.dark) .commit-link {
+        color: #888;
+    }
+
+    :global(body.dark) .commit-link:hover {
+        color: #ccc;
     }
 
     :global(body.dark) .separator {

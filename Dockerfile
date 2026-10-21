@@ -34,6 +34,12 @@ COPY --from=frontend-builder /app/frontend/dist/ ./static/
 # Create directories that might need permission changes
 RUN mkdir -p /music /logs
 
+# Commit this image was built from. The release workflow passes GITHUB_SHA;
+# /api/version exposes it so a running container can be matched against the
+# signed build-provenance attestation.
+ARG GIT_SHA=unknown
+ENV APP_GIT_SHA=$GIT_SHA
+
 # Run as an unprivileged user by default. Override PUID/PGID to match your host
 # user, or set both to 0 to keep running as root (not recommended).
 ENV PUID=1000 \

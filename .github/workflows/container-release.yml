@@ -63,6 +63,10 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Baked into the image and exposed by /api/version so users can match
+          # a running container to the attestation below.
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           # Unsigned SLSA provenance and SBOM embedded in the image index. They
           # are handy for inspection, but the signed attestation below is what
           # users actually verify.
