@@ -83,55 +83,178 @@ Mount|Purpose
 ./addons:/app/addons|Addon folder
 
 ## Addons
-The app supports dynamically loaded metadata fetchers (addons) that let you pull track and album information from external services. You can install existing plugins or write your own.
 
-### Installing a Plugin
-Place the plugin file(s) inside the ```/addons``` directory.
-Supported layouts:
+Addons are small Python plugins that fetch metadata from outside sources. They show up as "fetchers" in the metadata editor: pick one, search for a song or album, then apply the results to one file or a whole folder.
+
+The app ships with no addons. You install the ones you want by dropping them into the `addons` folder, which `docker-compose.yml` mounts at `/app/addons`. Everything in that folder is scanned once at container start.
+
+### Installing an Existing Addon
+
+Working examples: [MusicBrainz](https://github.com/Jonny-Ponny/md-musicbrainz-addon), [VocaDB](https://github.com/Jonny-Ponny/md-vocadb-addon), [LrcLib](https://github.com/Jonny-Ponny/md-lrclib-addon) (lyrics, songs only), and [Genius](https://github.com/Jonny-Ponny/md-genius-addon).
+
+Clone addon repo into its own subfolder inside `addons`:
+
+```bash
+mkdir -p addons
+git clone https://github.com/Jonny-Ponny/md-musicbrainz-addon.git addons/musicbrainz
+git clone https://github.com/Jonny-Ponny/md-lrclib-addon.git addons/lrclib
 ```
-# In addons folder:
-addons:
--addon1.py
--addon1_requirements.txt(optional)
 
-# Or inside subfolder:
-addons:
--addon1:
---addon1.py
---addon1_requirements.txt(optional)
--addon2:
---addon2.py
---requirements.txt(optional)
+Then restart the container so it discovers the new files:
+
+```bash
+docker compose restart
 ```
-If the plugin needs extra Python packages, add them to a ```*_requirements.txt``` file. The container will automatically install them on the next start.
 
-Restart the container - the plugin will be discovered and appear in the frontend's fetcher dropdown.
+The addon now appears in the metadata editor's fetcher dropdown (and in **Settings → Addons**, which also lists the methods and environment variables it supports).
+
+#### Folder layout
+
+A subfolder per addon is the easiest option. You can also drop a single `.py` file directly into `addons/`, with no subfolder:
+
+```text
+addons/
+├── musicbrainz/                 # subfolder layout
+│   ├── MusicBrainz.py
+│   └── MusicBrainz_requirements.txt
+├── lrclib/
+│   ├── LrcLib.py
+│   └── requirements.txt         # name does not matter in a subfolder
+└── simple_addon.py              # flat layout
+```
+
+Only files ending in `requirements.txt` are installed, so the dependency file must be named accordingly. In a subfolder any `*requirements.txt` works (e.g. `requirements.txt` or `LrcLib_requirements.txt`). Directly in `addons/` it must end with `_requirements.txt`, e.g. `simple_addon_requirements.txt` - a plain `requirements.txt` in the flat root is ignored.
+
+#### Environment variables
+
+Some addons need an API key or a setting. Read the addon's README to see which variables it expects, then add them to the `environment` section of your `docker-compose.yml` and recreate the container:
+
+```yaml
+services:
+  app:
+    environment:
+      - AUTH_USERNAME=USERNAME
+      - AUTH_PASSWORD=PASSWORD
+      - MD_MUSICBRAINZ_FETCH_COVER=true   # example addon setting
+      - MY_API_KEY=your-key-here          # example API key
+```
+
+The names shown under **Settings → Addons** are informational - the addon decides whether a missing value is a hard error or just falls back to a default. In practice, set what the addon's README asks for.
+
+A restart is not enough after changing `environment` values; recreate the container so Docker applies them:
+
+```bash
+docker compose up -d
+```
+
+A few things to keep in mind:
+
+- The container installs `*requirements.txt` dependencies on every start, before the app launches. The first start after adding an addon can take a bit longer.
+- Dependencies are installed inside the container, so changing an addon's requirement file requires a container restart.
+- Plugins are loaded once at startup; editing a `.py` file or adding a new one has no effect until you restart.
+- A broken addon is skipped with an error in the logs (`docker compose logs`). One bad addon will not stop the app.
 
 ### Writing Your Own Fetcher
-Subclass ```MetadataFetcher``` from ```addon_base.py``` and set the required attributes:
-```
+
+An addon is a single Python file that subclasses `MetadataFetcher` from `addon_base.py`. Subclass it, set four attributes, and implement only the methods you need.
+
+```python
+# addons/my_service/MyService.py
+import os
+import requests
 from addon_base import MetadataFetcher
 
-class MyFetcher(MetadataFetcher):
-    name = "My Service"
-    id = "my_service"
+
+class MyService(MetadataFetcher):
+    name = "My Service"                 # shown in the UI
+    id = "my_service"                   # unique, lowercase, no spaces
     description = "Fetches metadata from My API"
-    required_env_vars = ["MY_API_KEY"]   # optional
+    required_env_vars = ["MY_API_KEY"]  # informational only
+
+    BASE_URL = "https://api.example.com"
+
+    def __init__(self):
+        self.api_key = os.getenv("MY_API_KEY", "")
+        self.session = requests.Session()
+        self.session.headers.update({"User-Agent": "metadata-docker-addon/1.0"})
+
+    def search_songs(self, query, limit=5):
+        resp = self.session.get(
+            f"{self.BASE_URL}/search",
+            params={"q": query, "limit": limit, "key": self.api_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return [
+            {
+                "id": str(item["id"]),          # required: passed back to fetch_song_metadata
+                "title": item.get("title", ""),
+                "artist": item.get("artist", ""),
+            }
+            for item in resp.json().get("results", [])
+        ]
+
+    def fetch_song_metadata(self, song_id):
+        resp = self.session.get(
+            f"{self.BASE_URL}/track/{song_id}",
+            params={"key": self.api_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return {
+            "title": data.get("title", ""),
+            "artist": data.get("artist", ""),
+            "album": data.get("album", ""),
+            "albumArtist": data.get("album_artist", ""),
+            "date": data.get("release_date", ""),
+            "trackNumber": data.get("track_number", ""),
+            "genre": data.get("genre", ""),
+            "picture": data.get("cover_url"),   # URL or data:image/... value
+        }
 ```
 
-Implement any of the four methods - you only need to override the ones you need:
-- ```search_songs(query, limit) → List[Dict]```
-- ```fetch_song_metadata(song_id) → Dict```
-- ```search_albums(query, limit) → List[Dict]```
-- ```fetch_album_metadata(album_id) → List[Dict]```
+Save the file as `addons/my_service/MyService.py`, restart the container, and the fetcher is available.
 
-Use environment variables for API keys - read them via ```os.getenv("MY_API_KEY")```. Key should be supplied by user in ```docker-compose.yml```.
+#### Required attributes
 
-Return release dates under the ```date``` key (mapped to TDRC for MP3 and DATE for FLAC), track numbers under ```trackNumber``` (TRCK/TRACKNUMBER), and disk numbers under ```diskNumber``` (TPOS/DISCNUMBER). For backwards compatibility, addons returning ```year```, ```track```, or ```disk``` have those values treated as ```date```, ```trackNumber```, and ```diskNumber```.
+| Attribute | Purpose |
+|---|---|
+| `name` | Display name in the frontend |
+| `id` | Unique identifier. Used in API URLs and stored in the browser, so keep it stable |
+| `description` | Short line shown in Settings |
+| `required_env_vars` | List of env var names to display in Settings. Not enforced by the app |
 
-Add dependencies by creating a ```*_requirements.txt``` file next to your plugin or in a subfolder listing the required PyPI packages.
+#### The four methods
 
-For example check [MusicBrainz](https://github.com/Jonny-Ponny/md-musicbrainz-addon), [VocaDB](https://github.com/Jonny-Ponny/md-vocadb-addon), [LrcLib](https://github.com/Jonny-Ponny/md-lrclib-addon) or [Genius](https://github.com/Jonny-Ponny/md-genius-addon) addons.
+You do not need all of them. Leave out the ones your service cannot support - the UI only shows fetchers that implement the matching search method.
+
+| Method | Called when | Returns |
+|---|---|---|
+| `search_songs(query, limit)` | Song search | List of result dicts, each with an `id` |
+| `fetch_song_metadata(song_id)` | A song result is selected | One metadata dict |
+| `search_albums(query, limit)` | Album search | List of result dicts, each with an `id` |
+| `fetch_album_metadata(album_id)` | An album result is selected | List of metadata dicts, one per track |
+
+The `id` from a search result is passed to the matching `fetch_*` method. Search results also feed the result list in the UI, so include `title`/`artist` for songs and `album`/`artist`/`coverart` for albums where available. `coverart` is only a thumbnail for the search results; use `picture` in fetched metadata to actually embed artwork.
+
+#### Metadata fields
+
+Return plain key/value dictionaries using the app's field names (`title`, `artist`, `album`, `albumArtist`, `date`, `genre`, `trackNumber`, `diskNumber`, `comment`, `composer`, `publisher`, `releaseType`, `lyrics`, `unsyncedLyrics`, `picture`, ...). Unknown keys are kept and written as custom tags, so service-specific IDs (e.g. `musicbrainz_trackid`) can be returned too.
+
+
+Older addons may return `year`, `track`, or `disk`. Those are still accepted and treated as `date`, `trackNumber`, and `diskNumber`, but they are not written as literal YEAR/TRACK/DISK tags. New addons should use the current names.
+
+#### Practical tips
+
+- Use `os.getenv()` for API keys and settings, and give sensible defaults where possible.
+- Set a `User-Agent` and a `timeout` on HTTP requests; rate-limit if the service requires it.
+- Raising an exception is fine - the API returns it as an error and the UI shows the message. Returning an empty list from a search is often friendlier for "no results".
+- Avoid doing network calls at import time. Keep them in `__init__` or in the methods, so a temporarily unavailable service does not break loading.
+- Dependencies go in a `*requirements.txt` file next to the addon, one package per line. The container installs them on the next start.
+- `addon_base` is importable because the backend runs from the directory containing it. Outside Docker, the addons folder is resolved relative to the process working directory (`backend/addons` if you run the backend from `backend/`).
+
+For reference check working examples.
 
 
 ## Troubleshooting
