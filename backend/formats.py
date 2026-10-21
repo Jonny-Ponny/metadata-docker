@@ -30,6 +30,8 @@ FORMATS = (
     AudioFormat('flac', 'FLAC', ('.flac',), 'audio/flac', 'flac'),
     AudioFormat('ogg', 'OGG Vorbis', ('.ogg', '.oga'), 'audio/ogg', 'vorbis'),
     AudioFormat('opus', 'Opus', ('.opus',), 'audio/ogg', 'vorbis'),
+    AudioFormat('m4a', 'M4A', ('.m4a',), 'audio/mp4', 'mp4'),
+    AudioFormat('m4b', 'M4B', ('.m4b',), 'audio/mp4', 'mp4'),
 )
 
 # extension -> AudioFormat

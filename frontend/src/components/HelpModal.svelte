@@ -763,15 +763,112 @@
                             </table>
                         </div>
 
+                        <div class="tag-group">
+                            <h4>M4A / M4B (MP4) Tags</h4>
+                            <table class="tag-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 240px;">Tag</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        ><td><code>©nam</code></td><td
+                                            >Title/Song name</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>©alb</code></td><td
+                                            >Album name</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>©ART</code></td><td
+                                            >Lead artist(s)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>aART</code></td><td
+                                            >Album artist</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>trkn</code></td><td
+                                            >Track number and total</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>disk</code></td><td
+                                            >Disc number and total</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>©day</code></td><td
+                                            >Date (YYYY or YYYY-MM-DD)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>©gen</code></td><td
+                                            >Genre</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>©cmt</code></td><td
+                                            >Comment</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>desc</code></td><td
+                                            >Description</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>©wrt</code></td><td
+                                            >Composer(s)</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td><code>©lyr</code></td><td
+                                            >Lyrics, use LRC format for synced
+                                            lyrics</td
+                                        ></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code
+                                                >----:com.apple.iTunes:PUBLISHER</code
+                                            ></td
+                                        ><td>Publisher</td></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code
+                                                >----:com.apple.iTunes:RELEASETYPE</code
+                                            ></td
+                                        ><td>Release type</td></tr
+                                    >
+                                    <tr
+                                        ><td
+                                            ><code
+                                                >----:com.apple.iTunes:UNSYNCEDLYRICS</code
+                                            ></td
+                                        ><td>Unsynced lyrics</td></tr
+                                    >
+                                    <tr
+                                        ><td><code>covr</code></td><td
+                                            >Cover art</td
+                                        ></tr
+                                    >
+                                </tbody>
+                            </table>
+                        </div>
+
                         <p class="note">
-                            <strong>Note:</strong> The main <strong>Date</strong> field
-                            maps to <code>TDRC</code> for MP3 and <code>DATE</code>
-                            for FLAC, OGG Vorbis and Opus. <strong>Track Number</strong> maps to
-                            <code>TRCK</code>/<code>TRACKNUMBER</code>.
-                            <strong>Disk Number</strong> maps to
-                            <code>TPOS</code>/<code>DISCNUMBER</code>. You can add custom fields using
+                            You can add custom fields using
                             the "+ Add new field" button. These will be saved as
-                            appropriate tags based on the file format.
+                            appropriate tags based on the file format; M4A/M4B
+                            custom fields use <code>----:com.apple.iTunes:NAME</code> atoms.
                         </p>
                     </div>
                 {/if}

@@ -27,7 +27,7 @@ export const FIELD_METADATA = {
   },
   date: {
     label: 'Date',
-    description: 'Release date (YYYY or YYYY-MM-DD). Mapped to TDRC for MP3 and DATE for FLAC, OGG and Opus.',
+    description: 'Release date (YYYY or YYYY-MM-DD). Mapped to TDRC for MP3, DATE for FLAC/OGG/Opus, and ©day for M4A/M4B.',
   },
   genre: {
     label: 'Genre',

@@ -9,6 +9,8 @@ export const AUDIO_FORMAT_LABELS = {
     ogg: "OGG",
     oga: "OGG",
     opus: "OPUS",
+    m4a: "M4A",
+    m4b: "M4B",
 };
 
 export const AUDIO_EXTENSIONS = Object.keys(AUDIO_FORMAT_LABELS).map(

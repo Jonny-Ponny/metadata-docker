@@ -35,28 +35,44 @@ from mutagen.id3 import (
     TextFrame,
 )
 from mutagen.mp3 import MP3
+from mutagen.mp4 import MP4, MP4Cover, MP4FreeForm
 from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
 
 
+MP4_FREEFORM_PREFIX = '----:com.apple.iTunes:'
+
 # Canonical frontend field -> tag key per family. ``TXXX:NAME`` means the value
-# is stored in a TXXX frame with that description.
+# is stored in a TXXX frame with that description. MP4 freeform atoms use the
+# ``----:com.apple.iTunes:NAME`` form.
 FIELD_SCHEMA = {
-    'title': {'id3': 'TIT2', 'vorbis': 'TITLE'},
-    'album': {'id3': 'TALB', 'vorbis': 'ALBUM'},
-    'artist': {'id3': 'TPE1', 'vorbis': 'ARTIST'},
-    'albumArtist': {'id3': 'TPE2', 'vorbis': 'ALBUMARTIST'},
-    'trackNumber': {'id3': 'TRCK', 'vorbis': 'TRACKNUMBER'},
-    'diskNumber': {'id3': 'TPOS', 'vorbis': 'DISCNUMBER'},
-    'date': {'id3': 'TDRC', 'vorbis': 'DATE'},
-    'genre': {'id3': 'TCON', 'vorbis': 'GENRE'},
-    'comment': {'id3': 'COMM', 'vorbis': 'COMMENT'},
-    'description': {'id3': 'TXXX:DESCRIPTION', 'vorbis': 'DESCRIPTION'},
-    'composer': {'id3': 'TCOM', 'vorbis': 'COMPOSER'},
-    'publisher': {'id3': 'TPUB', 'vorbis': 'PUBLISHER'},
-    'releaseType': {'id3': 'TXXX:RELEASETYPE', 'vorbis': 'RELEASETYPE'},
-    'lyrics': {'id3': 'SYLT', 'vorbis': 'LYRICS'},
-    'unsyncedLyrics': {'id3': 'USLT', 'vorbis': 'UNSYNCEDLYRICS'},
+    'title': {'id3': 'TIT2', 'vorbis': 'TITLE', 'mp4': '©nam'},
+    'album': {'id3': 'TALB', 'vorbis': 'ALBUM', 'mp4': '©alb'},
+    'artist': {'id3': 'TPE1', 'vorbis': 'ARTIST', 'mp4': '©ART'},
+    'albumArtist': {'id3': 'TPE2', 'vorbis': 'ALBUMARTIST', 'mp4': 'aART'},
+    'trackNumber': {'id3': 'TRCK', 'vorbis': 'TRACKNUMBER', 'mp4': 'trkn'},
+    'diskNumber': {'id3': 'TPOS', 'vorbis': 'DISCNUMBER', 'mp4': 'disk'},
+    'date': {'id3': 'TDRC', 'vorbis': 'DATE', 'mp4': '©day'},
+    'genre': {'id3': 'TCON', 'vorbis': 'GENRE', 'mp4': '©gen'},
+    'comment': {'id3': 'COMM', 'vorbis': 'COMMENT', 'mp4': '©cmt'},
+    'description': {'id3': 'TXXX:DESCRIPTION', 'vorbis': 'DESCRIPTION', 'mp4': 'desc'},
+    'composer': {'id3': 'TCOM', 'vorbis': 'COMPOSER', 'mp4': '©wrt'},
+    'publisher': {
+        'id3': 'TPUB',
+        'vorbis': 'PUBLISHER',
+        'mp4': MP4_FREEFORM_PREFIX + 'PUBLISHER',
+    },
+    'releaseType': {
+        'id3': 'TXXX:RELEASETYPE',
+        'vorbis': 'RELEASETYPE',
+        'mp4': MP4_FREEFORM_PREFIX + 'RELEASETYPE',
+    },
+    'lyrics': {'id3': 'SYLT', 'vorbis': 'LYRICS', 'mp4': '©lyr'},
+    'unsyncedLyrics': {
+        'id3': 'USLT',
+        'vorbis': 'UNSYNCEDLYRICS',
+        'mp4': MP4_FREEFORM_PREFIX + 'UNSYNCEDLYRICS',
+    },
 }
 
 ID3_FRAME_CLASSES = {
@@ -88,6 +104,17 @@ VORBIS_KEY_TO_FIELD = {
     for field, keys in FIELD_SCHEMA.items()
     if 'vorbis' in keys
 }
+
+MP4_KEY_TO_FIELD = {}
+MP4_FREEFORM_TO_FIELD = {}
+for _field, _keys in FIELD_SCHEMA.items():
+    _mp4_key = _keys.get('mp4')
+    if not _mp4_key:
+        continue
+    if _mp4_key.startswith(MP4_FREEFORM_PREFIX):
+        MP4_FREEFORM_TO_FIELD[_mp4_key[len(MP4_FREEFORM_PREFIX):].upper()] = _field
+    else:
+        MP4_KEY_TO_FIELD[_mp4_key] = _field
 
 VORBIS_PICTURE_KEY = 'METADATA_BLOCK_PICTURE'
 
@@ -163,6 +190,55 @@ def lrc_to_sylt_events(value):
         if text:
             events.append((text, int(round((minutes * 60 + seconds) * 1000))))
     return events
+
+
+def parse_number_pair(value):
+    """Parse ``"3/12"`` into an MP4 ``(3, 12)`` tuple, or None when empty."""
+    text = str(value).strip()
+    if not text:
+        return None
+
+    number, _, total = text.partition('/')
+
+    def to_int(part):
+        try:
+            return max(0, min(int(part.strip()), 65535))
+        except (TypeError, ValueError):
+            return 0
+
+    return (to_int(number), to_int(total))
+
+
+def format_number_pair(values):
+    """Format an MP4 ``trkn``/``disk`` value as ``"3/12"`` or ``"3"``."""
+    if not values:
+        return ''
+    try:
+        number, total = values[0]
+    except (TypeError, ValueError):
+        return ''
+    if not number and not total:
+        return ''
+    return f"{number}/{total}" if total else str(number)
+
+
+def mp4_freeform_name(key):
+    """Return the user-facing name from a ``----:...:NAME`` atom key."""
+    if not key.startswith('----:'):
+        return key
+    parts = key.split(':', 2)
+    return parts[2] if len(parts) == 3 else ''
+
+
+def decode_freeform_values(values):
+    """Decode freeform atom values, which mutagen exposes as bytes."""
+    decoded = []
+    for value in values:
+        try:
+            decoded.append(bytes(value).decode('utf-8'))
+        except (TypeError, UnicodeDecodeError):
+            decoded.append(str(value))
+    return '; '.join(decoded)
 
 
 def _normalise_field_name(name):
@@ -477,9 +553,143 @@ class FlacBackend(VorbisBackend):
         audio.clear_pictures()
 
 
+class Mp4Backend(TagBackend):
+    """MP4 atoms used by M4A/M4B (AAC and ALAC)."""
+
+    family = 'mp4'
+    supports_synced_lyrics = False
+    picture_storage = 'mp4-atom'
+
+    def _tags(self, audio):
+        if audio.tags is None:
+            audio.add_tags()
+        return audio.tags
+
+    def read_tags(self, audio, result):
+        tags = audio.tags
+        if tags is None:
+            return
+
+        for key, values in tags.items():
+            if key == 'covr':
+                continue
+            if not isinstance(values, list):
+                values = [values]
+
+            if key in ('trkn', 'disk'):
+                value = format_number_pair(values)
+                field = MP4_KEY_TO_FIELD.get(key)
+                if field and value and not result[field]:
+                    result[field] = value
+                continue
+
+            if key.startswith('----:'):
+                value = decode_freeform_values(values)
+                if not value:
+                    continue
+                name = mp4_freeform_name(key)
+                field = MP4_FREEFORM_TO_FIELD.get(name.upper())
+                if field:
+                    if not result[field]:
+                        result[field] = value
+                elif name:
+                    result['customFields'].append({'name': name, 'value': value})
+                continue
+
+            value = '; '.join(str(v) for v in values)
+            if not value:
+                continue
+
+            field = MP4_KEY_TO_FIELD.get(key)
+            if field:
+                if not result[field]:
+                    result[field] = value
+            else:
+                result['customFields'].append({'name': key, 'value': value})
+
+    def write_field(self, audio, field, value):
+        tags = self._tags(audio)
+        atom = FIELD_SCHEMA.get(field, {}).get('mp4')
+
+        if atom is None:
+            atom = MP4_FREEFORM_PREFIX + field
+
+        if atom in ('trkn', 'disk'):
+            tags.pop(atom, None)
+            pair = parse_number_pair(value)
+            if pair and (pair[0] or pair[1]):
+                tags[atom] = [pair]
+            return
+
+        if atom.startswith('----:'):
+            self._remove_freeform(tags, atom)
+            tags[atom] = [MP4FreeForm(str(value).encode('utf-8'))]
+            return
+
+        tags[atom] = [str(value)]
+
+    def delete_field(self, audio, field):
+        tags = audio.tags
+        if tags is None:
+            return
+
+        atom = FIELD_SCHEMA.get(field, {}).get('mp4')
+        if atom is None:
+            self._remove_freeform(tags, MP4_FREEFORM_PREFIX + field)
+        elif atom.startswith('----:'):
+            self._remove_freeform(tags, atom)
+        else:
+            tags.pop(atom, None)
+
+    @staticmethod
+    def _remove_freeform(tags, full_key):
+        target = mp4_freeform_name(full_key).upper()
+        for key in list(tags.keys()):
+            if key.startswith('----:') and mp4_freeform_name(key).upper() == target:
+                del tags[key]
+
+    def get_picture(self, audio):
+        if audio.tags is None:
+            return None
+        covers = audio.tags.get('covr')
+        if not covers:
+            return None
+
+        cover = covers[0]
+        image_data = bytes(cover)
+        if cover.imageformat == MP4Cover.FORMAT_PNG:
+            mime = 'image/png'
+        elif cover.imageformat == MP4Cover.FORMAT_JPEG:
+            mime = 'image/jpeg'
+        else:
+            mime = detect_image_mime(image_data)
+        return image_data, mime
+
+    def set_picture(self, audio, image_data, mime_type):
+        tags = self._tags(audio)
+        mime = resolve_image_mime(image_data, mime_type)
+        imageformat = (
+            MP4Cover.FORMAT_PNG
+            if mime == 'image/png'
+            else MP4Cover.FORMAT_JPEG
+        )
+        tags['covr'] = [MP4Cover(image_data, imageformat=imageformat)]
+
+    def delete_picture(self, audio):
+        if audio.tags is not None:
+            audio.tags.pop('covr', None)
+
+    def save(self, audio):
+        if audio.tags is not None and not audio.tags:
+            audio.delete()
+        else:
+            audio.save()
+
+
 ID3_BACKEND = Id3Backend()
 FLAC_BACKEND = FlacBackend()
 VORBIS_BACKEND = VorbisBackend()
+MP4_BACKEND = Mp4Backend()
 
 
 def backend_for(audio):
@@ -490,4 +700,6 @@ def backend_for(audio):
         return FLAC_BACKEND
     if isinstance(audio, (OggVorbis, OggOpus)):
         return VORBIS_BACKEND
+    if isinstance(audio, MP4):
+        return MP4_BACKEND
     return None
