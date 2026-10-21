@@ -309,6 +309,9 @@ In the synced lyrics editor:
 - Click timestamp to jump to that position in the audio
 - Click edit icon to modify timestamps manually
 - Synchronize line button - Insert current playback time as timestamp
+- Shift - Move all timestamps earlier or later by an offset in seconds
+- Import .lrc - Load lyrics and timestamps from an .lrc file
+- Export .lrc - Download synchronized lyrics as an .lrc file (with `[ti:]`/`[ar:]`/`[al:]` headers when known)
 - Copy LRC - Copy with timestamps
 - Copy Text - Copy without timestamps
 - Clear Timestamps - Remove all timestamps

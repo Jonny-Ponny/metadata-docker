@@ -1609,6 +1609,11 @@
         {filePath}
         initialLyrics={syncedLyricsData.lyrics}
         initialTimestamps={syncedLyricsData.timestamps}
+        trackInfo={{
+            title: metadata.title,
+            artist: metadata.artist,
+            album: metadata.album,
+        }}
         onSave={handleSyncedLyricsSave}
     />
 </div>

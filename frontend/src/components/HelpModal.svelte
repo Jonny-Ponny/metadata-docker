@@ -238,6 +238,18 @@
                                 from synchronized lyrics
                             </li>
                             <li>
+                                <strong>Import .lrc</strong> - Load lyrics and
+                                timestamps from an .lrc file
+                            </li>
+                            <li>
+                                <strong>Export .lrc</strong> - Download the
+                                synchronized lyrics as an .lrc file
+                            </li>
+                            <li>
+                                <strong>Shift −/+</strong> - Move all timestamps
+                                earlier or later by the amount in seconds
+                            </li>
+                            <li>
                                 <strong>Synchronize line</strong> - Insert current
                                 playback time as timestamp for the next line
                             </li>

@@ -34,6 +34,28 @@ export function scrollToElement(element, options = {}) {
 }
 
 /**
+ * Trigger a browser download for a text file
+ * @param {string} filename - Suggested file name
+ * @param {string} text - File contents
+ * @param {string} mimeType - MIME type for the blob
+ */
+export function downloadTextFile(
+  filename,
+  text,
+  mimeType = "text/plain;charset=utf-8",
+) {
+  const blob = new Blob([text], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
  * Equalize heights of multiple elements
  * @param {HTMLElement[]} elements - Array of elements to equalize
  * @returns {number} The maximum height applied

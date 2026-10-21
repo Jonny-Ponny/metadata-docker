@@ -6,6 +6,11 @@
         secondsToTimestamp,
         validateTimestampRange,
         processEditedLyrics,
+        parseLrc,
+        shiftTimestamps,
+        buildLrc,
+        downloadTextFile,
+        TIMESTAMP_PLACEHOLDER,
         debounce,
         toast,
         equalizeElementHeights,
@@ -22,6 +27,7 @@
         filePath = null,
         initialLyrics = "",
         initialTimestamps = [],
+        trackInfo = {},
         onSave = () => {},
     } = $props();
 
@@ -32,6 +38,10 @@
     let currentActiveLine = $state(-1);
 
     let currentPlaybackTime = $state(0);
+
+    // Bulk timestamp tools
+    let shiftAmount = $state(0.5);
+    let lrcFileInput = $state(null);
 
     // For the old timestamp edit modal
     let showTimestampModal = $state(false);
@@ -111,11 +121,8 @@
     // ========== FUNCTIONS ==========
     function updateSynchronizedLyricsText() {
         const lines = USLT.split("\n");
-        const syncedLines = lines.map((line, i) => {
-            const ts = timestamps[i] || "[--:--.--]";
-            return `${ts} ${line}`;
-        });
-        synchronizedLyricsText = syncedLines.join("\n");
+        // Untimed lines are written as plain text so the result is valid LRC
+        synchronizedLyricsText = buildLrc(lines, timestamps);
     }
 
     function handleLineClick(lineIndex) {
@@ -422,12 +429,7 @@
 
     // Copy synchronized lyrics
     async function copySynchronizedLyrics() {
-        const lines = USLT.split("\n");
-        const syncedLines = lines.map((line, i) => {
-            const ts = timestamps[i] || "[--:--.--]";
-            return `${ts} ${line}`;
-        });
-        const textToCopy = syncedLines.join("\n");
+        const textToCopy = buildLrc(USLT.split("\n"), timestamps);
 
         try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -452,10 +454,11 @@
 
     // ========== SAVE HANDLER ==========
     function handleSave() {
-        // A "real" timestamp is anything other than the empty placeholder
-        const hasTimestamps =
-            timestamps.length > 0 &&
-            timestamps.every((ts) => ts && ts !== "[--:--.--]");
+        // At least one real timestamp means this is LRC content. Untimed lines
+        // are written as plain lines by updateSynchronizedLyricsText().
+        const hasTimestamps = timestamps.some(
+            (ts) => ts && ts !== TIMESTAMP_PLACEHOLDER,
+        );
 
         onSave({
             lyrics: USLT,
@@ -483,6 +486,147 @@
         requestAnimationFrame(() => {
             equalizeAllLineHeights();
         });
+    }
+
+    // ========== BULK TIMESTAMP TOOLS ==========
+    async function refreshAfterBulkEdit({ resetActive = true } = {}) {
+        updateSynchronizedLyricsText();
+
+        if (resetActive) {
+            currentActiveLine = -1;
+        } else {
+            updateActiveLine(currentPlaybackTime);
+        }
+
+        cleanupResizeObservers();
+        await tick();
+        requestAnimationFrame(() => {
+            equalizeAllLineHeights();
+            setupResizeObservers();
+        });
+    }
+
+    function applyTimestampShift(direction) {
+        const amount = Math.abs(Number(shiftAmount));
+        if (!Number.isFinite(amount) || amount === 0) {
+            toast.info("Enter a non-zero shift amount");
+            return;
+        }
+
+        const delta = Math.abs(amount) * (direction < 0 ? -1 : 1);
+        const result = shiftTimestamps(timestamps, delta);
+
+        if (!result.ok) {
+            toast.error(result.error);
+            return;
+        }
+        if (result.count === 0) {
+            toast.info("No timestamps to shift");
+            return;
+        }
+
+        timestamps = result.timestamps;
+        refreshAfterBulkEdit({ resetActive: false });
+
+        const label = `${delta > 0 ? "+" : ""}${delta.toFixed(2)}s`;
+        toast.success(
+            `Shifted ${result.count} timestamp${
+                result.count === 1 ? "" : "s"
+            } by ${label}`,
+        );
+    }
+
+    function handleImportClick() {
+        lrcFileInput?.click();
+    }
+
+    function handleShiftAmountInput(event) {
+        const raw = event.target.value;
+        // Keep digits and a single decimal separator, normalise "," to "."
+        const [whole, ...decimals] = raw
+            .replace(/,/g, ".")
+            .replace(/[^0-9.]/g, "")
+            .split(".");
+        const cleaned =
+            decimals.length > 0 ? `${whole}.${decimals.join("")}` : whole;
+
+        if (event.target.value !== cleaned) {
+            event.target.value = cleaned;
+        }
+        shiftAmount = cleaned;
+    }
+
+    function clampShiftAmount() {
+        const value = Math.abs(Number(shiftAmount));
+        shiftAmount = Number.isFinite(value) ? value : 0;
+    }
+
+    async function handleLrcFileSelected(event) {
+        const file = event.target.files?.[0];
+        // Reset so selecting the same file again still fires onchange
+        event.target.value = "";
+        if (!file) return;
+
+        try {
+            const parsed = parseLrc(await file.text());
+
+            if (!parsed.text.trim()) {
+                toast.info("No lyrics found in the selected file");
+                return;
+            }
+
+            USLT = parsed.text;
+            timestamps = parsed.timestamps;
+
+            const lineCount = USLT.split("\n").length;
+            while (timestamps.length < lineCount) {
+                timestamps.push(TIMESTAMP_PLACEHOLDER);
+            }
+
+            await refreshAfterBulkEdit();
+            toast.success(`Imported lyrics from ${file.name}`);
+
+            if (parsed.hasOffset) {
+                toast.info(
+                    "[offset] tags are ignored - use the Shift controls to adjust timing",
+                );
+            }
+        } catch (err) {
+            console.error("Failed to import LRC file:", err);
+            toast.error(`Import failed: ${err.message}`);
+        }
+    }
+
+    function buildExportFilename() {
+        const title = (trackInfo?.title || "").trim();
+        const artist = (trackInfo?.artist || "").trim();
+        const fallback = filePath
+            ? filePath
+                  .split(/[\\/]/)
+                  .pop()
+                  .replace(/\.[^.]+$/, "")
+            : "lyrics";
+
+        const base = title ? (artist ? `${artist} - ${title}` : title) : fallback;
+        const safe = base.replace(/[\\/:*?"<>|]/g, "_").trim() || "lyrics";
+
+        return `${safe}.lrc`;
+    }
+
+    function exportLrcFile() {
+        if (!USLT.trim()) {
+            toast.info("No lyrics to export");
+            return;
+        }
+
+        const content = buildLrc(USLT.split("\n"), timestamps, {
+            title: trackInfo?.title,
+            artist: trackInfo?.artist,
+            album: trackInfo?.album,
+        });
+
+        downloadTextFile(buildExportFilename(), content);
+        toast.success("LRC file downloaded");
     }
 
     async function copyUnsyncedText() {
@@ -606,6 +750,13 @@
     >
         <!-- Make the entire modal scrollable -->
         <div class="lyrics-modal" onclick={stopPropagation}>
+            <input
+                class="hidden-file-input"
+                type="file"
+                accept=".lrc,.txt,text/plain"
+                bind:this={lrcFileInput}
+                onchange={handleLrcFileSelected}
+            />
             <!-- Header - stays fixed -->
             <div class="modal-header">
                 <h2>Synced Lyrics Editor</h2>
@@ -632,6 +783,52 @@
                             />
                         </svg>
                         <span>Edit</span>
+                    </button>
+
+                    <!-- Import .lrc button -->
+                    <button
+                        class="header-btn"
+                        onclick={handleImportClick}
+                        title="Import lyrics from an .lrc file"
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path d="M12 3v12" />
+                            <path d="m7 8 5-5 5 5" />
+                            <path
+                                d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                            />
+                        </svg>
+                        <span>Import .lrc</span>
+                    </button>
+
+                    <!-- Export .lrc button -->
+                    <button
+                        class="header-btn"
+                        onclick={exportLrcFile}
+                        title="Download synchronized lyrics as an .lrc file"
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path d="M12 3v12" />
+                            <path d="m7 10 5 5 5-5" />
+                            <path
+                                d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                            />
+                        </svg>
+                        <span>Export .lrc</span>
                     </button>
 
                     <!-- Copy LRC button (with timestamps) -->
@@ -908,7 +1105,38 @@
             <!-- Footer with Save and Cancel - stays fixed -->
             <div class="modal-footer">
                 <div class="footer-left">
-                    <!-- Empty div to balance the layout -->
+                    <div class="shift-control">
+                        <span class="shift-label">Shift</span>
+                        <button
+                            class="shift-btn"
+                            onclick={() => applyTimestampShift(-1)}
+                            disabled={USLT === ""}
+                            title="Shift all timestamps earlier"
+                            aria-label="Shift all timestamps earlier"
+                        >
+                            −
+                        </button>
+                        <input
+                            class="shift-input"
+                            type="text"
+                            inputmode="decimal"
+                            value={shiftAmount}
+                            oninput={handleShiftAmountInput}
+                            onblur={clampShiftAmount}
+                            aria-label="Shift amount in seconds"
+                            title="Shift amount in seconds"
+                        />
+                        <span class="shift-unit">s</span>
+                        <button
+                            class="shift-btn"
+                            onclick={() => applyTimestampShift(1)}
+                            disabled={USLT === ""}
+                            title="Shift all timestamps later"
+                            aria-label="Shift all timestamps later"
+                        >
+                            +
+                        </button>
+                    </div>
                 </div>
 
                 <div class="footer-center">
@@ -1318,6 +1546,67 @@
         stroke: white;
     }
 
+    .hidden-file-input {
+        display: none;
+    }
+
+    .shift-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .shift-label,
+    .shift-unit {
+        font-size: 13px;
+        color: #666;
+    }
+
+    .shift-input {
+        width: 68px;
+        height: 32px;
+        padding: 0 6px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: white;
+        color: #333;
+        font-size: 13px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .shift-input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+    }
+
+    .shift-btn {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: transparent;
+        color: #666;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .shift-btn:hover:not(:disabled) {
+        background: var(--color-primary-transparent);
+        border-color: var(--color-primary);
+        color: var(--color-primary);
+    }
+
+    .shift-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
     .modal-footer {
         display: flex;
         align-items: center;
@@ -1516,6 +1805,32 @@
 
     :global(body.dark) .btn-primary:hover {
         background-color: var(--color-primary-dark-focus);
+    }
+
+    :global(body.dark) .shift-label,
+    :global(body.dark) .shift-unit {
+        color: #b0b0b0;
+    }
+
+    :global(body.dark) .shift-input {
+        background: #2d2d2d;
+        border-color: #555;
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .shift-input:focus {
+        border-color: var(--color-primary-dark);
+    }
+
+    :global(body.dark) .shift-btn {
+        border-color: #555;
+        color: #aaa;
+    }
+
+    :global(body.dark) .shift-btn:hover:not(:disabled) {
+        background: var(--color-primary-transparent-dark);
+        border-color: var(--color-primary-dark);
+        color: var(--color-primary-dark);
     }
 
     :global(.player) {
