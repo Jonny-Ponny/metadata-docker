@@ -1116,16 +1116,18 @@
     gap: 6px;
     cursor: pointer;
     flex: 1;
+    min-width: 0;
   }
   .file-enable input[type="checkbox"] {
     margin: 0;
     accent-color: var(--color-primary);
+    flex-shrink: 0;
   }
   .file-name {
     font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .file-header select {
     padding: 4px 8px;
