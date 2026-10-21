@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { updateFavicon } from '../utils/favicon.utils';
 
 const getInitialTheme = () => {
   if (typeof localStorage !== 'undefined') {
@@ -28,6 +29,9 @@ theme.subscribe(value => {
     } else {
       document.body.classList.remove('dark');
     }
+
+    // The favicon uses a different accent per mode, so refresh it here too
+    updateFavicon();
     
     // Remove the no-transitions class after the theme is applied
     requestAnimationFrame(() => {

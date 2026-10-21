@@ -3,6 +3,7 @@
 import { writable } from "svelte/store";
 import { getAuthHeaders } from "../stores/auth.store";
 import { generateFullTheme} from "./index"
+import { updateFavicon } from "./favicon.utils";
 
 // Allowed variables for renaming schemes
 export const ALLOWED_VARIABLES = {
@@ -141,4 +142,7 @@ export function applyThemeFromSettings(settingsObj) {
     for (const [key, value] of Object.entries(fullTheme)) {
         root.style.setProperty(key, value);
     }
+
+    // The favicon can't read the CSS variables above, so refresh it explicitly.
+    updateFavicon();
 }

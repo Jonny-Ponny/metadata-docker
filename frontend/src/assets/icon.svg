@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" style="color:#fd7d05">
+  <!-- Music folder: accent-colored body with two darker entry bars on top and a dark note -->
+  <rect x="0" y="1" width="16" height="4" fill="currentColor"/>
+  <rect x="0" y="5" width="32" height="4" fill="currentColor"/>
+  <rect x="0" y="9" width="48" height="39" fill="currentColor"/>
+  <!-- Darker shades derived from the accent by compositing black over it -->
+  <rect x="0" y="1" width="16" height="4" fill="#000" fill-opacity="0.22"/>
+  <rect x="0" y="5" width="32" height="4" fill="#000" fill-opacity="0.12"/>
+  <path d="M24 17H33V21H28V40H18V32H24Z" fill="#000" fill-opacity="0.5"/>
+</svg>
