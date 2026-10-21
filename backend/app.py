@@ -3,19 +3,19 @@ import shutil
 import re
 import jwt
 import datetime
-import zipfile
-import io
 import base64
 import re
 import requests
 import time
+from urllib.parse import quote
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
 from formats import is_supported_audio, mime_for
 from pathlib import Path
+from zip_stream import iter_zip
 
-from flask import Flask, jsonify, request, send_file, send_from_directory
+from flask import Flask, jsonify, request, send_file, send_from_directory, Response
 from logger_config import log_info, log_error, log_warning, LOG_DIR
 
 from plugin_manager import PluginManager
@@ -1458,6 +1458,18 @@ def apply_renaming_scheme():
 DOWNLOAD_TOKEN_EXPIRE_SECONDS = 120
 
 
+def _content_disposition(filename):
+    """Return a download header that survives non-Latin-1 file names."""
+    fallback = ''.join(
+        char if 32 <= ord(char) < 127 and char not in '"\\' else '_'
+        for char in filename
+    )
+    return (
+        f'attachment; filename="{fallback}"; '
+        f"filename*=UTF-8''{quote(filename, safe='')}"
+    )
+
+
 def _send_download(path, is_folder):
     """Build the download response for a file or folder."""
     try:
@@ -1484,36 +1496,33 @@ def _send_download(path, is_folder):
             )
             
             log_info(f'Downloading file: {full_path}')
-            return send_file(
+            filename = os.path.basename(full_path)
+            response = send_file(
                 full_path,
                 mimetype=mimetype,
                 as_attachment=True,
-                download_name=os.path.basename(full_path)
+                download_name=filename,
             )
+            response.headers['Content-Disposition'] = _content_disposition(filename)
+            return response
         
         # Handle folder download as ZIP
         elif os.path.isdir(full_path):
-            # Create ZIP in memory
-            memory_file = io.BytesIO()
-            
-            with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-                # Walk through all files in the folder
-                for root, dirs, files in os.walk(full_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        # Create archive name with relative path from the folder being downloaded
-                        arcname = os.path.relpath(file_path, os.path.dirname(full_path))
-                        zf.write(file_path, arcname)
-            
-            memory_file.seek(0)
-            
-            log_info(f'Downloading folder as ZIP: {full_path}')
-            return send_file(
-                memory_file,
+            archive_name = f'{os.path.basename(full_path)}.zip'
+
+            log_info(f'Streaming folder as ZIP: {full_path}')
+            response = Response(
+                iter_zip(full_path),
                 mimetype='application/zip',
-                as_attachment=True,
-                download_name=f'{os.path.basename(full_path)}.zip'
             )
+            # Content-Length is unknown while streaming, so let the browser
+            # save the file under the folder's name.
+            response.headers['Content-Disposition'] = _content_disposition(
+                archive_name
+            )
+            # Ask reverse proxies not to buffer the whole archive first.
+            response.headers['X-Accel-Buffering'] = 'no'
+            return response
         else:
             return jsonify({'error': 'Invalid item type'}), 400
             
