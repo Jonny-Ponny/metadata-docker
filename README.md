@@ -49,6 +49,9 @@ services:
       - ~/path/to/your/music:/music                 # Library
       - ./logs:/logs                                # Logs
       - ./addons:/app/addons                        # Addons
+    # Healthcheck is inherited from the image. Uncomment to disable it.
+    #healthcheck:
+    #  disable: true
 ```
 Change environment variables according to your preferences
 
@@ -76,7 +79,22 @@ PGID|Group ID for file permissions|1000
 
 Make sure user/group ID has proper file permissions. The container runs as an unprivileged user by default; set `PUID`/`PGID` to match the owner of your music folder, or set both to `0` to run as root (not recommended).
 
-The image also defines a `HEALTHCHECK` that polls `/api/ping`, so `docker ps` reports the container as healthy once the app and its addon dependencies are ready.
+## Healthcheck
+
+The image defines a `HEALTHCHECK` that polls the unauthenticated `/api/ping` endpoint, so `docker ps` reports the container as healthy once the app and its addon dependencies are ready.
+
+An unhealthy status alone does not restart the container. Addons are installed before the app starts, so a slow first boot can briefly show `(unhealthy)` and then recover.
+
+To disable it for a deployment, uncomment the `healthcheck` block in `docker-compose.yml` or add:
+
+```yaml
+services:
+  app:
+    healthcheck:
+      disable: true
+```
+
+You can also override the image defaults (`interval`, `timeout`, `start_period`, `retries`) in the same block, for example a longer `start_period` for addons with heavy dependencies.
 
 ## Volume Mounts
 Mount|Purpose

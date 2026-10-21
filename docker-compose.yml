@@ -16,3 +16,6 @@ services:
       - ~/path/to/your/music:/music                 # Library
       - ./logs:/logs                                # Logs
       - ./addons:/app/addons                        # Addons
+    # Healthcheck is inherited from the image. Uncomment to disable it.
+    #healthcheck:
+    #  disable: true
