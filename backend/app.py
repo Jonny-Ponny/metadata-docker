@@ -12,6 +12,7 @@ import time
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
+from formats import is_supported_audio, mime_for
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
@@ -46,7 +47,7 @@ PGID = os.getenv('PGID', '0')
 app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
-MUSIC_FOLDER = '/music'
+MUSIC_FOLDER = os.getenv('MUSIC_FOLDER', '/music')
 
 log_info(f'Debug set to {DEBUG}')
 log_info(f'PUID set to {PUID}')
@@ -259,7 +260,7 @@ def build_tree(current_path, relative_path):
                 })
             elif os.path.isfile(full):
                 # Check for audio files
-                if entry.lower().endswith(('.mp3', '.flac')):
+                if is_supported_audio(entry):
                     stat = os.stat(full)
                     items.append({
                         'name': entry,
@@ -377,8 +378,7 @@ def update_single_file():
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # Only process mp3 and flac files
-        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+        if not is_supported_audio(full_path):
             return jsonify({'error': 'Unsupported file format'}), 400
         
         success = update_file_metadata(full_path, field, value)
@@ -410,7 +410,7 @@ def update_folder_files():
         if not os.path.isdir(full_path):
             return jsonify({'error': 'Folder not found'}), 404
         
-        # Only process mp3 and flac files in the folder
+        # Only process supported audio files in the folder
         results = update_folder_metadata(full_path, field, value)
         
         return jsonify({
@@ -439,9 +439,7 @@ def serve_audio():
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
         log_info(f'Serving audio: {full_path}')
-        # Set correct MIME type based on file extension
-        mimetype = 'audio/mpeg' if full_path.lower().endswith('.mp3') else 'audio/flac'
-        return send_file(full_path, mimetype=mimetype, conditional=True)
+        return send_file(full_path, mimetype=mime_for(full_path), conditional=True)
     
     except PermissionError as e:
         return jsonify({'error': str(e)}), 403
@@ -739,8 +737,7 @@ def update_file_picture_endpoint():
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # Only process mp3 and flac files
-        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+        if not is_supported_audio(full_path):
             return jsonify({'error': 'Unsupported file format'}), 400
         
         # Read image data
@@ -955,7 +952,7 @@ def delete_metadata_field():
             })
         else:
             # Single file deletion (existing behavior)
-            if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+            if not is_supported_audio(full_path):
                 return jsonify({'error': 'Unsupported file format'}), 400
 
             from metadata_writer import delete_metadata_field as delete_field
@@ -988,8 +985,7 @@ def delete_cover_art():
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # Only process mp3 and flac files
-        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+        if not is_supported_audio(full_path):
             return jsonify({'error': 'Unsupported file format'}), 400
 
         from metadata_writer import delete_cover_art as delete_cover
@@ -1063,8 +1059,7 @@ def save_cover_art_as_file():
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # Only process mp3 and flac files
-        if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
+        if not is_supported_audio(full_path):
             return jsonify({'error': 'Unsupported file format'}), 400
         
         metadata = extract_metadata(full_path)
@@ -1319,7 +1314,7 @@ def apply_renaming_scheme():
             first_audio = None
             for root, dirs, files in os.walk(full_path):
                 for file in files:
-                    if file.lower().endswith(('.mp3', '.flac')):
+                    if is_supported_audio(file):
                         first_audio = os.path.join(root, file)
                         break
                 if first_audio:
@@ -1375,8 +1370,8 @@ def apply_renaming_scheme():
             if not os.path.isfile(full_path):
                 return jsonify({'error': 'File not found'}), 404
             
-            if not (full_path.lower().endswith('.mp3') or full_path.lower().endswith('.flac')):
-                return jsonify({'error': 'Smart rename only works on audio files (MP3/FLAC)'}), 400
+            if not is_supported_audio(full_path):
+                return jsonify({'error': 'Smart rename only works on supported audio files'}), 400
             
             # Extract metadata from the file itself
             metadata = extract_metadata(full_path)
@@ -1446,21 +1441,21 @@ def _send_download(path, is_folder):
         
         # Handle single file download
         if not is_folder and os.path.isfile(full_path):
-            # Determine mimetype
+            # Determine mimetype using the format registry, with image
+            # fallbacks for non-audio downloads.
             ext = os.path.splitext(full_path)[1].lower()
-            if ext in ['.mp3', '.flac', '.wav', '.aac', '.ogg', '.m4a', '.wma', '.opus', '.ape', '.dsf', '.dff']:
-                mimetype = 'audio/mpeg' if ext == '.mp3' else 'audio/flac' if ext == '.flac' else 'application/octet-stream'
-            elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
-                mimetype = {
-                    '.jpg': 'image/jpeg',
-                    '.jpeg': 'image/jpeg',
-                    '.png': 'image/png',
-                    '.gif': 'image/gif',
-                    '.bmp': 'image/bmp',
-                    '.webp': 'image/webp'
-                }.get(ext, 'application/octet-stream')
-            else:
-                mimetype = 'application/octet-stream'
+            image_mimetypes = {
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.gif': 'image/gif',
+                '.bmp': 'image/bmp',
+                '.webp': 'image/webp'
+            }
+            mimetype = mime_for(
+                full_path,
+                default=image_mimetypes.get(ext, 'application/octet-stream'),
+            )
             
             log_info(f'Downloading file: {full_path}')
             return send_file(

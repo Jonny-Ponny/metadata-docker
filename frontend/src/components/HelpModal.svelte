@@ -530,7 +530,7 @@
                         </div>
 
                         <div class="tag-group">
-                            <h4>FLAC (Vorbis Comments) Tags</h4>
+                            <h4>FLAC / OGG Vorbis / Opus (Vorbis Comments) Tags</h4>
                             <table class="tag-table">
                                 <thead>
                                     <tr>
@@ -766,7 +766,7 @@
                         <p class="note">
                             <strong>Note:</strong> The main <strong>Date</strong> field
                             maps to <code>TDRC</code> for MP3 and <code>DATE</code>
-                            for FLAC. <strong>Track Number</strong> maps to
+                            for FLAC, OGG Vorbis and Opus. <strong>Track Number</strong> maps to
                             <code>TRCK</code>/<code>TRACKNUMBER</code>.
                             <strong>Disk Number</strong> maps to
                             <code>TPOS</code>/<code>DISCNUMBER</code>. You can add custom fields using

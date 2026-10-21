@@ -561,7 +561,7 @@
         const field = "lyrics";
 
         // If nothing was actually synced, write the plain text
-        // (FLAC lyrics field accepts both LRC and plain text).
+        // (FLAC/OGG/Opus lyrics fields accept both LRC and plain text).
         // Otherwise write the LRC-formatted string.
         const value = data.hasTimestamps
             ? data.synchronizedLyrics

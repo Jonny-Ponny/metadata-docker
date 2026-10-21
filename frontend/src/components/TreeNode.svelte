@@ -16,6 +16,8 @@
         toast,
         getFolderSummary,
         formatFileSize,
+        isAudioFile,
+        getAudioFormatLabel,
     } from "../utils/index.js";
 
     let {
@@ -318,17 +320,16 @@
                 return;
             }
 
-            // Filter for audio files only (mp3 and flac)
+            // Filter for supported audio files only.
             const audioFiles =
                 item.children?.filter(
                     (child) =>
                         child.type === "file" &&
-                        (child.name.toLowerCase().endsWith(".mp3") ||
-                            child.name.toLowerCase().endsWith(".flac")),
+                        isAudioFile(child.name, child.file_type),
                 ) || [];
 
             if (audioFiles.length === 0) {
-                toast.info("No audio files (MP3/FLAC) found in this folder");
+                toast.info("No supported audio files found in this folder");
                 return;
             }
 
@@ -617,21 +618,7 @@
     <!-- Get format from file extension -->
     {@const fileExt = filename.split(".").pop().toLowerCase()}
 
-    {@const isAudio =
-        item.file_type === "audio" ||
-        [
-            ".mp3",
-            ".flac",
-            ".wav",
-            ".aac",
-            ".ogg",
-            ".m4a",
-            ".wma",
-            ".opus",
-            ".ape",
-            ".dsf",
-            ".dff",
-        ].includes("." + fileExt)}
+    {@const isAudio = isAudioFile(filename, item.file_type)}
     {@const isImage =
         item.file_type === "image" ||
         [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"].includes(
@@ -641,19 +628,6 @@
         item.file_type === "text" || [".txt", ".lrc"].includes("." + fileExt)}
 
     {@const format = (() => {
-        const audioFormatMap = {
-            mp3: "MP3",
-            flac: "FLAC",
-            wav: "WAV",
-            aac: "AAC",
-            ogg: "OGG",
-            m4a: "M4A",
-            wma: "WMA",
-            opus: "OPUS",
-            ape: "APE",
-            dsf: "DSF",
-            dff: "DFF",
-        };
         const imageFormatMap = {
             jpg: "JPG",
             jpeg: "JPEG",
@@ -666,7 +640,7 @@
             txt: "TXT",
             lrc: "LRC",
         };
-        if (isAudio) return audioFormatMap[fileExt] || fileExt.toUpperCase();
+        if (isAudio) return getAudioFormatLabel(filename);
         if (isImage) return imageFormatMap[fileExt] || fileExt.toUpperCase();
         if (isText) return textFormatMap[fileExt] || fileExt.toUpperCase();
         return fileExt.toUpperCase();

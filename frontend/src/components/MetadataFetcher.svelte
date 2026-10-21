@@ -4,6 +4,7 @@
     toast,
     getFieldLabel,
     getFieldDescription,
+    isAudioFile,
   } from "../utils/index.js";
 
   let { isOpen, onClose, mode, targetPath, isFolder = false } = $props();
@@ -86,9 +87,7 @@
       const folderNode = findFolder({ path: "", children: tree }, folderPath);
       if (!folderNode) return [];
       const audioFiles = folderNode.children.filter(
-        (f) =>
-          f.type === "file" &&
-          (f.name.endsWith(".mp3") || f.name.endsWith(".flac")),
+        (f) => f.type === "file" && isAudioFile(f.name, f.file_type),
       );
       return audioFiles.map((f) => ({ path: f.path, name: f.name }));
     } catch (e) {

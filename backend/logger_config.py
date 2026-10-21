@@ -4,8 +4,12 @@ import logging.handlers
 import os
 from pathlib import Path
 
-LOG_DIR = Path('/logs')
-LOG_DIR.mkdir(exist_ok=True, parents=True)
+LOG_DIR = Path(os.getenv('LOG_DIR', '/logs'))
+try:
+    LOG_DIR.mkdir(exist_ok=True, parents=True)
+except OSError:
+    # The file handler below falls back to console-only logging.
+    pass
 
 class AppLogger:
     """Application logger singleton"""

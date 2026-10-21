@@ -1,5 +1,5 @@
 Flask
-mutagen
+mutagen>=1.47,<2
 gunicorn
 pyjwt
 requests
