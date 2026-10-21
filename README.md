@@ -81,7 +81,7 @@ gh attestation verify oci://ghcr.io/jonny-ponny/metadata-docker:latest \
   --signer-workflow Jonny-Ponny/metadata-docker/.github/workflows/container-release.yml
 ```
 
-For a release tag, add `--source-ref refs/tags/v1.0.3` and use the matching image tag (`1.0.3`). On older `gh` versions, drop `--signer-workflow` and keep `--repo`.
+For a release tag, add `--source-ref refs/tags/v1.0.4` and use the matching image tag (`1.0.4`). On older `gh` versions, drop `--signer-workflow` and keep `--repo`.
 
 Successful verification means the image was built by this repo's workflow. Anything else (no attestation, another workflow or repo) means it was not.
 

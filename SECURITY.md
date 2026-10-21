@@ -19,7 +19,7 @@ What it doesn't prove:
 If you don't trust the maintainer, build from a reviewed tag:
 
 ```bash
-git clone --branch v1.0.3 https://github.com/Jonny-Ponny/metadata-docker.git
+git clone --branch v1.0.4 https://github.com/Jonny-Ponny/metadata-docker.git
 cd metadata-docker
 docker build -t metadata-docker .
 ```
