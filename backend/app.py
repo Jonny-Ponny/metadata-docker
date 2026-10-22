@@ -41,6 +41,13 @@ TOKEN_EXPIRE_HOURS = TOKEN_EXPIRE_HOURS if TOKEN_EXPIRE_HOURS > 0 else 24
 
 JWT_SECRET_KEY = os.urandom(24).hex()
 
+# Token scopes. Session tokens authenticate API requests; download tokens only
+# authorize a single download via the /api/download?token=... URL. Keeping the
+# scopes distinct prevents a download token (which can leak through URLs, proxy
+# logs or browser history) from being used as a full session token.
+TOKEN_SCOPE_SESSION = 'session'
+TOKEN_SCOPE_DOWNLOAD = 'download'
+
 # If not in environment docker will run as root
 PUID = os.getenv('PUID', '0')
 PGID = os.getenv('PGID', '0')
@@ -192,6 +199,10 @@ def token_required(f):
         try:
             # Decode token
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            # Only session tokens may authenticate API requests. Download
+            # tokens (scope 'download') must be rejected here.
+            if data.get('scope') != TOKEN_SCOPE_SESSION:
+                raise Exception('Not a session token')
             current_user = data.get('username')
             if not current_user or current_user != AUTH_USERNAME:
                 raise Exception('Invalid user')
@@ -230,6 +241,7 @@ def login():
     # Generate token with configurable expiry
     token = jwt.encode({
         'username': username,
+        'scope': TOKEN_SCOPE_SESSION,
         'exp': datetime.datetime.now() + datetime.timedelta(hours=TOKEN_EXPIRE_HOURS)
     }, app.config['SECRET_KEY'], algorithm='HS256')
     
@@ -1586,7 +1598,7 @@ def create_download_token():
 
     token = jwt.encode({
         'username': AUTH_USERNAME,
-        'scope': 'download',
+        'scope': TOKEN_SCOPE_DOWNLOAD,
         'path': path,
         'isFolder': is_folder,
         'exp': datetime.datetime.now() + datetime.timedelta(seconds=DOWNLOAD_TOKEN_EXPIRE_SECONDS)
@@ -1615,7 +1627,10 @@ def download_item_with_token():
     except Exception:
         return jsonify({'error': 'Token is invalid'}), 401
 
-    if data.get('scope') != 'download' or not data.get('path'):
+    if data.get('scope') != TOKEN_SCOPE_DOWNLOAD or not data.get('path'):
+        return jsonify({'error': 'Token is invalid'}), 401
+
+    if data.get('username') != AUTH_USERNAME:
         return jsonify({'error': 'Token is invalid'}), 401
 
     return _send_download(data['path'], bool(data.get('isFolder', False)))
