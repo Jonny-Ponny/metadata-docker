@@ -65,7 +65,7 @@ plugin_manager.discover_plugins()
 
 # ---------------------VERSION CHECK---------------------#
 
-APP_VERSION = 'v1.0.4'
+APP_VERSION = 'v1.0.5'
 # Commit the image was built from, set at build time (see Dockerfile). Lets
 # users compare a running container against the build-provenance attestation.
 APP_GIT_SHA = os.getenv('APP_GIT_SHA', 'unknown')
