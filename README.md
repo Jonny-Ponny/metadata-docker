@@ -36,12 +36,12 @@ services:
     image: ghcr.io/jonny-ponny/metadata-docker:latest
     container_name: metadata-docker
     ports:
-      - "8888:5000"                                 # Change 8888 to preferred port
+      - "127.0.0.1:8888:5000"                       # Localhost only; see below
     restart: unless-stopped
     environment:
-      - AUTH_USERNAME=USERNAME                      # Login
-      - AUTH_PASSWORD=PASSWORD                      # Plain text password
-      - TOKEN_EXPIRE_HOURS=24                       # Optional
+      - AUTH_USERNAME=USERNAME                      # Replace this
+      - AUTH_PASSWORD=PASSWORD                      # Replace this
+      - TOKEN_EXPIRE_HOURS=12                       # Optional
       - PUID=1000                                   # User(optional)
       - PGID=1000                                   # Group(optional)
       - TZ=UTC                                      # Timezone(optional)
@@ -63,9 +63,25 @@ Or if using Compose V1:
 
 ```docker-compose up -d```
 
-Access the web interface at http://your-server:8888 (or your configured port)
+Access the web interface at http://localhost:8888 on the server (or your configured port). The compose file binds to localhost, so for access from other machines see below.
 
-Use your auth credentials from docker-compose.yml
+Use your auth credentials from docker-compose.yml, or the temporary credentials printed in the logs if you left them unset.
+
+## Exposing the app safely
+
+The compose file binds the app to `127.0.0.1`, so it is not reachable from other machines by default. For remote access, put a TLS-terminating reverse proxy in front of it instead of exposing the Flask port directly. For example, with Caddy on the same host:
+
+```caddyfile
+metadata.example.com {
+    reverse_proxy 127.0.0.1:8888
+}
+```
+
+Never expose plain HTTP to the internet: the login password and bearer tokens would travel in clear text. If you deliberately bind to `0.0.0.0` for a trusted LAN, understand that anyone on that network can reach the login page.
+
+Set `AUTH_USERNAME` and `AUTH_PASSWORD` (or `AUTH_PASSWORD_HASH`) explicitly. If either is unset or empty, the app generates a random temporary credential at startup and writes it to the logs (`docker compose logs app` or `./logs/app.log`). Those credentials change on every restart; the app has no user database or setup screen. After five failed logins from one address, login is locked for 15 minutes.
+
+The SPA stores its JWT in `localStorage`, so it is exposed to any XSS. The app sends a restrictive `Content-Security-Policy` and related headers as defense-in-depth, but that does not make `localStorage` equivalent to an `HttpOnly` cookie. Addons run arbitrary Python inside the container; only mount addons you trust.
 
 ## Verifying the image
 
@@ -112,13 +128,22 @@ See [SECURITY.md](SECURITY.md).
 Variable|Description|Default
 |---|---|---|
 DEBUG|Enable debug mode|False
-AUTH_USERNAME|Login username|admin
-AUTH_PASSWORD|Login password|admin
-TOKEN_EXPIRE_HOURS|JWT token expiry|24
+AUTH_USERNAME|Login username. Generated and logged if empty|random for this run
+AUTH_PASSWORD|Login password. Generated and logged if empty|random for this run
+AUTH_PASSWORD_HASH|Werkzeug password hash, used instead of `AUTH_PASSWORD`|unset
+TOKEN_EXPIRE_HOURS|JWT token expiry|12
 PUID|User ID for file permissions|1000
 PGID|Group ID for file permissions|1000
 
 Make sure user/group ID has proper file permissions. The container runs as an unprivileged user by default; set `PUID`/`PGID` to match the owner of your music folder, or set both to `0` to run as root (not recommended).
+
+To avoid storing a plaintext password in `.env`, generate a Werkzeug hash and set `AUTH_PASSWORD_HASH` instead of `AUTH_PASSWORD`:
+
+```bash
+python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your-password'))"
+```
+
+If both `AUTH_PASSWORD` and `AUTH_PASSWORD_HASH` are set, the hash wins and a warning is logged.
 
 ## Healthcheck
 

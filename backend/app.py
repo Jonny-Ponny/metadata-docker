@@ -1,6 +1,9 @@
 import os
 import shutil
 import re
+import hmac
+import secrets
+import threading
 import jwt
 import datetime
 import base64
@@ -16,6 +19,7 @@ from pathlib import Path
 from zip_stream import iter_zip
 
 from flask import Flask, jsonify, request, send_file, send_from_directory, Response
+from werkzeug.security import check_password_hash
 from logger_config import log_info, log_error, log_warning, LOG_DIR
 
 from plugin_manager import PluginManager
@@ -24,20 +28,69 @@ from addon_base import EXTRA_INFO_FIELD
 log_info("STARTING")
 app = Flask(__name__, static_folder='static', static_url_path='')
 
-# Auth config from environment (with defaults)
-if os.getenv('AUTH_USERNAME'):
-    AUTH_USERNAME = os.getenv('AUTH_USERNAME')
-else:
-    AUTH_USERNAME = 'admin'
-    log_warning('AUTH_USERNAME not in environment, using default')
-if os.getenv('AUTH_PASSWORD'):
-    AUTH_PASSWORD = os.getenv('AUTH_PASSWORD')
-else:
-    AUTH_PASSWORD = 'admin'
-    log_warning('AUTH_PASSWORD not in environment, using default')
+# Auth config from environment. Missing or empty credentials never fall back
+# to a known default. Instead, generate temporary random credentials for this
+# process and log them once, so an unconfigured deployment cannot be accessed
+# with a guessable password. Set AUTH_USERNAME and AUTH_PASSWORD (or
+# AUTH_PASSWORD_HASH) for a stable login.
+AUTH_USERNAME = os.getenv('AUTH_USERNAME') or ''
+AUTH_PASSWORD = os.getenv('AUTH_PASSWORD') or ''
+AUTH_PASSWORD_HASH = os.getenv('AUTH_PASSWORD_HASH') or ''
 
-TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 24
-TOKEN_EXPIRE_HOURS = TOKEN_EXPIRE_HOURS if TOKEN_EXPIRE_HOURS > 0 else 24
+_generated_username = not AUTH_USERNAME
+_generated_password = False
+
+if _generated_username:
+    AUTH_USERNAME = f'admin_{secrets.token_hex(4)}'
+
+if AUTH_PASSWORD_HASH and AUTH_PASSWORD:
+    log_warning('Both AUTH_PASSWORD and AUTH_PASSWORD_HASH are set; using AUTH_PASSWORD_HASH')
+    AUTH_PASSWORD = ''
+
+if AUTH_PASSWORD_HASH:
+    # Validate the hash at startup so a typo fails loudly instead of every
+    # login returning a 500 or silently never matching. Werkzeug hashes look
+    # like "scrypt:...$salt$hash" (or the older pbkdf2 format).
+    hash_error = None
+    if AUTH_PASSWORD_HASH.count('$') < 2:
+        hash_error = 'expected "method$salt$hash"'
+    else:
+        try:
+            check_password_hash(AUTH_PASSWORD_HASH, 'startup-validation')
+        except (ValueError, TypeError) as e:
+            hash_error = str(e)
+    if hash_error:
+        raise RuntimeError(
+            f'AUTH_PASSWORD_HASH is not a valid Werkzeug password hash ({hash_error}). '
+            'Generate one with: python -c "from werkzeug.security import '
+            'generate_password_hash; print(generate_password_hash(\'your-password\'))"'
+        )
+elif not AUTH_PASSWORD:
+    AUTH_PASSWORD = secrets.token_urlsafe(24)
+    _generated_password = True
+
+if _generated_username or _generated_password:
+    log_warning('=' * 70)
+    log_warning('AUTH_USERNAME/AUTH_PASSWORD are not fully configured.')
+    log_warning('Temporary credentials for this run (they change on every restart):')
+    log_warning(f'  username: {AUTH_USERNAME}{" (generated)" if _generated_username else ""}')
+    if _generated_password:
+        log_warning(f'  password: {AUTH_PASSWORD} (generated)')
+    elif AUTH_PASSWORD_HASH:
+        log_warning('  password: (from AUTH_PASSWORD_HASH)')
+    else:
+        log_warning('  password: (from AUTH_PASSWORD)')
+    log_warning('Set AUTH_USERNAME and AUTH_PASSWORD (or AUTH_PASSWORD_HASH) for a stable login.')
+    log_warning('=' * 70)
+
+if not AUTH_PASSWORD_HASH and (
+    AUTH_PASSWORD.lower() in ('admin', 'password', 'changeme')
+    or AUTH_PASSWORD == AUTH_USERNAME
+):
+    log_warning('AUTH_PASSWORD is weak or matches the username. Set a strong password before exposing the app.')
+
+TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 12
+TOKEN_EXPIRE_HOURS = TOKEN_EXPIRE_HOURS if TOKEN_EXPIRE_HOURS > 0 else 12
 
 JWT_SECRET_KEY = os.urandom(24).hex()
 
@@ -53,6 +106,34 @@ PUID = os.getenv('PUID', '0')
 PGID = os.getenv('PGID', '0')
 
 app.config['SECRET_KEY'] = JWT_SECRET_KEY
+
+# Defense-in-depth headers for the SPA and API. The SPA has no inline scripts
+# (Vite emits external module files), but Svelte uses inline style attributes,
+# so styles still need 'unsafe-inline'. Images may come from addon cover URLs,
+# and blob:/data: are used for local previews and audio playback.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob: http: https:; "
+    "media-src 'self' blob:; "
+    "connect-src 'self' data:; "
+    "font-src 'self' data:; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers['Content-Security-Policy'] = CONTENT_SECURITY_POLICY
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    return response
 
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
 MUSIC_FOLDER = os.getenv('MUSIC_FOLDER', '/music')
@@ -223,24 +304,128 @@ def validate_token():
     """Simple endpoint to check if token is valid."""
     return jsonify({'valid': True})
 
-# Login endpoint with plain text check
+# -------------------------LOGIN RATE LIMIT------------------------- #
+
+# In-memory per-IP limiter. The container runs a single gunicorn worker, so
+# this is shared by all threads. It resets on restart, which is acceptable for
+# a single-admin app; a multi-worker deployment would need shared storage.
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_SECONDS = 15 * 60
+_login_failures = {}
+_login_failures_lock = threading.Lock()
+
+
+def _constant_time_eq(value, expected):
+    """Compare two strings without leaking content or length through timing."""
+    return hmac.compare_digest(value.encode('utf-8'), expected.encode('utf-8'))
+
+
+def _password_matches(password):
+    if AUTH_PASSWORD_HASH:
+        try:
+            return check_password_hash(AUTH_PASSWORD_HASH, password)
+        except (ValueError, TypeError):
+            # Startup validation should prevent this, but never turn a bad
+            # configuration into a 500 on the login endpoint.
+            return False
+    return _constant_time_eq(password, AUTH_PASSWORD)
+
+
+def _client_ip():
+    # Behind a reverse proxy this is the proxy's address unless a trusted
+    # proxy header is configured, so the limiter remains a global limit there.
+    return request.remote_addr or 'unknown'
+
+
+def _login_retry_after(ip):
+    """Return seconds until this IP may try again, or 0 if it may try now."""
+    now = time.time()
+    with _login_failures_lock:
+        entry = _login_failures.get(ip)
+        if not entry:
+            return 0
+        if entry['locked_until'] > now:
+            return max(1, int(entry['locked_until'] - now + 0.999))
+        if now - entry['first'] >= LOGIN_LOCKOUT_SECONDS:
+            _login_failures.pop(ip, None)
+        return 0
+
+
+def _record_login_failure(ip):
+    """Record a failed attempt and return retry-after seconds when locked."""
+    now = time.time()
+    with _login_failures_lock:
+        entry = _login_failures.get(ip)
+        if not entry or now - entry['first'] >= LOGIN_LOCKOUT_SECONDS:
+            entry = {'count': 0, 'first': now, 'locked_until': 0}
+
+        entry['count'] += 1
+        retry_after = 0
+        if entry['count'] >= LOGIN_MAX_ATTEMPTS:
+            entry['locked_until'] = now + LOGIN_LOCKOUT_SECONDS
+            retry_after = LOGIN_LOCKOUT_SECONDS
+        _login_failures[ip] = entry
+
+        # Keep the table bounded if many client addresses are seen.
+        if len(_login_failures) > 4096:
+            stale = [
+                key for key, value in _login_failures.items()
+                if value['locked_until'] <= now
+                and now - value['first'] >= LOGIN_LOCKOUT_SECONDS
+            ]
+            for key in stale:
+                _login_failures.pop(key, None)
+
+    return retry_after
+
+
+def _clear_login_failures(ip):
+    with _login_failures_lock:
+        _login_failures.pop(ip, None)
+
+
+def _rate_limited_response(retry_after):
+    response = jsonify({'error': 'Too many failed login attempts. Try again later.'})
+    response.status_code = 429
+    response.headers['Retry-After'] = str(retry_after)
+    return response
+
+
+# Login endpoint
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    
-    if not data or not data.get('username') or not data.get('password'):
+    client_ip = _client_ip()
+    retry_after = _login_retry_after(client_ip)
+    if retry_after:
+        return _rate_limited_response(retry_after)
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
         return jsonify({'error': 'Username and password required'}), 400
-    
+
     username = data.get('username')
     password = data.get('password')
-    
-    # Simple plain text check
-    if username != AUTH_USERNAME or password != AUTH_PASSWORD:
+
+    if not isinstance(username, str) or not isinstance(password, str) or not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+
+    if len(username) > 256 or len(password) > 4096:
         return jsonify({'error': 'Invalid credentials'}), 401
-    
+
+    username_ok = _constant_time_eq(username, AUTH_USERNAME)
+    password_ok = _password_matches(password)
+
+    if not (username_ok and password_ok):
+        retry_after = _record_login_failure(client_ip)
+        if retry_after:
+            return _rate_limited_response(retry_after)
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    _clear_login_failures(client_ip)
+
     # Generate token with configurable expiry
     token = jwt.encode({
-        'username': username,
+        'username': AUTH_USERNAME,
         'scope': TOKEN_SCOPE_SESSION,
         'exp': datetime.datetime.now() + datetime.timedelta(hours=TOKEN_EXPIRE_HOURS)
     }, app.config['SECRET_KEY'], algorithm='HS256')
@@ -248,7 +433,7 @@ def login():
     return jsonify({
         'success': True,
         'token': token,
-        'username': username,
+        'username': AUTH_USERNAME,
         'expires_in': TOKEN_EXPIRE_HOURS * 3600  # in seconds
     })
 

@@ -3,19 +3,25 @@ services:
     image: ghcr.io/jonny-ponny/metadata-docker:latest
     container_name: metadata-docker
     ports:
-      - "8888:5000"                                 # Change 8888 to preferred port
+      # Bound to localhost. Put a TLS-terminating reverse proxy in front for
+      # access from other machines; see "Exposing the app safely" in README.md.
+      - "127.0.0.1:8888:5000"                         # Change 8888 to preferred port
     restart: unless-stopped
     environment:
-      - AUTH_USERNAME=USERNAME                      # Login
-      - AUTH_PASSWORD=PASSWORD                      # Plain text password
-      - TOKEN_EXPIRE_HOURS=24                       # Optional
-      - PUID=1000                                   # User(optional)
-      - PGID=1000                                   # Group(optional)
-      - TZ=UTC                                      # Timezone(optional)
+      # If these are empty, random temporary credentials are generated at
+      # startup and printed to the container logs. Set them for a stable login.
+      - AUTH_USERNAME=${AUTH_USERNAME:-}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      # Optional alternative to AUTH_PASSWORD: a Werkzeug password hash.
+      - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH:-}
+      - TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS:-12}  # Optional
+      - PUID=1000                                     # User(optional)
+      - PGID=1000                                     # Group(optional)
+      - TZ=UTC                                        # Timezone(optional)
     volumes:
-      - ~/path/to/your/music:/music                 # Library
-      - ./logs:/logs                                # Logs
-      - ./addons:/app/addons                        # Addons
+      - ~/path/to/your/music:/music                   # Library
+      - ./logs:/logs                                  # Logs
+      - ./addons:/app/addons                          # Addons
     # Healthcheck is inherited from the image. Uncomment to disable it.
     #healthcheck:
     #  disable: true
