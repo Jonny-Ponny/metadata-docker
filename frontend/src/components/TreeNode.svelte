@@ -626,6 +626,7 @@
         )}
     {@const isText =
         item.file_type === "text" || [".txt", ".lrc"].includes("." + fileExt)}
+    {@const isOther = !isAudio && !isImage && !isText}
 
     {@const format = (() => {
         const imageFormatMap = {
@@ -730,6 +731,7 @@
                         class="format"
                         class:image-format={isImage}
                         class:text-format={isText}
+                        class:other-format={isOther}
                     >
                         {format}
                     </span>
@@ -945,6 +947,11 @@
         color: var(--color-badge-text);
     }
 
+    .file .format.other-format {
+        background: rgba(0, 0, 0, 0.06);
+        color: #777;
+    }
+
     /* Dark mode overrides */
     :global(body.dark) .directory .name,
     :global(body.dark) .file .name {
@@ -1009,5 +1016,10 @@
     :global(body.dark) .file .format.text-format {
         background: var(--color-badge-text-background-dark);
         color: var(--color-badge-text-dark);
+    }
+
+    :global(body.dark) .file .format.other-format {
+        background: rgba(255, 255, 255, 0.1);
+        color: #aaa;
     }
 </style>

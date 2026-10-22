@@ -2,7 +2,7 @@
 
 The app supports several containers, but they only use three tag models:
 
-* ID3 (MP3, later WAV/AIFF)
+* ID3 (MP3, WAV, AIFF)
 * native FLAC metadata blocks
 * Vorbis comments
 
@@ -14,6 +14,7 @@ entry plus, at most, a small backend override.
 import base64
 import re
 
+from mutagen.aiff import AIFF
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import (
     APIC,
@@ -38,6 +39,7 @@ from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover, MP4FreeForm
 from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
+from mutagen.wave import WAVE
 
 
 MP4_FREEFORM_PREFIX = '----:com.apple.iTunes:'
@@ -295,7 +297,7 @@ class TagBackend:
 
 
 class Id3Backend(TagBackend):
-    """ID3v2 tags (MP3 today, WAV/AIFF if registered later)."""
+    """ID3v2 tags used by MP3, WAV and AIFF files."""
 
     family = 'id3'
     supports_synced_lyrics = True
@@ -697,7 +699,7 @@ MP4_BACKEND = Mp4Backend()
 
 def backend_for(audio):
     """Return the backend matching a loaded mutagen object, or None."""
-    if isinstance(audio, MP3):
+    if isinstance(audio, (MP3, WAVE, AIFF)):
         return ID3_BACKEND
     if isinstance(audio, FLAC):
         return FLAC_BACKEND

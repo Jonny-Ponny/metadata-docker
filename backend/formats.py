@@ -27,6 +27,8 @@ class AudioFormat:
 
 FORMATS = (
     AudioFormat('mp3', 'MP3', ('.mp3',), 'audio/mpeg', 'id3'),
+    AudioFormat('wav', 'WAV', ('.wav',), 'audio/wav', 'id3'),
+    AudioFormat('aiff', 'AIFF', ('.aiff', '.aif'), 'audio/aiff', 'id3'),
     AudioFormat('flac', 'FLAC', ('.flac',), 'audio/flac', 'flac'),
     AudioFormat('ogg', 'OGG Vorbis', ('.ogg', '.oga'), 'audio/ogg', 'vorbis'),
     AudioFormat('opus', 'Opus', ('.opus',), 'audio/ogg', 'vorbis'),

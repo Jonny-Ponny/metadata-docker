@@ -300,6 +300,20 @@ def build_tree(current_path, relative_path):
                         'created': stat.st_ctime,
                         'modified': stat.st_mtime
                     })
+                # Everything else is still listed so it can be inspected,
+                # renamed, downloaded or deleted. The metadata endpoint marks
+                # these files read-only.
+                else:
+                    stat = os.stat(full)
+                    items.append({
+                        'name': entry,
+                        'type': 'file',
+                        'file_type': 'other',
+                        'path': rel,
+                        'size': stat.st_size,
+                        'created': stat.st_ctime,
+                        'modified': stat.st_mtime
+                    })
         
     except PermissionError:
         pass
@@ -381,6 +395,11 @@ def get_metadata():
 
         metadata = extract_metadata(full_path, include_picture=include_picture)
         if metadata is None:
+            # Unsupported files are shown in the tree but cannot be edited.
+            # Return an empty read-only payload instead of an error so the UI
+            # can display them without a failure toast.
+            if not is_supported_audio(full_path):
+                return jsonify(read_only_metadata(full_path))
             return jsonify({'error': 'Could not read metadata (unsupported format?)'}), 500
 
         return jsonify(metadata)

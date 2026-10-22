@@ -1,6 +1,6 @@
 # metadata-docker
 
-A self-hosted web application for editing audio file metadata (FLAC/MP3) and managing audio library with a built-in audio player, synchronized lyrics editor, and file browser. Personal project that started as a way to manage Navidrome library.
+A self-hosted web application for editing audio file metadata (MP3/FLAC/OGG/Opus/M4A/WAV/AIFF) and managing audio library with a built-in audio player, synchronized lyrics editor, and file browser. Personal project that started as a way to manage Navidrome library.
 
 ![Filebrowser and metadata editor](screenshots/image1.png)
 
@@ -8,7 +8,7 @@ App could be useful to anyone selfhosting their own music streaming service like
 
 ## Features
 - Easy setup with docker-compose.yml
-- Metadata Editor - Edit common and custom tags for MP3 and FLAC files
+- Metadata Editor - Edit common and custom tags for MP3, FLAC, OGG/Opus, M4A, WAV and AIFF files
 - Cover Art Management - Upload, view, delete, and extract cover art
 - File Management: Upload files/folders via browser or move items within the filetree, delete/rename/copy with context menu operations
 - Batch Operations - Apply metadata changes to entire folders

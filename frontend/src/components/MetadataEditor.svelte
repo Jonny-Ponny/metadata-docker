@@ -32,6 +32,11 @@
     let otherExpanded = $state(false);
     let customFields = $state([]); // { name: '', value: '' }
 
+    // Unsupported files are listed in the tree for inspection only. The API
+    // returns ``readOnly`` for them, which disables every editing control.
+    let readOnly = $state(false);
+    let readOnlyFormat = $state("");
+
     // Track which field is being edited (by field name)
     let editingFields = $state(new Set());
 
@@ -80,6 +85,7 @@
     const textareaFields = ["comment", "description"];
 
     function startEditing(fieldName) {
+        if (readOnly) return;
         editingFields.add(fieldName);
         editingFields = new Set(editingFields); // trigger reactivity
     }
@@ -95,12 +101,13 @@
     }
 
     function addCustomField() {
+        if (readOnly) return;
         customFields = [...customFields, { name: "", value: "" }];
         customFieldEditing = [...customFieldEditing, false];
     }
 
     async function applyToFile(field, value, showToast = true) {
-        if (!filePath) return;
+        if (!filePath || readOnly) return;
 
         try {
             const URL = `/api/metadata/file`;
@@ -139,7 +146,7 @@
     }
 
     async function applyToFolder(field, value) {
-        if (!filePath) return;
+        if (!filePath || readOnly) return;
 
         // Get the folder path from the file path
         const folderPath = filePath.split("/").slice(0, -1).join("/");
@@ -182,6 +189,9 @@
     async function fetchMetadata(path) {
         if (!path) return;
 
+        readOnly = false;
+        readOnlyFormat = "";
+
         try {
             const URL = `/api/metadata?path=${encodeURIComponent(path)}`;
             const response = await fetch(URL);
@@ -193,6 +203,9 @@
             }
 
             const data = await response.json();
+
+            readOnly = data.readOnly === true || data.supported === false;
+            readOnlyFormat = readOnly ? data.format || "" : "";
 
             // Fields that have dedicated top‑level properties in the component
             const mainFields = [
@@ -217,6 +230,9 @@
                 "picture",
                 "customFields",
                 "otherFields",
+                "readOnly",
+                "supported",
+                "format",
             ];
 
             // Start with an empty otherFields object
@@ -304,7 +320,7 @@
         applyToFolder = false,
         showToast = true,
     ) {
-        if (!file || !filePath) return;
+        if (!file || !filePath || readOnly) return;
 
         // Validate file type
         if (!file.type.startsWith("image/")) {
@@ -374,6 +390,7 @@
     }
 
     function triggerPictureUpload(applyToFolder = false) {
+        if (readOnly) return;
         // Create hidden file input if it doesn't exist
         if (!pictureFileInput) {
             pictureFileInput = document.createElement("input");
@@ -403,7 +420,7 @@
     }
 
     async function deleteField(field) {
-        if (!filePath || !field) return;
+        if (!filePath || !field || readOnly) return;
 
         try {
             const URL = `/api/metadata/field/delete`;
@@ -442,7 +459,7 @@
     }
 
     async function deleteCoverArt() {
-        if (!filePath) return;
+        if (!filePath || readOnly) return;
 
         try {
             const URL = `/api/metadata/picture/delete`;
@@ -580,7 +597,7 @@
     }
 
     async function applyAllChanges() {
-        if (!filePath) return;
+        if (!filePath || readOnly) return;
 
         try {
             // Collect all fields that have values
@@ -651,7 +668,7 @@
     }
 
     async function deleteFieldFromFolder(field) {
-        if (!filePath || !field) return;
+        if (!filePath || !field || readOnly) return;
 
         // Get the folder path from the file path
         const folderPath = filePath.split("/").slice(0, -1).join("/") || "/";
@@ -768,28 +785,45 @@
     });
 </script>
 
-<div class="metadata-editor">
-    <div class="operation-controls">
-        <label
-            class="checkbox-label"
-            title="When enabled, folder operations will include subfolders"
-        >
-            <input type="checkbox" bind:checked={applyToSubfolders} />
-            <span>Recursive</span>
-        </label>
-        <label
-            class="checkbox-label"
-            title="When enabled, tag deletetion operations will apply to all files in folder"
-        >
-            <input type="checkbox" bind:checked={applyDeleteToFolder} />
-            <span>Tag deletion applies to folder</span>
-        </label>
-    </div>
+<div class="metadata-editor" class:readonly={readOnly}>
+    {#if !readOnly}
+        <div class="operation-controls">
+            <label
+                class="checkbox-label"
+                title="When enabled, folder operations will include subfolders"
+            >
+                <input type="checkbox" bind:checked={applyToSubfolders} />
+                <span>Recursive</span>
+            </label>
+            <label
+                class="checkbox-label"
+                title="When enabled, tag deletetion operations will apply to all files in folder"
+            >
+                <input type="checkbox" bind:checked={applyDeleteToFolder} />
+                <span>Tag deletion applies to folder</span>
+            </label>
+        </div>
+    {/if}
 
     <!-- Filename badge -->
     <div class="editor-header">
         <div class="filename-badge">{filename}</div>
     </div>
+
+    {#if readOnly}
+        <div class="readonly-banner" role="note">
+            <span class="readonly-badge">Read-only</span>
+            <span>
+                {#if readOnlyFormat}
+                    {readOnlyFormat} files are not supported for tag editing.
+                {:else}
+                    This file type is not supported for tag editing.
+                {/if}
+                You can still rename, download or delete the file from the
+                tree.
+            </span>
+        </div>
+    {/if}
 
     <div class="cover-art-container">
         <div class="cover-art" class:editing={pictureEditing}>
@@ -852,91 +886,15 @@
                             >
                         </button>
                     </div>
-                    <div class="cover-art-actions">
-                        <button
-                            class="icon-btn"
-                            title="Upload cover art for this file only"
-                            onclick={() => triggerPictureUpload(false)}
-                            disabled={isUploadingPicture}
-                        >
-                            <!-- File icon - matches other fields -->
-                            <svg
-                                width="14"
-                                height="16"
-                                viewBox="0 0 14 16"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
-                                    fill="currentColor"
-                                    fill-opacity="0.7"
-                                />
-                                <path
-                                    d="M10 1L12 3H10V1Z"
-                                    fill="currentColor"
-                                    fill-opacity="0.7"
-                                />
-                            </svg>
-                        </button>
-                        <HoldButton
-                            variant="icon"
-                            duration={800}
-                            onConfirm={() => triggerPictureUpload(true)}
-                            disabled={isUploadingPicture}
-                            title={applyToSubfolders
-                                ? "Hold to apply to all files in folder (including subfolders)"
-                                : "Hold to apply to all files in folder (same level only)"}
-                            class="cover-art-icon"
-                        >
-                            <!-- Folder icon SVG -->
-                            <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 16 16"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
-                                    fill="currentColor"
-                                    fill-opacity="0.9"
-                                />
-                            </svg>
-                        </HoldButton>
-                        {#if metadata.picture}
-                            <HoldButton
-                                variant="icon"
-                                duration={800}
-                                onConfirm={deleteCoverArt}
-                                disabled={isUploadingPicture}
-                                title="Hold to delete cover art"
-                                class="delete-btn cover-art-icon"
-                            >
-                                <!-- Trash can icon -->
-                                <svg
-                                    width="14"
-                                    height="16"
-                                    viewBox="0 0 14 16"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
-                                        stroke="currentColor"
-                                        stroke-width="1.5"
-                                        stroke-linecap="round"
-                                    />
-                                </svg>
-                            </HoldButton>
+                    {#if !readOnly}
+                        <div class="cover-art-actions">
                             <button
                                 class="icon-btn"
-                                title="Save as cover.*"
-                                onclick={saveCoverAsFile}
-                                disabled={isUploadingPicture ||
-                                    !metadata.picture}
+                                title="Upload cover art for this file only"
+                                onclick={() => triggerPictureUpload(false)}
+                                disabled={isUploadingPicture}
                             >
-                                <!-- Save icon -->
+                                <!-- File icon - matches other fields -->
                                 <svg
                                     width="14"
                                     height="16"
@@ -945,22 +903,100 @@
                                     xmlns="http://www.w3.org/2000/svg"
                                 >
                                     <path
-                                        d="M7 2V11M7 11L10 8M7 11L4 8"
-                                        stroke="currentColor"
-                                        stroke-width="1.8"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
+                                        d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                                        fill="currentColor"
+                                        fill-opacity="0.7"
                                     />
                                     <path
-                                        d="M2 14H12"
-                                        stroke="currentColor"
-                                        stroke-width="1.5"
-                                        stroke-linecap="round"
+                                        d="M10 1L12 3H10V1Z"
+                                        fill="currentColor"
+                                        fill-opacity="0.7"
                                     />
                                 </svg>
                             </button>
-                        {/if}
-                    </div>
+                            <HoldButton
+                                variant="icon"
+                                duration={800}
+                                onConfirm={() => triggerPictureUpload(true)}
+                                disabled={isUploadingPicture}
+                                title={applyToSubfolders
+                                    ? "Hold to apply to all files in folder (including subfolders)"
+                                    : "Hold to apply to all files in folder (same level only)"}
+                                class="cover-art-icon"
+                            >
+                                <!-- Folder icon SVG -->
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 16 16"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path
+                                        d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
+                                        fill="currentColor"
+                                        fill-opacity="0.9"
+                                    />
+                                </svg>
+                            </HoldButton>
+                            {#if metadata.picture}
+                                <HoldButton
+                                    variant="icon"
+                                    duration={800}
+                                    onConfirm={deleteCoverArt}
+                                    disabled={isUploadingPicture}
+                                    title="Hold to delete cover art"
+                                    class="delete-btn cover-art-icon"
+                                >
+                                    <!-- Trash can icon -->
+                                    <svg
+                                        width="14"
+                                        height="16"
+                                        viewBox="0 0 14 16"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                                            stroke="currentColor"
+                                            stroke-width="1.5"
+                                            stroke-linecap="round"
+                                        />
+                                    </svg>
+                                </HoldButton>
+                                <button
+                                    class="icon-btn"
+                                    title="Save as cover.*"
+                                    onclick={saveCoverAsFile}
+                                    disabled={isUploadingPicture ||
+                                        !metadata.picture}
+                                >
+                                    <!-- Save icon -->
+                                    <svg
+                                        width="14"
+                                        height="16"
+                                        viewBox="0 0 14 16"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M7 2V11M7 11L10 8M7 11L4 8"
+                                            stroke="currentColor"
+                                            stroke-width="1.8"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        />
+                                        <path
+                                            d="M2 14H12"
+                                            stroke="currentColor"
+                                            stroke-width="1.5"
+                                            stroke-linecap="round"
+                                        />
+                                    </svg>
+                                </button>
+                            {/if}
+                        </div>
+                    {/if}
                 {:else if isUploadingPicture}
                     <div class="uploading-indicator">
                         <span>Uploading...</span>
@@ -1003,6 +1039,7 @@
                             }
                         }}
                         placeholder={field}
+                        readonly={readOnly}
                     />
                     {#if editingFields.has(field)}
                         <div class="field-actions">
@@ -1099,14 +1136,16 @@
     </div>
 
     <!-- Lyrics action buttons -->
-    <div class="lyrics-actions">
-        <button class="action-btn" onclick={openSyncedLyricsModal}>
-            Edit synced lyrics
-        </button>
-        <button class="action-btn" onclick={openUnsyncedLyricsModal}>
-            Edit unsynced lyrics
-        </button>
-    </div>
+    {#if !readOnly}
+        <div class="lyrics-actions">
+            <button class="action-btn" onclick={openSyncedLyricsModal}>
+                Edit synced lyrics
+            </button>
+            <button class="action-btn" onclick={openUnsyncedLyricsModal}>
+                Edit unsynced lyrics
+            </button>
+        </div>
+    {/if}
 
     <!-- Other section (collapsible) -->
     <div class="other-section">
@@ -1145,6 +1184,7 @@
                                 onblur={() => stopEditing(field)}
                                 placeholder={field}
                                 rows="2"
+                                readonly={readOnly}
                             ></textarea>
                             {#if editingFields.has(field)}
                                 <div class="field-actions textarea-actions">
@@ -1268,6 +1308,7 @@
                                         );
                                     }
                                 }}
+                                readonly={readOnly}
                             />
                             {#if editingFields.has(key)}
                                 <div class="field-actions">
@@ -1365,9 +1406,11 @@
     </div>
 
     <!-- Add new field button -->
-    <button class="add-field-btn" onclick={addCustomField}>
-        + Add new field
-    </button>
+    {#if !readOnly}
+        <button class="add-field-btn" onclick={addCustomField}>
+            + Add new field
+        </button>
+    {/if}
 
     <!-- Custom fields added by user -->
     {#each customFields as field, i (i)}
@@ -2250,6 +2293,38 @@
         flex-wrap: wrap;
     }
 
+    .readonly-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        border-left: 2px solid #d9a406;
+        background: rgba(217, 164, 6, 0.12);
+        color: #8a6d3b;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+    .readonly-badge {
+        flex-shrink: 0;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border-radius: 3px;
+        background: rgba(217, 164, 6, 0.2);
+    }
+
+    .metadata-editor.readonly .input-wrapper input,
+    .metadata-editor.readonly .input-wrapper textarea {
+        cursor: default;
+        color: #777;
+        background: rgba(0, 0, 0, 0.02);
+    }
+
     .checkbox-label {
         display: flex;
         align-items: center;
@@ -2286,6 +2361,21 @@
     :global(body.dark) .filename-badge {
         background: rgba(255, 255, 255, 0.1);
         color: #ccc;
+    }
+
+    :global(body.dark) .readonly-banner {
+        background: rgba(217, 164, 6, 0.16);
+        color: #e0c168;
+    }
+
+    :global(body.dark) .readonly-badge {
+        background: rgba(217, 164, 6, 0.25);
+    }
+
+    :global(body.dark) .metadata-editor.readonly .input-wrapper input,
+    :global(body.dark) .metadata-editor.readonly .input-wrapper textarea {
+        color: #aaa;
+        background: rgba(255, 255, 255, 0.04);
     }
 
     :global(body.dark) .field label {

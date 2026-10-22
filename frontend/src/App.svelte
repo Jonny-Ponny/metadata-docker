@@ -28,6 +28,7 @@
     getAuthHeaders,
     settings,
     applyThemeFromSettings,
+    isAudioFile,
   } from "./utils/index.js";
 
   import "./app.css";
@@ -1135,7 +1136,7 @@
     if ($settings.enablePlayer && selectedFile) {
       // Check if it's an audio file
       const isAudio = selectedFile.match(
-        /\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i,
+        /\.(mp3|flac|wav|aif|aiff|aac|ogg|m4a|wma|opus|ape|dsf|dff)$/i,
       );
 
       if (isAudio) {
@@ -1441,6 +1442,8 @@
               Image Viewer
             {:else if selectedFile && selectedFile.match(/\.(txt|lrc)$/i)}
               Text Editor
+            {:else if selectedFile && !isAudioFile(selectedFile)}
+              File Info (read-only)
             {:else if selectedFile}
               Metadata Editor
             {:else if selectedFolder && !selectedFile}

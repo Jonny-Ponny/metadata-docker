@@ -5,6 +5,9 @@
 // labels where a synchronous check is needed.
 export const AUDIO_FORMAT_LABELS = {
     mp3: "MP3",
+    wav: "WAV",
+    aiff: "AIFF",
+    aif: "AIFF",
     flac: "FLAC",
     ogg: "OGG",
     oga: "OGG",

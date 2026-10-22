@@ -320,7 +320,7 @@
                         <h3>Common Audio Tags</h3>
 
                         <div class="tag-group">
-                            <h4>ID3v2 (MP3) Tags</h4>
+                            <h4>ID3v2 (MP3/WAV/AIFF) Tags</h4>
                             <table class="tag-table">
                                 <thead>
                                     <tr>
