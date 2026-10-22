@@ -231,6 +231,8 @@ class MyService(MetadataFetcher):
     name = "My Service"                 # shown in the UI
     id = "my_service"                   # unique, lowercase, no spaces
     description = "Fetches metadata from My API"
+    version = "1.0.0"                   # optional, shown in Settings
+    github = "https://github.com/you/md-my-service-addon"  # optional, shown as a link
     required_env_vars = ["MY_API_KEY"]  # informational only
 
     BASE_URL = "https://api.example.com"
@@ -286,6 +288,8 @@ Save the file as `addons/my_service/MyService.py`, restart the container, and th
 | `name` | Display name in the frontend |
 | `id` | Unique identifier. Used in API URLs and stored in the browser, so keep it stable |
 | `description` | Short line shown in Settings |
+| `version` | Optional version string shown in Settings |
+| `github` | Optional GitHub URL shown as a clickable link in Settings. Only `github.com` links are displayed |
 | `required_env_vars` | List of env var names to display in Settings. Not enforced by the app |
 
 #### The four methods

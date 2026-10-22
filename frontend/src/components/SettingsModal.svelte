@@ -192,6 +192,12 @@
         }
     }
 
+    function formatAddonVersion(version) {
+        const value = String(version ?? "").trim();
+        if (!value) return "";
+        return /^v/i.test(value) ? value : `v${value}`;
+    }
+
     // Trigger fetch when modal opens
     $effect(() => {
         if (isOpen && !addonsFetched && !addonsLoading) {
@@ -549,10 +555,27 @@
                                             <span class="addon-id"
                                                 >({addon.id})</span
                                             >
+                                            {#if addon.version}
+                                                <span class="addon-version"
+                                                    >{formatAddonVersion(
+                                                        addon.version,
+                                                    )}</span
+                                                >
+                                            {/if}
                                         </div>
                                         {#if addon.description}
                                             <div class="addon-description">
                                                 {addon.description}
+                                            </div>
+                                        {/if}
+                                        {#if addon.github}
+                                            <div class="addon-links">
+                                                <a
+                                                    href={addon.github}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    >{addon.github}</a
+                                                >
                                             </div>
                                         {/if}
                                         <div class="addon-details-grid">
@@ -1052,11 +1075,36 @@
         font-family: monospace;
     }
 
+    .addon-version {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--color-primary);
+        background: var(--color-primary-transparent);
+        border-radius: 10px;
+        padding: 1px 7px;
+        line-height: 1.5;
+    }
+
     .addon-description {
         font-size: 13px;
         color: #555;
         margin: 4px 0 10px 0;
         line-height: 1.4;
+    }
+
+    .addon-links {
+        font-size: 13px;
+        margin: -4px 0 10px 0;
+    }
+
+    .addon-links a {
+        color: var(--color-primary);
+        text-decoration: none;
+        overflow-wrap: anywhere;
+    }
+
+    .addon-links a:hover {
+        text-decoration: underline;
     }
 
     .addon-details-grid {
@@ -1307,8 +1355,15 @@
     :global(body.dark) .addon-id {
         color: #aaa;
     }
+    :global(body.dark) .addon-version {
+        color: var(--color-primary-dark);
+        background: var(--color-primary-transparent-dark);
+    }
     :global(body.dark) .addon-description {
         color: #ccc;
+    }
+    :global(body.dark) .addon-links a {
+        color: var(--color-primary-dark);
     }
     :global(body.dark) .addon-details-grid {
         color: #ccc;

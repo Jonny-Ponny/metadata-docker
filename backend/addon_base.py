@@ -10,6 +10,8 @@ class MetadataFetcher(ABC):
     name: str = "Unnamed Fetcher"
     id: str = "unnamed_fetcher"
     description: str = ""
+    version: str = ""
+    github: str = ""
     
     required_env_vars: List[str] = []
 

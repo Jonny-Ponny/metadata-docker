@@ -7,7 +7,7 @@ import base64
 import re
 import requests
 import time
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
@@ -1717,6 +1717,33 @@ def _normalize_addon_metadata(metadata):
     return normalized
 
 # Addon endpoints
+def _addon_version(fetcher_cls):
+    value = getattr(fetcher_cls, 'version', '')
+    return '' if value is None else str(value).strip()
+
+
+def _addon_github_url(fetcher_cls):
+    """Return a validated GitHub URL declared by an addon, if any."""
+    raw = ''
+    for attr in ('github', 'github_url', 'github_link', 'repository', 'homepage'):
+        value = getattr(fetcher_cls, attr, '')
+        if isinstance(value, str) and value.strip():
+            raw = value.strip()
+            break
+
+    if raw.startswith(('github.com/', 'www.github.com/')):
+        raw = 'https://' + raw
+    if not raw:
+        return ''
+
+    parsed = urlparse(raw)
+    if parsed.scheme not in ('http', 'https'):
+        return ''
+    if (parsed.hostname or '').lower() not in ('github.com', 'www.github.com'):
+        return ''
+    return raw
+
+
 @app.route('/api/addons', methods=['GET'])
 @token_required
 def list_addons():
@@ -1740,6 +1767,8 @@ def list_addons():
                 "id": fetcher_cls.id,
                 "name": fetcher_cls.name,
                 "description": fetcher_cls.description,
+                "version": _addon_version(fetcher_cls),
+                "github": _addon_github_url(fetcher_cls),
                 "required_env_vars": getattr(fetcher_cls, 'required_env_vars', []),
                 "methods": methods
             })

@@ -151,6 +151,8 @@ class MockAddon(MetadataFetcher):
         "Returns local mock data for testing search results, album batches, "
         "and the display-only extraInfo field"
     )
+    version = "1.0.0"
+    github = "https://github.com/Jonny-Ponny/metadata-docker"
     required_env_vars = []
 
     def search_songs(self, query, limit=5):
