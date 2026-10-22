@@ -19,6 +19,7 @@ from flask import Flask, jsonify, request, send_file, send_from_directory, Respo
 from logger_config import log_info, log_error, log_warning, LOG_DIR
 
 from plugin_manager import PluginManager
+from addon_base import EXTRA_INFO_FIELD
 
 log_info("STARTING")
 app = Flask(__name__, static_folder='static', static_url_path='')
@@ -1709,6 +1710,7 @@ def _normalize_addon_metadata(metadata):
         ('year', 'date'),
         ('track', 'trackNumber'),
         ('disk', 'diskNumber'),
+        ('extra_info', EXTRA_INFO_FIELD),
     ):
         if legacy in normalized and not normalized.get(current):
             normalized[current] = normalized.pop(legacy)

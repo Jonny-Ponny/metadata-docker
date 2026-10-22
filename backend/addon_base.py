@@ -2,6 +2,10 @@
 from abc import ABC
 from typing import Dict, Any, List, Optional
 
+# Optional display-only key addons may return in search results and fetched
+# metadata. The UI shows it but never writes it to a tag.
+EXTRA_INFO_FIELD = "extraInfo"
+
 class MetadataFetcher(ABC):
     name: str = "Unnamed Fetcher"
     id: str = "unnamed_fetcher"

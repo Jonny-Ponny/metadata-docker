@@ -252,6 +252,7 @@ class MyService(MetadataFetcher):
                 "id": str(item["id"]),          # required: passed back to fetch_song_metadata
                 "title": item.get("title", ""),
                 "artist": item.get("artist", ""),
+                "extraInfo": item.get("duration", ""),  # optional, display-only
             }
             for item in resp.json().get("results", [])
         ]
@@ -303,6 +304,10 @@ The `id` from a search result is passed to the matching `fetch_*` method. Search
 #### Metadata fields
 
 Return plain key/value dictionaries using the app's field names (`title`, `artist`, `album`, `albumArtist`, `date`, `genre`, `trackNumber`, `diskNumber`, `comment`, `composer`, `publisher`, `releaseType`, `lyrics`, `unsyncedLyrics`, `picture`, ...). Unknown keys are kept and written as custom tags, so service-specific IDs (e.g. `musicbrainz_trackid`) can be returned too.
+
+#### Extra information in the UI
+
+Search results and fetched metadata may include an optional display-only `extraInfo` key. It is shown under the result title and above the field picker, but it is never offered as a tag or written to a file. Use it for short plain text that helps identify a result or explain where it came from, such as song duration, the source, or how metadata was aggregated. Omit the key or return an empty string when there is nothing to show.
 
 
 Older addons may return `year`, `track`, or `disk`. Those are still accepted and treated as `date`, `trackNumber`, and `diskNumber`, but they are not written as literal YEAR/TRACK/DISK tags. New addons should use the current names.

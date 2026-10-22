@@ -66,7 +66,33 @@
 
   const LAST_ADDON_KEY = "md_lastAddonId";
 
+  // Display-only field addons may return in search results and fetched
+  // metadata. It is shown in the UI but never offered or written as a tag.
+  const EXTRA_INFO_FIELD = "extraInfo";
+
   // ---------- Helper functions ----------
+  function isExtraInfoKey(key) {
+    return key === EXTRA_INFO_FIELD || key === "extra_info";
+  }
+
+  function getExtraInfo(metadata) {
+    if (!metadata) return "";
+    const value = metadata[EXTRA_INFO_FIELD] ?? metadata.extra_info;
+    if (value === undefined || value === null) return "";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value).trim();
+  }
+
+  function selectableFields(metadata) {
+    return Object.keys(metadata || {}).filter((key) => !isExtraInfoKey(key));
+  }
+
+  function metadataEntries(metadata) {
+    return Object.entries(metadata || {}).filter(
+      ([key]) => !isExtraInfoKey(key),
+    );
+  }
+
   async function getAudioFilesInFolder(folderPath) {
     try {
       const res = await fetch("/api/files");
@@ -228,7 +254,7 @@
       if (data.success) {
         if (mode === "song") {
           fetchedSong = data.metadata;
-          songFields = new Set(Object.keys(fetchedSong));
+          songFields = new Set(selectableFields(fetchedSong));
         } else {
           const tracks = data.metadata || [];
           fetchedTracks = tracks;
@@ -248,7 +274,7 @@
             // Compute union of all field keys from all tracks
             const allKeys = new Set();
             tracks.forEach((t) =>
-              Object.keys(t).forEach((k) => allKeys.add(k)),
+              selectableFields(t).forEach((k) => allKeys.add(k)),
             );
             allFields = allKeys;
             globalSelectedFields = new Set(allKeys); // start with all selected
@@ -264,13 +290,13 @@
               const assign = fileAssignments.find((a) => a.fileIndex === idx);
               if (assign && assign.trackIndex !== null) {
                 const track = fetchedTracks[assign.trackIndex];
-                if (track) return new Set(Object.keys(track));
+                if (track) return new Set(selectableFields(track));
               }
               return new Set();
             });
           } else {
             selectedTrackIndex = 0;
-            singleFileFields = new Set(Object.keys(tracks[0]));
+            singleFileFields = new Set(selectableFields(tracks[0]));
           }
         }
       } else {
@@ -371,6 +397,7 @@
           if (fields.length === 0) continue;
           const file = folderFiles[i];
           for (const field of fields) {
+            if (isExtraInfoKey(field)) continue;
             if (field === "picture") {
               if (track.picture) {
                 await uploadCoverArt(file.path, track.picture);
@@ -393,6 +420,7 @@
         }
         const fields = Array.from(singleFileFields);
         for (const field of fields) {
+          if (isExtraInfoKey(field)) continue;
           if (field === "picture") {
             if (track.picture) await uploadCoverArt(targetPath, track.picture);
             continue;
@@ -410,6 +438,7 @@
         }
         const fields = Array.from(songFields);
         for (const field of fields) {
+          if (isExtraInfoKey(field)) continue;
           if (field === "picture") {
             if (fetchedSong.picture)
               await uploadCoverArt(targetPath, fetchedSong.picture);
@@ -546,7 +575,7 @@
     if (!fetchedSong) return;
     let fields;
     if (preset.label === "All") {
-      fields = new Set(Object.keys(fetchedSong));
+      fields = new Set(selectableFields(fetchedSong));
     } else if (preset.label === "None") {
       fields = new Set();
     } else {
@@ -563,7 +592,7 @@
     if (!track) return;
     let fields;
     if (preset.label === "All") {
-      fields = new Set(Object.keys(track));
+      fields = new Set(selectableFields(track));
     } else if (preset.label === "None") {
       fields = new Set();
     } else {
@@ -647,6 +676,9 @@
                       ? `(${result.date || result.year})`
                       : ""}
                   {/if}
+                  {#if getExtraInfo(result)}
+                    <div class="result-extra-info">{getExtraInfo(result)}</div>
+                  {/if}
                 </div>
                 {#if result.coverart && (result.coverart.startsWith("data:image") || isImageUrl(result.coverart))}
                   <img src={result.coverart} alt="cover" class="result-cover" />
@@ -668,6 +700,9 @@
         {:else if mode === "song" && fetchedSong}
           <div class="metadata-preview">
             <h3>Song Metadata</h3>
+            {#if getExtraInfo(fetchedSong)}
+              <div class="extra-info">{getExtraInfo(fetchedSong)}</div>
+            {/if}
             <div class="presets">
               {#each PRESETS as preset}
                 <button
@@ -679,7 +714,7 @@
               {/each}
             </div>
             <div class="fields-list">
-              {#each Object.entries(fetchedSong) as [key, value]}
+              {#each metadataEntries(fetchedSong) as [key, value]}
                 <div class="field-item">
                   <label title={getFieldDescription(key) || undefined}>
                     <input
@@ -778,9 +813,13 @@
                       </select>
                     </div>
 
+                    {#if track && getExtraInfo(track)}
+                      <div class="extra-info">{getExtraInfo(track)}</div>
+                    {/if}
+
                     {#if enabled && track}
                       <div class="file-fields">
-                        {#each Object.entries(track) as [key, value]}
+                        {#each metadataEntries(track) as [key, value]}
                           <div class="field-item">
                             <label title={getFieldDescription(key) || undefined}>
                               <input
@@ -829,6 +868,11 @@
             </div>
             <div class="metadata-preview">
               <h3>Track Metadata</h3>
+              {#if getExtraInfo(fetchedTracks[selectedTrackIndex])}
+                <div class="extra-info">
+                  {getExtraInfo(fetchedTracks[selectedTrackIndex])}
+                </div>
+              {/if}
               <div class="presets">
                 {#each PRESETS as preset}
                   <button
@@ -840,7 +884,7 @@
                 {/each}
               </div>
               <div class="fields-list">
-                {#each Object.entries(fetchedTracks[selectedTrackIndex]) as [key, value]}
+                {#each metadataEntries(fetchedTracks[selectedTrackIndex]) as [key, value]}
                   <div class="field-item">
                     <label title={getFieldDescription(key) || undefined}>
                       <input
@@ -1020,6 +1064,13 @@
     border-left: 3px solid var(--color-primary);
     border-radius: 3px;
   }
+  .result-extra-info {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #777;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   .result-cover {
     width: 40px;
     height: 40px;
@@ -1038,6 +1089,18 @@
     font-weight: 600;
     color: #333;
     margin: 0 0 12px 0;
+  }
+
+  .extra-info {
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border-left: 3px solid var(--color-primary);
+    border-radius: 4px;
+    background: var(--color-primary-transparent);
+    color: #555;
+    font-size: 13px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
   .fields-list {
@@ -1303,11 +1366,19 @@
     background: var(--color-primary-transparent-dark);
     border-left-color: var(--color-primary-dark);
   }
+  :global(body.dark) .result-extra-info {
+    color: #aaa;
+  }
   :global(body.dark) .metadata-preview {
     border-color: #444;
   }
   :global(body.dark) .metadata-preview h3 {
     color: #e0e0e0;
+  }
+  :global(body.dark) .extra-info {
+    background: var(--color-primary-transparent-dark);
+    border-left-color: var(--color-primary-dark);
+    color: #ccc;
   }
   :global(body.dark) .field-value {
     color: #ccc;
