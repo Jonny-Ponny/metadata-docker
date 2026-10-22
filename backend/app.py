@@ -17,6 +17,7 @@ from metadata_writer import *
 from formats import is_supported_audio, mime_for
 from pathlib import Path
 from zip_stream import iter_zip
+from safe_fetch import fetch_image, UnsafeURLError, ImageTooLargeError
 
 from flask import Flask, jsonify, request, send_file, send_from_directory, Response
 from werkzeug.security import check_password_hash
@@ -1027,16 +1028,12 @@ def update_file_picture_from_url_endpoint():
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # 1. Fetch image using requests (handles user-agent and connection pool)
-        headers = {'User-Agent': f'metadata-docker/{APP_VERSION}'}
-        response = requests.get(image_url, headers=headers, timeout=10)
-        response.raise_for_status() # Raises HTTPError for 4xx/5xx responses
+        # 1. Fetch the image through the SSRF guard (public http/https only,
+        # validated redirects, streamed with a size cap and timeouts).
+        user_agent = f'metadata-docker/{APP_VERSION}'
+        image_data, mime_type = fetch_image(image_url, user_agent)
         
-        # 2. Extract image bytes and auto-detect MIME type directly from response
-        image_data = response.content
-        mime_type = response.headers.get('Content-Type', 'image/jpeg').split(';')[0]
-
-        # 3. Apply coverart
+        # 2. Apply coverart
         success = update_file_picture(full_path, image_data, mime_type)
         
         if success:
@@ -1048,8 +1045,14 @@ def update_file_picture_from_url_endpoint():
             })
         return jsonify({'error': 'Failed to update cover art'}), 500
             
+    except ImageTooLargeError as e:
+        return jsonify({'error': str(e)}), 413
+    except UnsafeURLError as e:
+        return jsonify({'error': str(e)}), 400
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Failed to download image: {str(e)}'}), 502
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

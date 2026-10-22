@@ -32,4 +32,5 @@ docker build -t metadata-docker .
 - Set `AUTH_USERNAME`/`AUTH_PASSWORD` (or `AUTH_PASSWORD_HASH`) explicitly. If they are unset or empty, random temporary credentials are generated at startup and logged; they change on every restart. The app does not fall back to a known default.
 - Login is rate-limited per client address: five failed attempts trigger a 15-minute lockout. The limiter is in-memory and resets on restart.
 - The shipped compose files bind to `127.0.0.1`. Terminate TLS in a reverse proxy before exposing the app beyond localhost, and never serve it over plain HTTP to the internet.
+- Cover images fetched from a user-supplied URL go through an SSRF guard: only public `http`/`https` hosts, every redirect hop revalidated, `image/*` content type required, 10 MB cap while streaming and explicit timeouts.
 - JWTs use a per-process secret, so a restart logs everyone out.
