@@ -1,6 +1,7 @@
 # Metadata Docker — improvement plan
 
-Status: **proposed, nothing implemented yet.**
+Status: **Phase 1 complete.** Phase 2 (tests) is in progress; see the
+checkboxes below.
 
 This file replaces the "Security patches plan" and "Suggested improvements
 (backlog)" sections This file describes what to change, in what order.
@@ -141,7 +142,7 @@ queued in Phase 2 (or added with the fix for P0 items).
 
 ## 1.3 Metadata and file operations
 
-- [ ] **B-12 (P1) Deleting a field from a missing file returns 500, not 404.**
+- [x] **B-12 (P1) Deleting a field from a missing file returns 500, not 404.**
   `delete_metadata_field()` (`app.py:1594-1619`) has no existence check; a
   missing `.mp3` path is treated as a file, the writer returns `False`, and the
   route answers 500 "Failed to delete field". A missing path without an audio
@@ -150,7 +151,7 @@ queued in Phase 2 (or added with the fix for P0 items).
   keep the folder branch's 404).
   **Test:** missing file and missing folder → 404.
 
-- [ ] **B-13 (P1) Smart rename returns 500 for unreadable metadata or bad input.**
+- [x] **B-13 (P1) Smart rename returns 500 for unreadable metadata or bad input.**
   `extract_metadata()` can return `None` for a corrupt supported file, and
   `generate_name_from_scheme()` then calls `None.get()`
   (`app.py:1988, 2044`). A non-string `scheme` raises in `re.findall`
@@ -160,7 +161,7 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** monkeypatch `extract_metadata` to return `None` for folder and file;
   non-string `scheme`; both → 400 JSON.
 
-- [ ] **B-14 (P1) Cover endpoints can 500 when metadata cannot be re-read.**
+- [x] **B-14 (P1) Cover endpoints can 500 when metadata cannot be re-read.**
   `update_file_picture_endpoint` (`app.py:1370`), the URL variant (`1411`) and
   `delete_cover_art` (`1653`) call `metadata.get(...)` on a potentially `None`
   result.
@@ -168,7 +169,7 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** monkeypatch `extract_metadata` → `None`; response is 200/500 JSON
   without `AttributeError`.
 
-- [ ] **B-15 (P1) Cover-from-URL downloads before checking the file format.**
+- [x] **B-15 (P1) Cover-from-URL downloads before checking the file format.**
   `update_file_picture_from_url_endpoint()` (`app.py:1398-1408`) checks only
   `isfile`, spends a network request, then `update_file_picture()` returns
   `False` for an unsupported format and the route answers 500.
@@ -176,20 +177,20 @@ queued in Phase 2 (or added with the fix for P0 items).
   route.
   **Test:** target `notes.txt` → 400 and `fetch_image` is never called.
 
-- [ ] **B-16 (P2) Folder picture routes use the raw `MUSIC_FOLDER` for root.**
+- [x] **B-16 (P2) Folder picture routes use the raw `MUSIC_FOLDER` for root.**
   `app.py:1480` and `1554` use `MUSIC_FOLDER` directly when `path == ""`, while
   every other route uses the resolved `MUSIC_ROOT`.
   **Fix:** use `safe_path('')` / `MUSIC_ROOT` consistently.
   **Test:** root folder picture update with a relative `MUSIC_FOLDER` behaves
   the same as `path: ""`.
 
-- [ ] **B-17 (P2) `save_cover_art_as_file` returns 500 on a corrupt picture.**
+- [x] **B-17 (P2) `save_cover_art_as_file` returns 500 on a corrupt picture.**
   `base64.b64decode()` (`app.py:1725-1745`) raises `binascii.Error` for a
   malformed `picture` payload; the generic handler turns it into 500.
   **Fix:** catch `binascii.Error`/`ValueError` → 400.
   **Test:** tagged file with a broken data URI → 400.
 
-- [ ] **B-18 (P2) `/api/image` serves any file type.**
+- [x] **B-18 (P2) `/api/image` serves any file type.**
   `serve_image()` (`app.py:1670`) only checks `isfile`; `/api/audio` does the
   same. It also duplicates the image MIME table used in `build_tree` and
   `_send_download`.
@@ -198,7 +199,7 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** `/api/image?path=track.mp3` → 400; a real `.png` → 200 with
   `image/png`.
 
-- [ ] **B-19 (P1) Text save accepts non-strings and is not atomic.**
+- [x] **B-19 (P1) Text save accepts non-strings and is not atomic.**
   `save_text_file()` (`app.py:2301-2313`) calls `f.write(content)` without a
   type check (500 on an int/list) and truncates the file before writing (a
   failed write loses the `.lrc`).
@@ -208,13 +209,13 @@ queued in Phase 2 (or added with the fix for P0 items).
   monkeypatch the write to fail → original content survives.
   Also add a size cap (see B-27).
 
-- [ ] **B-20 (P1) Reading a non-UTF-8 or oversized text file returns 500.**
+- [x] **B-20 (P1) Reading a non-UTF-8 or oversized text file returns 500.**
   `get_text_file()` (`app.py:2282`) uses strict UTF-8 and reads the whole file.
   **Fix:** decode with `errors='replace'` or return `400` with a clear message;
   cap the read size (e.g. 1 MiB) and return 413/400.
   **Test:** Latin-1 `.lrc` and a file over the cap → clear JSON error, no 500.
 
-- [ ] **B-21 (P2) `/api/logs` mishandles `lines <= 0`.**
+- [x] **B-21 (P2) `/api/logs` mishandles `lines <= 0`.**
   `all_logs[-lines:]` (`app.py:1785`) with `lines=0` returns everything and
   with a negative value returns an unexpected slice.
   **Fix:** clamp to `1..1000`.
@@ -222,7 +223,7 @@ queued in Phase 2 (or added with the fix for P0 items).
 
 ## 1.4 Tag backends
 
-- [ ] **B-22 (P1) GIF/BMP/WebP covers are stored as `image/jpeg`.**
+- [x] **B-22 (P1) GIF/BMP/WebP covers are stored as `image/jpeg`.**
   `detect_image_mime()` (`tag_backends.py:135-141`) only recognises JPEG and
   PNG and falls back to JPEG for everything else (including arbitrary bytes).
   `resolve_image_mime()` then trusts any client `image/*`.
@@ -231,7 +232,7 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** round-trip a GIF, PNG, JPEG, WebP and BMP cover per backend; the
   stored MIME matches the bytes.
 
-- [ ] **B-23 (P2) LRC parsing is narrower than the format.**
+- [x] **B-23 (P2) LRC parsing is narrower than the format.**
   `lrc_to_sylt_events()` (`tag_backends.py:182-194`) requires exactly two
   decimal places and two-digit minutes, so `[0:12.34]` and `[00:12.345]` are
   silently dropped. `format_sylt_timestamp()` can print `[00:60.00]` for
@@ -242,19 +243,19 @@ queued in Phase 2 (or added with the fix for P0 items).
 
 ## 1.5 Addons and miscellaneous
 
-- [ ] **B-24 (P2) Addon GitHub links allow `http://` and credentials.**
+- [x] **B-24 (P2) Addon GitHub links allow `http://` and credentials.**
   `_addon_github_url()` (`app.py:2349-2368`) accepts `http://` (mixed content on
   an HTTPS page) and `https://user:pass@github.com/...`.
   **Fix:** require `https`, reject `parsed.username`/`password`.
   **Test:** table of accepted/rejected URLs.
 
-- [ ] **B-25 (P2) Addon `limit` is unbounded and can be negative.**
+- [x] **B-25 (P2) Addon `limit` is unbounded and can be negative.**
   `search_songs()` / `search_albums()` (`app.py:2409, 2450`) pass any integer
   to the addon.
   **Fix:** clamp to `1..50`, default 5.
   **Test:** `limit=0`, `-1`, `10000` → clamped value passed to a fake fetcher.
 
-- [ ] **B-26 (P2) `get_version_info()` performs a network call at import.**
+- [x] **B-26 (P2) `get_version_info()` performs a network call at import.**
   `app.py:488` calls GitHub with a 5 s timeout during startup; offline installs
   and tests pay the delay.
   **Fix:** do the first check lazily on `/api/version` (or in a background
@@ -262,18 +263,18 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** import with a patched `requests.get` that would fail; startup is
   immediate; the first request populates the cache once.
 
-- [ ] **B-27 (P2) Text writes are unbounded.**
+- [x] **B-27 (P2) Text writes are unbounded.**
   `/api/text/save` accepts up to the 4 GiB request limit for a `.lrc`.
   **Fix:** cap text content (e.g. 1 MiB) → 413/400; mirror the read cap.
   **Test:** oversized content → 413/400 and the original file unchanged.
 
-- [ ] **B-28 (P2) Upload creates target directories before validating the name.**
+- [x] **B-28 (P2) Upload creates target directories before validating the name.**
   `upload_file()` (`app.py:1006`) calls `os.makedirs()` before the filename
   check, so an invalid name still leaves a new empty folder.
   **Fix:** validate the filename first, then create the directory.
   **Test:** invalid name with a new `targetPath` leaves no folder.
 
-- [ ] **B-29 (P1) Pin the Flask version required by cover uploads.**
+- [x] **B-29 (P1) Pin the Flask version required by cover uploads.**
   `limit_cover_upload_size()` assigns `request.max_content_length`
   (`app.py:272`), a Flask 3.1+ feature; `backend/requirements.txt` just says
   `Flask`, so an older install breaks every cover upload with `AttributeError`.
@@ -354,36 +355,41 @@ every non-trivial helper at least once, and make CI run the suite.
 - [x] `tests/test_rename.py` — overwrite rejection, same-name no-op, normal
   rename (B-05).
 - [x] `tests/test_move.py` — self-move, symlink alias, normal move (B-06).
+- [x] `tests/test_metadata_endpoints.py` — missing path → 404, unreadable
+  metadata on smart rename, `None` metadata after cover changes, corrupt
+  base64, image/audio type guards, root folder palettes (B-12..B-18).
 - [ ] `tests/test_metadata.py`
   - tag round-trip for every `FIELD_SCHEMA` field on MP3/WAV/AIFF/FLAC/
     OGG/Opus/M4A/M4B using committed small fixtures (`tests/fixtures/`);
   - comment vs description vs custom fields; lyrics (SYLT) and unsynced
-    lyrics (USLT), LRC parsing (B-23);
-  - cover set/get/delete on all three picture storages; MIME detection
-    (B-22);
+    lyrics (USLT);
+  - cover set/get/delete on all three picture storages;
   - `delete_field` / `delete_cover_art`, `read_only_metadata`, empty payload
-    invariant: `set(FIELD_SCHEMA) == set(empty_metadata()) - {'customFields'}`;
-  - endpoint happy paths and B-12..B-18 cases.
+    invariant: `set(FIELD_SCHEMA) == set(empty_metadata()) - {'customFields'}`.
+- [x] `tests/test_tag_backends.py` — magic-byte MIME detection and LRC/SYLT
+  timestamp parsing (B-22, B-23).
 - [ ] `tests/test_downloads.py`
   - file download headers, Unicode filenames (`_content_disposition`),
     folder ZIP contents, symlink exclusion, empty folder, `iter_zip` error
     before/after first byte, expired/tampered token, token path escape.
-- [ ] `tests/test_text_logs.py`
-  - text read/write round-trip, non-UTF-8, non-string content, atomicity,
-    size caps (B-19/B-20/B-27);
-  - log filter/limit/clear cases (B-21); no log file → empty result.
-- [ ] `tests/test_addons.py`
+- [x] `tests/test_text_logs.py` — invalid UTF-8, size caps, non-string
+  content, atomic write, log line clamping (B-19, B-20, B-21, B-27).
+- [ ] `tests/test_text_logs.py` (remaining) — log level/search filters, clear,
+  no log file → empty result.
+- [x] `tests/test_addons.py` — GitHub URL validation and limit clamping
+  (B-24, B-25).
+- [ ] `tests/test_addons.py` (remaining)
   - list shape, legacy metadata normalisation, unimplemented methods → 400,
-    failing fetcher → JSON error with `success: false`, GitHub URL validation
-    (B-24), limit clamping (B-25);
+    failing fetcher → JSON error with `success: false`;
   - `PluginManager` discovery: underscore files ignored, broken module skipped,
     duplicate id last-wins.
 - [ ] `tests/test_formats.py`
   - unique extensions, every family has a backend, MIME non-empty,
     case-insensitive lookup, default MIME.
-- [ ] `tests/test_version.py`
-  - `_compare_versions` table; cache hit/miss; disabled check; lazy startup
-    (B-26).
+- [x] `tests/test_version.py` — import does not fetch, first check is cached
+  (B-26).
+- [ ] `tests/test_version.py` (remaining) — `_compare_versions` table and
+  `DISABLE_VERSION_CHECK`.
 
 ## 2.3 Regression matrix
 
@@ -540,9 +546,11 @@ service.
 - The app sends CSP, `X-Content-Type-Options`, `X-Frame-Options`,
   `Referrer-Policy` and `Permissions-Policy`. HSTS is left to the reverse proxy.
 
-Phase 1 (B-01..B-07, B-09, B-11, B-19) strengthens this baseline; update this
-list when those fixes land. Phase 2 extends the pytest suite beyond the
-security invariants.
+Phase 1 (B-01..B-29) is complete and strengthens this baseline: root
+operations are refused, uploads claim their destination atomically, every JSON
+route rejects non-object bodies with JSON errors, and text reads/writes are
+bounded and atomic. Phase 2 extends the pytest suite beyond the security
+invariants.
 
 ## P2 — optional and deployment-specific
 
