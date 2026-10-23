@@ -755,8 +755,15 @@ def login():
 
 # Sort filetree
 def natural_key(text):
-    """Convert text into a list of strings and numbers for natural sorting."""
-    return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', text)]
+    """Convert text into a list of strings and numbers for natural sorting.
+
+    ``str.isdigit()`` is true for characters such as ``²`` that ``int()``
+    rejects, so only ASCII digits are converted (B-10).
+    """
+    return [
+        int(part) if part.isascii() and part.isdigit() else part.lower()
+        for part in re.split(r'(\d+)', text)
+    ]
 
 def build_tree(current_path, relative_path):
     items = []
@@ -770,6 +777,9 @@ def build_tree(current_path, relative_path):
                 continue
             full = os.path.join(current_path, entry)
             rel = os.path.join(relative_path, entry).replace('\\', '/')
+            # An entry can disappear between listdir() and stat() when a file
+            # is deleted or renamed concurrently. Skip it instead of failing
+            # the whole tree with a 500 (B-11).
             if os.path.isdir(full):
                 # Symlinked directories are skipped: following them can escape
                 # MUSIC_ROOT or recurse forever through a cycle. safe_path()
@@ -777,15 +787,18 @@ def build_tree(current_path, relative_path):
                 # not be opened through the API either.
                 if os.path.islink(full):
                     continue
-                children = build_tree(full, rel)
-                stat = os.stat(full)
+                try:
+                    children = build_tree(full, rel)
+                    info = os.stat(full)
+                except OSError:
+                    continue
                 items.append({
                     'name': entry,
                     'type': 'directory',
                     'path': rel,
                     'children': children,
-                    'created': stat.st_ctime,
-                    'modified': stat.st_mtime,
+                    'created': info.st_ctime,
+                    'modified': info.st_mtime,
                     'size': 0
                 })
             elif os.path.isfile(full):
@@ -794,57 +807,57 @@ def build_tree(current_path, relative_path):
                 # points at an arbitrary outside file.
                 if os.path.islink(full) and not _is_within(MUSIC_ROOT, full):
                     continue
+                try:
+                    info = os.stat(full)
+                except OSError:
+                    continue
                 # Check for audio files
                 if is_supported_audio(entry):
-                    stat = os.stat(full)
                     items.append({
                         'name': entry,
                         'type': 'file',
                         'file_type': 'audio',
                         'path': rel,
-                        'size': stat.st_size,
-                        'created': stat.st_ctime,
-                        'modified': stat.st_mtime
+                        'size': info.st_size,
+                        'created': info.st_ctime,
+                        'modified': info.st_mtime
                     })
                 # Check for image files
                 elif entry.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')):
-                    stat = os.stat(full)
                     items.append({
                         'name': entry,
                         'type': 'file',
                         'file_type': 'image',
                         'path': rel,
-                        'size': stat.st_size,
-                        'created': stat.st_ctime,
-                        'modified': stat.st_mtime
+                        'size': info.st_size,
+                        'created': info.st_ctime,
+                        'modified': info.st_mtime
                     })
 
                 elif entry.lower().endswith(('.txt', '.lrc')):
-                    stat = os.stat(full)
                     items.append({
                         'name': entry,
                         'type': 'file',
                         'file_type': 'text',
                         'path': rel,
-                        'size': stat.st_size,
-                        'created': stat.st_ctime,
-                        'modified': stat.st_mtime
+                        'size': info.st_size,
+                        'created': info.st_ctime,
+                        'modified': info.st_mtime
                     })
                 # Everything else is still listed so it can be inspected,
                 # renamed, downloaded or deleted. The metadata endpoint marks
                 # these files read-only.
                 else:
-                    stat = os.stat(full)
                     items.append({
                         'name': entry,
                         'type': 'file',
                         'file_type': 'other',
                         'path': rel,
-                        'size': stat.st_size,
-                        'created': stat.st_ctime,
-                        'modified': stat.st_mtime
+                        'size': info.st_size,
+                        'created': info.st_ctime,
+                        'modified': info.st_mtime
                     })
-        
+
     except PermissionError:
         pass
 
