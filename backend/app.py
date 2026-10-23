@@ -598,8 +598,6 @@ def get_version_info():
         'update_available': _version_cache['update_available']
     }
 
-get_version_info()
-
 @app.route('/api/version', methods=['GET'])
 def get_version():
     info = get_version_info()
@@ -1144,8 +1142,6 @@ def upload_file():
     if os.path.exists(target_dir) and not os.path.isdir(target_dir):
         return jsonify({'error': 'Upload target is not a folder'}), 400
 
-    os.makedirs(target_dir, exist_ok=True)
-
     # Keep only the base name - a client-supplied filename must never be able
     # to change the destination directory.
     filename = os.path.basename(str(original_filename).replace('\\', '/'))
@@ -1157,6 +1153,10 @@ def upload_file():
     file_path = os.path.join(target_dir, filename)
     if not _is_within(target_dir, file_path):
         return jsonify({'error': 'Invalid filename'}), 400
+
+    # Create the target folder only after the name is known to be valid, so a
+    # rejected upload does not leave an empty folder behind.
+    os.makedirs(target_dir, exist_ok=True)
 
     incoming_size = _stream_size(file)
 
@@ -2610,7 +2610,9 @@ def _addon_github_url(fetcher_cls):
         return ''
 
     parsed = urlparse(raw)
-    if parsed.scheme not in ('http', 'https'):
+    if parsed.scheme != 'https':
+        return ''
+    if parsed.username or parsed.password:
         return ''
     if (parsed.hostname or '').lower() not in ('github.com', 'www.github.com'):
         return ''
@@ -2656,7 +2658,7 @@ def list_addons():
 @token_required
 def search_songs(fetcher_id):
     query = request.args.get('query')
-    limit = request.args.get('limit', 5, type=int)
+    limit = max(1, min(request.args.get('limit', 5, type=int), 50))
 
     if not query:
         return jsonify({"success": False, "error": "Missing 'query' parameter"}), 400
@@ -2697,7 +2699,7 @@ def fetch_song_metadata(fetcher_id, song_id):
 @token_required
 def search_albums(fetcher_id):
     query = request.args.get('query')
-    limit = request.args.get('limit', 5, type=int)
+    limit = max(1, min(request.args.get('limit', 5, type=int), 50))
 
     if not query:
         return jsonify({"success": False, "error": "Missing 'query' parameter"}), 400

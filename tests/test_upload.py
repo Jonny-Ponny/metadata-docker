@@ -384,3 +384,14 @@ def test_upload_cannot_escape_the_library(
 
     assert response.status_code == 403
     assert not (music_root.parent / "outside").exists()
+
+
+def test_invalid_filename_does_not_create_the_target_folder(
+    client, auth_headers, test_dir, music_root
+):
+    target = f"{_relative(test_dir, music_root)}/Nested/Album"
+
+    response = _upload(client, auth_headers, filename="..", target=target)
+
+    assert response.status_code == 400
+    assert not (test_dir / "Nested").exists()
