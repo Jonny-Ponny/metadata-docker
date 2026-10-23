@@ -313,6 +313,9 @@ def _save_upload_atomic(file_storage, directory, filename, conflict, size=None):
 # per file, so this caps a single file rather than the whole library.
 MAX_UPLOAD_BYTES = _env_size_mib('MAX_UPLOAD_MB', 4096)
 COVER_UPLOAD_BYTES = 20 * 1024 * 1024
+# Text files (lyrics, notes) are edited in the browser, so keep them small
+# enough to read and write in one request.
+TEXT_MAX_BYTES = 1024 * 1024
 
 # Upload conflict policy. "skip-identical" leaves an existing file untouched
 # when the incoming file has the same size, so re-dropping a folder is
@@ -1101,6 +1104,8 @@ def serve_audio():
         full_path = safe_path(file_path)
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
+        if not is_supported_audio(full_path):
+            return jsonify({'error': 'Not an audio file'}), 400
         log_info(f'Serving audio: {full_path}')
         return send_file(full_path, mimetype=mime_for(full_path), conditional=True)
     
@@ -1648,7 +1653,7 @@ def update_folder_pictures_endpoint():
         return jsonify({'error': 'Missing path parameter'}), 400
     
     try:
-        full_path = safe_path(folder_path) if folder_path else MUSIC_FOLDER
+        full_path = safe_path(folder_path)
         if not os.path.isdir(full_path):
             return jsonify({'error': 'Folder not found'}), 404
         
@@ -1724,7 +1729,7 @@ def update_folder_pictures_current_only_endpoint():
         return jsonify({'error': 'Missing path parameter'}), 400
     
     try:
-        full_path = safe_path(folder_path) if folder_path else MUSIC_FOLDER
+        full_path = safe_path(folder_path)
         if not os.path.isdir(full_path):
             return jsonify({'error': 'Folder not found'}), 404
         
@@ -1858,7 +1863,9 @@ def serve_image():
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # Determine mimetype
+        # Determine mimetype. Only the image types listed in the tree are
+        # served; anything else would expose arbitrary library files through a
+        # content-type-free endpoint.
         ext = os.path.splitext(full_path)[1].lower()
         mimetypes = {
             '.jpg': 'image/jpeg',
@@ -1868,7 +1875,9 @@ def serve_image():
             '.bmp': 'image/bmp',
             '.webp': 'image/webp'
         }
-        mimetype = mimetypes.get(ext, 'application/octet-stream')
+        mimetype = mimetypes.get(ext)
+        if mimetype is None:
+            return jsonify({'error': 'Not an image file'}), 400
         
         return send_file(full_path, mimetype=mimetype)
     
@@ -1901,25 +1910,30 @@ def save_cover_art_as_file():
         
         metadata = extract_metadata(full_path)
         
-        if not metadata.get('picture'):
+        if not (metadata or {}).get('picture'):
             return jsonify({'error': 'No cover art found in file'}), 404
         
-        # Extract image data from base64
+        # Extract image data from base64. A corrupt tag value must be a clear
+        # 400 rather than an unhandled binascii error.
         picture_data = metadata['picture']
-        if picture_data.startswith('data:image'):
-            # Format: data:image/jpeg;base64,/9j/4AAQ...
-            header, encoded = picture_data.split(',', 1)
-            image_data = base64.b64decode(encoded)
-            
-            # Determine extension from mime type
-            mime_match = re.search(r'image/(\w+)', header)
-            ext = mime_match.group(1) if mime_match else 'jpg'
-            if ext == 'jpeg':
-                ext = 'jpg'
-        else:
-            # Assume it's already base64 without header
-            image_data = base64.b64decode(picture_data)
-            ext = 'jpg'  # default
+        try:
+            if picture_data.startswith('data:image'):
+                # Format: data:image/jpeg;base64,/9j/4AAQ...
+                header, encoded = picture_data.split(',', 1)
+                image_data = base64.b64decode(encoded)
+
+                # Determine extension from mime type
+                mime_match = re.search(r'image/(\w+)', header)
+                ext = mime_match.group(1) if mime_match else 'jpg'
+                if ext == 'jpeg':
+                    ext = 'jpg'
+            else:
+                # Assume it's already base64 without header
+                image_data = base64.b64decode(picture_data)
+                ext = 'jpg'  # default
+        except ValueError:
+            # binascii.Error subclasses ValueError.
+            return jsonify({'error': 'The cover art data is not valid base64'}), 400
         
         # Save to same folder as the audio file
         folder_path = os.path.dirname(full_path)
@@ -1958,6 +1972,7 @@ def get_logs():
     try:
         # Get query parameters
         lines = request.args.get('lines', default=100, type=int)
+        lines = max(1, min(lines, 1000))
         level = request.args.get('level', default=None, type=str)
         search = request.args.get('search', default=None, type=str)
         
@@ -2477,8 +2492,24 @@ def get_text_file():
         if not full_path.lower().endswith(('.txt', '.lrc')):
             return jsonify({'error': 'Not a text file'}), 400
 
-        with open(full_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        try:
+            size = os.path.getsize(full_path)
+        except OSError:
+            size = None
+        if size is not None and size > TEXT_MAX_BYTES:
+            return jsonify({
+                'error': f'The text file is too large. The maximum size is {_format_size(TEXT_MAX_BYTES)}.'
+            }), 413
+
+        # Undecodable bytes must not make the editor fail with a 500; the
+        # replacement character is visible and the file can still be fixed.
+        with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read(TEXT_MAX_BYTES + 1)
+
+        if len(content) > TEXT_MAX_BYTES:
+            return jsonify({
+                'error': f'The text file is too large. The maximum size is {_format_size(TEXT_MAX_BYTES)}.'
+            }), 413
 
         return jsonify({'content': content})
 
@@ -2500,6 +2531,12 @@ def save_text_file():
 
     if not file_path or content is None:
         return jsonify({'error': 'Missing path or content'}), 400
+    if not isinstance(content, str):
+        return jsonify({'error': 'content must be a string'}), 400
+    if len(content.encode('utf-8')) > TEXT_MAX_BYTES:
+        return jsonify({
+            'error': f'The text content is too large. The maximum size is {_format_size(TEXT_MAX_BYTES)}.'
+        }), 413
 
     try:
         full_path = safe_path(file_path)
@@ -2509,8 +2546,20 @@ def save_text_file():
         if not full_path.lower().endswith(('.txt', '.lrc')):
             return jsonify({'error': 'Not a text file'}), 400
 
-        with open(full_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+        # Write to a hidden temp file in the same directory first: a failed
+        # write must not truncate the existing lyrics or notes.
+        directory = os.path.dirname(full_path) or '.'
+        temp_path = os.path.join(directory, f'.upload-{secrets.token_hex(8)}.part')
+        try:
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            os.replace(temp_path, full_path)
+        finally:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
         log_info(f"Updated text file: {full_path}")
         return jsonify({'success': True})
