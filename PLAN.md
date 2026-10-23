@@ -383,7 +383,7 @@ every non-trivial helper at least once, and make CI run the suite.
 - [x] `tests/test_metadata_endpoints.py` — missing path → 404, unreadable
   metadata on smart rename, `None` metadata after cover changes, corrupt
   base64, image/audio type guards, root folder palettes (B-12..B-18).
-- [ ] `tests/test_metadata.py`
+- [x] `tests/test_metadata.py`
   - tag round-trip for every `FIELD_SCHEMA` field on MP3/WAV/AIFF/FLAC/
     OGG/Opus/M4A/M4B using committed small fixtures (`tests/fixtures/`);
   - comment vs description vs custom fields; lyrics (SYLT) and unsynced
