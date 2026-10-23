@@ -17,4 +17,4 @@ services:
     volumes:
       - ~/Media/music:/music                           # Library
       - ./logs:/logs                                   # Logs
-      - ./addons:/app/addons                           # Addons
+      - ./addons:/app/addons:ro                        # Addons (read-only; arbitrary Python)

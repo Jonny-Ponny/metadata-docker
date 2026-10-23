@@ -48,7 +48,7 @@ services:
     volumes:
       - ~/path/to/your/music:/music                 # Library
       - ./logs:/logs                                # Logs
-      - ./addons:/app/addons                        # Addons
+      - ./addons:/app/addons:ro                     # Addons (read-only; trusted code)
     # Healthcheck is inherited from the image. Uncomment to disable it.
     #healthcheck:
     #  disable: true
@@ -81,7 +81,7 @@ Never expose plain HTTP to the internet: the login password and bearer tokens wo
 
 Set `AUTH_USERNAME` and `AUTH_PASSWORD` (or `AUTH_PASSWORD_HASH`) explicitly. If either is unset or empty, the app generates a random temporary credential at startup and writes it to the logs (`docker compose logs app` or `./logs/app.log`). Those credentials change on every restart; the app has no user database or setup screen. After five failed logins from one address, login is locked for 15 minutes.
 
-The SPA stores its JWT in `localStorage`, so it is exposed to any XSS. The app sends a restrictive `Content-Security-Policy` and related headers as defense-in-depth, but that does not make `localStorage` equivalent to an `HttpOnly` cookie. Addons run arbitrary Python inside the container; only mount addons you trust.
+The SPA stores its JWT in `localStorage`, so it is exposed to any XSS. The app sends a restrictive `Content-Security-Policy` and related headers as defense-in-depth, but that does not make `localStorage` equivalent to an `HttpOnly` cookie. Addons run arbitrary Python inside the container with the app user's access to `/music` and `/logs`; only mount addons you trust. The addons folder is mounted read-only, and addon dependency installs run as the unprivileged `PUID`/`PGID` user (or are skipped when running as root).
 
 ## Verifying the image
 
@@ -149,7 +149,7 @@ If both `AUTH_PASSWORD` and `AUTH_PASSWORD_HASH` are set, the hash wins and a wa
 
 The image defines a `HEALTHCHECK` that polls the unauthenticated `/api/ping` endpoint, so `docker ps` reports the container as healthy once the app and its addon dependencies are ready.
 
-An unhealthy status alone does not restart the container. Addons are installed before the app starts, so a slow first boot can briefly show `(unhealthy)` and then recover.
+An unhealthy status alone does not restart the container. Addon dependencies are installed before the app starts, so a slow first boot can briefly show `(unhealthy)` and then recover.
 
 To disable it for a deployment, uncomment the `healthcheck` block in `docker-compose.yml` or add:
 
@@ -167,13 +167,15 @@ Mount|Purpose
 |---|---|
 ~/path/to/your/music:/music|Your music library
 ./logs:/logs|Application logs
-./addons:/app/addons|Addon folder
+./addons:/app/addons:ro|Addon folder (read-only; trusted Python code)
 
 ## Addons
 
 Addons are small Python plugins that fetch metadata from outside sources. They show up as "fetchers" in the metadata editor: pick one, search for a song or album, then apply the results to one file or a whole folder.
 
 The app ships with no addons. You install the ones you want by dropping them into the `addons` folder, which `docker-compose.yml` mounts at `/app/addons`. Everything in that folder is scanned once at container start.
+
+> **Addons are arbitrary Python code.** They run inside the container with the app user's access to `/music` and `/logs`, so only mount addons you trust. The folder is mounted read-only, and addon dependency installs run as the unprivileged `PUID`/`PGID` user, never as root (root mode skips runtime dependency installation).
 
 ### Installing an Existing Addon
 
@@ -236,8 +238,11 @@ docker compose up -d
 
 A few things to keep in mind:
 
-- The container installs `*requirements.txt` dependencies on every start, before the app launches. The first start after adding an addon can take a bit longer.
+- The container installs `*requirements.txt` dependencies on every start as the unprivileged `PUID`/`PGID` user (into `/app/.local`), before the app launches. The first start after adding an addon can take a bit longer.
+- If you run the container as root (`PUID=0`), runtime addon dependency installation is disabled. Install the dependencies in a custom image derived from this one, or run with a non-root `PUID`/`PGID`.
 - Dependencies are installed inside the container, so changing an addon's requirement file requires a container restart.
+- The addons folder is read-only inside the container. Addons that write cache files must use `/tmp` or another writable location.
+- The host addons folder must be readable by `PUID`/`PGID`; normal `755`/`644` permissions are sufficient. The container does not chown it because it is mounted read-only.
 - Plugins are loaded once at startup; editing a `.py` file or adding a new one has no effect until you restart.
 - A broken addon is skipped with an error in the logs (`docker compose logs`). One bad addon will not stop the app.
 
@@ -347,7 +352,7 @@ Older addons may return `year`, `track`, or `disk`. Those are still accepted and
 - Set a `User-Agent` and a `timeout` on HTTP requests; rate-limit if the service requires it.
 - Raising an exception is fine - the API returns it as an error and the UI shows the message. Returning an empty list from a search is often friendlier for "no results".
 - Avoid doing network calls at import time. Keep them in `__init__` or in the methods, so a temporarily unavailable service does not break loading.
-- Dependencies go in a `*requirements.txt` file next to the addon, one package per line. The container installs them on the next start.
+- Dependencies go in a `*requirements.txt` file next to the addon, one package per line. The container installs them on the next start as the unprivileged `PUID`/`PGID` user; installation is skipped when running as root (`PUID=0`).
 - `addon_base` is importable because the backend runs from the directory containing it. Outside Docker, the addons folder is resolved relative to the process working directory (`backend/addons` if you run the backend from `backend/`).
 
 For reference check working examples.

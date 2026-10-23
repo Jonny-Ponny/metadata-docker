@@ -21,7 +21,7 @@ services:
     volumes:
       - ~/path/to/your/music:/music                   # Library
       - ./logs:/logs                                  # Logs
-      - ./addons:/app/addons                          # Addons
+      - ./addons:/app/addons:ro                       # Addons (read-only; arbitrary Python)
     # Healthcheck is inherited from the image. Uncomment to disable it.
     #healthcheck:
     #  disable: true

@@ -28,7 +28,7 @@ docker build -t metadata-docker .
 
 - Runs as `PUID`/`PGID` (default `1000`), so non-root unless you set `0`.
 - Needs read/write on the music library and `/logs`; treat it like code running with that file access.
-- Addons are arbitrary Python from the mounted `addons` folder. Only mount addons you trust.
+- Addons are arbitrary Python from the read-only mounted `addons` folder. They run with the app user's access to `/music` and `/logs`, so only mount addons you trust. `*requirements.txt` installs run as the unprivileged `PUID`/`PGID` user into `/app/.local`, never as root, and application code in `/app` is not chowned. Running with `PUID=0` disables runtime dependency installation; preinstall addon dependencies in a custom image instead.
 - Set `AUTH_USERNAME`/`AUTH_PASSWORD` (or `AUTH_PASSWORD_HASH`) explicitly. If they are unset or empty, random temporary credentials are generated at startup and logged; they change on every restart. The app does not fall back to a known default.
 - Login is rate-limited per client address: five failed attempts trigger a 15-minute lockout. The limiter is in-memory and resets on restart.
 - The shipped compose files bind to `127.0.0.1`. Terminate TLS in a reverse proxy before exposing the app beyond localhost, and never serve it over plain HTTP to the internet.

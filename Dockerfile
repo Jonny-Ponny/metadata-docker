@@ -31,8 +31,10 @@ COPY backend/ .
 RUN mkdir -p static
 COPY --from=frontend-builder /app/frontend/dist/ ./static/
 
-# Create directories that might need permission changes
-RUN mkdir -p /music /logs
+# Create directories that might need permission changes. /app/addons exists in
+# the image so the app can start without an addons mount and never needs to
+# create it under the root-owned application directory.
+RUN mkdir -p /music /logs /app/addons
 
 # Commit this image was built from. The release workflow passes GITHUB_SHA;
 # /api/version exposes it so a running container can be matched against the
