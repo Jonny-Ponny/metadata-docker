@@ -414,6 +414,38 @@ def _permission_error(exc):
     return jsonify({'error': 'Permission denied while accessing the library.'}), 403
 
 
+def _json_object():
+    """Return ``(data, error_response)`` for a JSON object request body.
+
+    ``request.get_json()`` raises before the route can validate anything when
+    the ``Content-Type`` or the body is wrong, and a JSON list or string then
+    breaks ``data.get()`` with a 500. Every JSON route uses this helper so
+    those cases stay JSON with a 4xx status.
+    """
+    if not request.is_json:
+        return None, (jsonify({
+            'error': 'Request body must be JSON (Content-Type: application/json).'
+        }), 415)
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None, (jsonify({'error': 'Request body must be a JSON object.'}), 400)
+
+    return data, None
+
+
+@app.errorhandler(400)
+def handle_bad_request(error):
+    """Return JSON for malformed requests instead of Flask's HTML page."""
+    return jsonify({'error': 'Invalid request.'}), 400
+
+
+@app.errorhandler(415)
+def handle_unsupported_media_type(error):
+    """Return JSON when a request body has an unsupported content type."""
+    return jsonify({'error': 'Unsupported request body; send JSON.'}), 415
+
+
 @app.errorhandler(500)
 def handle_internal_server_error(error):
     """Return JSON for unhandled errors instead of Flask's HTML page."""
@@ -992,7 +1024,9 @@ def get_metadata():
 @app.route('/api/metadata/file', methods=['POST'])
 @token_required
 def update_single_file():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     file_path = data.get('path')
     field = data.get('field')
     value = data.get('value')
@@ -1024,7 +1058,9 @@ def update_single_file():
 @app.route('/api/metadata/folder', methods=['POST'])
 @token_required
 def update_folder_files():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     folder_path = data.get('path')
     field = data.get('field')
     value = data.get('value')
@@ -1189,7 +1225,9 @@ def create_directory():
     " (n)" to an existing name. ``conflict="merge"`` returns the existing
     folder so an upload writes into it instead of creating a stray copy.
     """
-    data = request.get_json(silent=True) or {}
+    data, error = _json_object()
+    if error:
+        return error
     desired_path = data.get('path', '')
     conflict = (data.get('conflict') or DEFAULT_MKDIR_CONFLICT).strip()
     if not desired_path:
@@ -1255,7 +1293,9 @@ def create_directory():
 @token_required
 def rename_item():
     """Rename a file or folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     old_path = data.get('oldPath')
     new_name = data.get('newName')   # only the new base name, not full path
 
@@ -1309,7 +1349,9 @@ def rename_item():
 @token_required
 def delete_item():
     """Delete a file or folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
 
     if not path:
@@ -1344,7 +1386,9 @@ def delete_item():
 @token_required
 def move_item():
     """Move a file or folder to a new destination folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     source = data.get('source')
     destination = data.get('destination')  # destination folder path (empty = root)
 
@@ -1402,7 +1446,9 @@ def move_item():
 @app.route('/api/copy', methods=['POST'])
 @token_required
 def copy_item():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
 
     if not path:
@@ -1505,7 +1551,9 @@ def update_file_picture_endpoint():
 @app.route('/api/metadata/picture/url', methods=['POST'])
 @token_required
 def update_file_picture_from_url_endpoint():
-    data = request.get_json() or {}
+    data, error = _json_object()
+    if error:
+        return error
     image_url = data.get('url')
     file_path = data.get('path')
     
@@ -1624,7 +1672,9 @@ def update_folder_pictures_endpoint():
 @app.route('/api/metadata/folder/current', methods=['POST'])
 @token_required
 def update_folder_files_current_only():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     folder_path = data.get('path')
     field = data.get('field')
     value = data.get('value')
@@ -1700,7 +1750,9 @@ def update_folder_pictures_current_only_endpoint():
 @token_required
 def delete_metadata_field():
     """Delete a specific metadata field from a file or all files in a folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
     field = data.get('field')
     recursive = data.get('recursive', False)  # Add recursive flag
@@ -1747,7 +1799,9 @@ def delete_metadata_field():
 @token_required
 def delete_cover_art():
     """Delete cover art from a file."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     file_path = data.get('path')
     
     if not file_path:
@@ -1821,7 +1875,9 @@ def serve_image():
 @token_required
 def save_cover_art_as_file():
     """Extract cover art from audio file and save as cover.jpg in the same folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     file_path = data.get('path')
     
     if not file_path:
@@ -1977,7 +2033,9 @@ def clear_logs():
 @token_required
 def apply_renaming_scheme():
     """Apply a renaming scheme to a folder or file."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
     scheme = data.get('scheme')
     is_folder = data.get('isFolder', True)
@@ -2303,7 +2361,9 @@ def _send_download(path, is_folder):
 @token_required
 def create_download_token():
     """Create a short-lived token authorizing one file/folder download."""
-    data = request.get_json(silent=True) or {}
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
     is_folder = bool(data.get('isFolder', False))
 
@@ -2369,7 +2429,9 @@ def download_item_with_token():
 @token_required
 def download_item():
     """Download a file or folder as a ZIP archive."""
-    data = request.get_json(silent=True) or {}
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
     is_folder = data.get('isFolder', False)
 
@@ -2412,7 +2474,9 @@ def get_text_file():
 @app.route('/api/text/save', methods=['POST'])
 @token_required
 def save_text_file():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     file_path = data.get('path')
     content = data.get('content')
 
