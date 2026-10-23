@@ -1,4 +1,4 @@
-"""Rename guardrails for the file tree."""
+"""Rename guardrails for the file tree (B-05)."""
 
 from pathlib import Path
 

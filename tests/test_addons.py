@@ -1,4 +1,4 @@
-"""Addon URL validation, result-limit clamping and plugin discovery."""
+"""Addon URL validation, result-limit clamping and plugin discovery (B-24, B-25)."""
 
 import textwrap
 

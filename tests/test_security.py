@@ -92,7 +92,7 @@ def test_unset_credentials_never_become_admin_admin(app_module, tmp_path):
 
 
 def test_empty_music_folder_falls_back_to_the_default(app_module, tmp_path):
-    """An empty MUSIC_FOLDER must not disable the path containment check.
+    """An empty MUSIC_FOLDER must not disable the path containment check (B-04).
 
     A missing default used to leave ``safe_path()`` returning the raw user
     path, so an absolute path could escape the library.

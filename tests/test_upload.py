@@ -1,4 +1,4 @@
-"""Upload and folder-creation behaviour.
+"""Upload and folder-creation behaviour, including the upload race (B-07).
 
 These complement the security suite: the upload flow is where a stale client
 used to create duplicate folders and files, so the conflict policies and the
@@ -389,6 +389,7 @@ def test_upload_cannot_escape_the_library(
 def test_invalid_filename_does_not_create_the_target_folder(
     client, auth_headers, test_dir, music_root
 ):
+    """B-28: validate the name before ``os.makedirs()``."""
     target = f"{_relative(test_dir, music_root)}/Nested/Album"
 
     response = _upload(client, auth_headers, filename="..", target=target)

@@ -136,6 +136,7 @@ def audio_file(test_dir):
         if not source.is_file():
             raise AssertionError(f"no audio fixture for {extension}")
         destination = test_dir / (name or f"track-{uuid.uuid4().hex}{extension}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
         return destination
 
