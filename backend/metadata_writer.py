@@ -120,17 +120,33 @@ def delete_cover_art(file_path):
 
 
 def _iter_audio_files(folder_path, recursive=True):
-    """Yield supported audio files in *folder_path*."""
+    """Yield supported audio files in *folder_path*.
+
+    Symlinks are skipped deliberately: a bulk tag/cover operation should never
+    follow a link out of the folder the user selected. Access to individual
+    symlinked files still goes through ``safe_path()``, which checks the
+    resolved target.
+    """
     if recursive:
-        for root, _, files in os.walk(folder_path):
-            for file in files:
+        for root, dir_names, files in os.walk(folder_path):
+            # os.walk() does not follow symlinked directories by default;
+            # pruning them keeps that explicit and prevents surprises.
+            dir_names[:] = [
+                name for name in dir_names
+                if not os.path.islink(os.path.join(root, name))
+            ]
+            for file in sorted(files):
                 file_path = os.path.join(root, file)
+                if os.path.islink(file_path):
+                    continue
                 if is_supported_audio(file_path):
                     yield file_path
         return
 
-    for file in os.listdir(folder_path):
+    for file in sorted(os.listdir(folder_path)):
         file_path = os.path.join(folder_path, file)
+        if os.path.islink(file_path):
+            continue
         if os.path.isfile(file_path) and is_supported_audio(file_path):
             yield file_path
 

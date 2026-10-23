@@ -452,6 +452,12 @@ def build_tree(current_path, relative_path):
             full = os.path.join(current_path, entry)
             rel = os.path.join(relative_path, entry).replace('\\', '/')
             if os.path.isdir(full):
+                # Symlinked directories are skipped: following them can escape
+                # MUSIC_ROOT or recurse forever through a cycle. safe_path()
+                # resolves symlinks as well, so anything not listed here could
+                # not be opened through the API either.
+                if os.path.islink(full):
+                    continue
                 children = build_tree(full, rel)
                 stat = os.stat(full)
                 items.append({
@@ -464,6 +470,11 @@ def build_tree(current_path, relative_path):
                     'size': 0
                 })
             elif os.path.isfile(full):
+                # A symlinked file is only listed when it resolves inside the
+                # library. This also avoids calling os.stat() on a link that
+                # points at an arbitrary outside file.
+                if os.path.islink(full) and not _is_within(MUSIC_ROOT, full):
+                    continue
                 # Check for audio files
                 if is_supported_audio(entry):
                     stat = os.stat(full)
@@ -523,11 +534,15 @@ def build_tree(current_path, relative_path):
 def _is_within(base_path, candidate_path):
     """Return True when *candidate_path* is *base_path* or lives below it.
 
-    Uses ``commonpath`` instead of ``startswith`` so a sibling such as
-    ``/music-other`` is not treated as being inside ``/music``.
+    Both paths are resolved with ``realpath`` first, so a symlink cannot be
+    used to point outside *base_path*. ``commonpath`` is used instead of
+    ``startswith`` so a sibling such as ``/music-other`` is not treated as
+    being inside ``/music``.
     """
     try:
-        return os.path.commonpath([base_path, candidate_path]) == base_path
+        base = os.path.realpath(base_path)
+        candidate = os.path.realpath(candidate_path)
+        return os.path.commonpath([base, candidate]) == base
     except ValueError:
         # Different drives on Windows cannot share a common path.
         return False
@@ -537,8 +552,10 @@ def safe_path(file_path):
     """Resolve a user-supplied path and keep it inside the music folder.
 
     Leading slashes are ignored so both ``/album/song.mp3`` and
-    ``album/song.mp3`` refer to the library root. Raises ``PermissionError``
-    when the resolved path would escape ``MUSIC_FOLDER``.
+    ``album/song.mp3`` refer to the library root. Symlinks are resolved for
+    the containment check, so a link inside the library cannot point outside
+    it. Raises ``PermissionError`` when the resolved path would escape
+    ``MUSIC_FOLDER``.
     """
     if not MUSIC_FOLDER:
         return file_path
@@ -832,6 +849,8 @@ def rename_item():
         # Return the new relative path
         new_rel = os.path.relpath(full_new, MUSIC_FOLDER).replace('\\', '/')
         return jsonify({'success': True, 'newPath': new_rel})
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -849,10 +868,12 @@ def delete_item():
 
     try:
         full_path = safe_path(path)
-        if not os.path.exists(full_path):
+        if not os.path.lexists(full_path):
             return jsonify({'error': 'Path not found'}), 404
 
-        if os.path.isfile(full_path):
+        # A symlink is removed itself, never the target it points at. This also
+        # lets users clean up symlinks without rmtree() refusing the path.
+        if os.path.islink(full_path) or os.path.isfile(full_path):
             os.remove(full_path)
             log_info(f"Deleted {full_path}")
         else:
@@ -861,6 +882,8 @@ def delete_item():
 
 
         return jsonify({'success': True})
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -958,11 +981,15 @@ def copy_item():
                 while os.path.exists(new_name):
                     new_name = f'{base} ({counter})'
                     counter += 1
-            shutil.copytree(full_path, new_name)
+            # Preserve symlinks as links. Following them would copy the target
+            # from outside the library into the new folder.
+            shutil.copytree(full_path, new_name, symlinks=True)
         
         log_info(f"Created a copy of {full_path}")
 
         return jsonify({'success': True})
+    except PermissionError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1595,12 +1622,20 @@ def apply_renaming_scheme():
             if not os.path.isdir(full_path):
                 return jsonify({'error': 'Folder not found'}), 404
             
-            # Find first audio file in folder to extract metadata
+            # Find first audio file in folder to extract metadata. Symlinks are
+            # skipped so a bulk rename never reads a target outside the folder.
             first_audio = None
             for root, dirs, files in os.walk(full_path):
-                for file in files:
+                dirs[:] = [
+                    name for name in dirs
+                    if not os.path.islink(os.path.join(root, name))
+                ]
+                for file in sorted(files):
+                    candidate = os.path.join(root, file)
+                    if os.path.islink(candidate):
+                        continue
                     if is_supported_audio(file):
-                        first_audio = os.path.join(root, file)
+                        first_audio = candidate
                         break
                 if first_audio:
                     break

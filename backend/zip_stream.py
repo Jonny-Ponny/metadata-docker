@@ -70,6 +70,17 @@ class _QueueWriter(io.RawIOBase):
         pass
 
 
+def _is_within(base_path, candidate_path):
+    """Return True when *candidate_path* resolves to *base_path* or below it."""
+    try:
+        base = os.path.realpath(base_path)
+        candidate = os.path.realpath(candidate_path)
+        return os.path.commonpath([base, candidate]) == base
+    except ValueError:
+        # Different drives on Windows cannot share a common path.
+        return False
+
+
 def _write_archive(root_path, destination):
     """Write every file under *root_path* into the archive at *destination*."""
     base_path = os.path.dirname(root_path)
@@ -80,9 +91,24 @@ def _write_archive(root_path, destination):
         allowZip64=True,
     ) as archive:
         for current_path, dir_names, file_names in os.walk(root_path):
-            dir_names.sort()
+            # Never descend through symlinked directories: they can escape the
+            # folder being downloaded or form a cycle.
+            dir_names[:] = sorted(
+                name for name in dir_names
+                if not os.path.islink(os.path.join(current_path, name))
+            )
             for file_name in sorted(file_names):
                 full_path = os.path.join(current_path, file_name)
+
+                # A symlinked file is only included when it still resolves
+                # inside the folder being downloaded, mirroring safe_path().
+                if os.path.islink(full_path) and not _is_within(root_path, full_path):
+                    log_warning(
+                        f'Skipping {full_path} in ZIP download: '
+                        'symlink points outside the folder'
+                    )
+                    continue
+
                 archive_name = os.path.relpath(full_path, base_path).replace('\\', '/')
 
                 # Open before creating the entry: an unreadable file can then
