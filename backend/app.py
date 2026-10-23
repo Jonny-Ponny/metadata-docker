@@ -17,6 +17,14 @@ from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
 from formats import is_supported_audio, mime_for
+from errors import AccessDenied
+from paths import (
+    generated_rename_path,
+    is_library_root,
+    is_within as _is_within,
+    safe_path as resolve_safe_path,
+    unique_path as _unique_path,
+)
 from pathlib import Path
 from zip_stream import iter_zip
 from safe_fetch import fetch_image, UnsafeURLError, ImageTooLargeError
@@ -176,17 +184,6 @@ def _format_size(size):
     if size >= 1024 ** 3 and size % (1024 ** 3) == 0:
         return f'{size // (1024 ** 3)} GiB'
     return f'{size // (1024 ** 2)} MiB'
-
-
-def _unique_path(path):
-    """Return *path* or the first free "name (n).ext" variant."""
-    base, ext = os.path.splitext(path)
-    counter = 1
-    candidate = path
-    while os.path.exists(candidate):
-        candidate = f'{base} ({counter}){ext}'
-        counter += 1
-    return candidate
 
 
 def _stream_size(file_storage):
@@ -352,10 +349,6 @@ def limit_cover_upload_size():
     """Apply the smaller body limit to cover-art uploads."""
     if request.path in COVER_UPLOAD_PATHS:
         request.max_content_length = COVER_UPLOAD_BYTES
-
-
-class AccessDenied(PermissionError):
-    """A user-supplied path attempted to leave the music library."""
 
 
 def _public_error_message(exc, fallback):
@@ -896,73 +889,22 @@ def build_tree(current_path, relative_path):
 
     return items
 
-def _is_within(base_path, candidate_path):
-    """Return True when *candidate_path* is *base_path* or lives below it.
 
-    Both paths are resolved with ``realpath`` first, so a symlink cannot be
-    used to point outside *base_path*. ``commonpath`` is used instead of
-    ``startswith`` so a sibling such as ``/music-other`` is not treated as
-    being inside ``/music``.
-    """
-    try:
-        base = os.path.realpath(base_path)
-        candidate = os.path.realpath(candidate_path)
-        return os.path.commonpath([base, candidate]) == base
-    except ValueError:
-        # Different drives on Windows cannot share a common path.
-        return False
-
-
+# Path helpers live in paths.py. These wrappers bind the library root until the
+# settings object replaces the module-level MUSIC_ROOT (Phase 3, step 3).
 def _is_library_root(path):
-    """Return True when *path* resolves to the music library root itself.
-
-    ``safe_path()`` maps ``""``, ``"."`` and ``"/"`` to the root. Removing that
-    tree, or deriving a sibling name from it, would act outside the library.
-    """
-    try:
-        return os.path.realpath(path) == os.path.realpath(MUSIC_ROOT)
-    except (OSError, ValueError):
-        return False
+    """Return True when *path* resolves to the music library root itself."""
+    return is_library_root(path, MUSIC_ROOT)
 
 
 def _generated_rename_path(parent, name):
-    """Validate a generated rename target and return its full path.
-
-    Smart rename builds names from tag values, so the result is not a
-    user-typed filename. Reject empty names, ``.``/``..``, separators and
-    names that would resolve outside the music library.
-    """
-    if not isinstance(name, str) or not name or '\0' in name:
-        raise ValueError('Invalid generated name')
-    if name in ('.', '..') or name.strip() != name:
-        raise ValueError('Invalid generated name')
-    if os.path.isabs(name) or '/' in name or '\\' in name:
-        raise ValueError('Invalid generated name')
-
-    new_path = os.path.join(parent, name)
-    if not _is_within(MUSIC_ROOT, new_path):
-        raise ValueError('Invalid generated name')
-    return new_path
+    """Validate a generated rename target and return its full path."""
+    return generated_rename_path(parent, name, MUSIC_ROOT)
 
 
 def safe_path(file_path):
-    """Resolve a user-supplied path and keep it inside the music folder.
-
-    Leading slashes are ignored so both ``/album/song.mp3`` and
-    ``album/song.mp3`` refer to the library root. Symlinks are resolved for
-    the containment check, so a link inside the library cannot point outside
-    it. Raises ``PermissionError`` when the resolved path would escape
-    ``MUSIC_FOLDER``.
-    """
-    if file_path is None or '\0' in str(file_path):
-        raise AccessDenied('Invalid path.')
-
-    full_path = os.path.abspath(
-        os.path.join(MUSIC_ROOT, str(file_path).lstrip('/'))
-    )
-    if not _is_within(MUSIC_ROOT, full_path):
-        raise AccessDenied('Path is outside the music library.')
-    return full_path
+    """Resolve a user-supplied path and keep it inside the music folder."""
+    return resolve_safe_path(file_path, MUSIC_ROOT)
 
 # -------------------------API ENDPOINTS------------------------- #
 
