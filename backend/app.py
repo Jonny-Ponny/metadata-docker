@@ -110,13 +110,14 @@ app.config['SECRET_KEY'] = JWT_SECRET_KEY
 
 # Defense-in-depth headers for the SPA and API. The SPA has no inline scripts
 # (Vite emits external module files), but Svelte uses inline style attributes,
-# so styles still need 'unsafe-inline'. Images may come from addon cover URLs,
-# and blob:/data: are used for local previews and audio playback.
+# so styles still need 'unsafe-inline'. Remote cover art is proxied through
+# /api/metadata/picture/preview, so the browser only loads same-origin, data:
+# and blob: images.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self'; "
     "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: blob: http: https:; "
+    "img-src 'self' data: blob:; "
     "media-src 'self' blob:; "
     "connect-src 'self' data:; "
     "font-src 'self' data:; "
@@ -1055,6 +1056,40 @@ def update_file_picture_from_url_endpoint():
         return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# GET /api/metadata/picture/preview?url=<remote image URL>
+# Proxy a remote cover for display in the UI. This keeps the browser from
+# contacting arbitrary hosts directly and reuses the same SSRF guard as the
+# apply-cover endpoint.
+PREVIEW_MAX_BYTES = 5 * 1024 * 1024
+
+
+@app.route('/api/metadata/picture/preview', methods=['GET'])
+@token_required
+def preview_remote_picture():
+    image_url = request.args.get('url')
+    if not image_url:
+        return jsonify({'error': 'Missing url parameter'}), 400
+
+    try:
+        image_data, mime_type = fetch_image(
+            image_url,
+            f'metadata-docker/{APP_VERSION}',
+            max_bytes=PREVIEW_MAX_BYTES,
+        )
+    except ImageTooLargeError as e:
+        return jsonify({'error': str(e)}), 413
+    except UnsafeURLError as e:
+        return jsonify({'error': str(e)}), 400
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Failed to download image: {str(e)}'}), 502
+
+    response = Response(image_data, mimetype=mime_type)
+    response.headers['Cache-Control'] = 'private, max-age=300'
+    response.headers['Content-Disposition'] = 'inline'
+    return response
+
 
 # POST /api/metadata/picture/folder
 # Update cover art for all files in a folder

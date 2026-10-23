@@ -7,8 +7,9 @@ streamed into memory with a hard size cap and timeouts.
 Residual risk: we validate the resolved addresses and then let ``requests``
 resolve the name again when it connects (DNS rebinding). Closing that window
 would mean pinning the connection to a validated IP, which is not worth the
-complexity for an authenticated-only cover-art endpoint. The image content-type
-requirement also limits what an attacker can exfiltrate through the response.
+complexity for the authenticated cover-art and preview endpoints. The image
+content-type requirement also limits what an attacker can exfiltrate through
+the response.
 """
 
 import ipaddress
@@ -62,7 +63,7 @@ def _is_public_address(address):
 def _resolve_public_ips(host):
     try:
         infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
-    except socket.gaierror:
+    except (socket.gaierror, UnicodeError):
         raise UnsafeURLError(f'Could not resolve host: {host}')
 
     addresses = {info[4][0] for info in infos}
@@ -77,14 +78,23 @@ def _resolve_public_ips(host):
 
 def validate_public_url(url):
     """Validate scheme, host and resolved addresses; raise UnsafeURLError."""
-    parsed = urlparse(url)
+    if not isinstance(url, str):
+        raise UnsafeURLError('URL must be a string')
+
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+    except ValueError:
+        # Malformed bracketed IPv6 literals and similar parse failures.
+        raise UnsafeURLError('Invalid URL')
+
     if parsed.scheme not in ('http', 'https'):
         raise UnsafeURLError('Only http and https URLs are allowed')
-    if not parsed.hostname:
+    if not hostname:
         raise UnsafeURLError('URL is missing a host')
     if parsed.username or parsed.password:
         raise UnsafeURLError('URLs with embedded credentials are not allowed')
-    _resolve_public_ips(parsed.hostname)
+    _resolve_public_ips(hostname)
     return parsed
 
 

@@ -33,4 +33,5 @@ docker build -t metadata-docker .
 - Login is rate-limited per client address: five failed attempts trigger a 15-minute lockout. The limiter is in-memory and resets on restart.
 - The shipped compose files bind to `127.0.0.1`. Terminate TLS in a reverse proxy before exposing the app beyond localhost, and never serve it over plain HTTP to the internet.
 - Cover images fetched from a user-supplied URL go through an SSRF guard: only public `http`/`https` hosts, every redirect hop revalidated, `image/*` content type required, 10 MB cap while streaming and explicit timeouts.
+- Browser cover previews are proxied through the same guard (`/api/metadata/picture/preview`). The CSP allows images only from the app itself, `data:` and `blob:`, so the browser does not contact addon-provided hosts directly. A hover link shows the original URL and opens it only on an explicit click.
 - JWTs use a per-process secret, so a restart logs everyone out.

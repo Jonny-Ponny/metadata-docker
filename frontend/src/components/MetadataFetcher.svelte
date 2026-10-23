@@ -6,6 +6,7 @@
     getFieldDescription,
     isAudioFile,
   } from "../utils/index.js";
+  import CoverPreview from "./CoverPreview.svelte";
 
   let { isOpen, onClose, mode, targetPath, isFolder = false } = $props();
 
@@ -680,15 +681,13 @@
                     <div class="result-extra-info">{getExtraInfo(result)}</div>
                   {/if}
                 </div>
-                {#if result.coverart && (result.coverart.startsWith("data:image") || isImageUrl(result.coverart))}
-                  <img src={result.coverart} alt="cover" class="result-cover" />
-                {:else}
-                  <img
-                    src={placeholderImage}
-                    alt="placeholder"
-                    class="result-cover"
-                  />
-                {/if}
+                <CoverPreview
+                  url={result.coverart}
+                  alt="cover"
+                  variant="result"
+                  placeholder={placeholderImage}
+                  showSourceLink={false}
+                />
               </div>
             {/each}
           </div>
@@ -725,7 +724,7 @@
                     {getFieldLabel(key)}:
                   </label>
                   {#if isPictureField(key, value)}
-                    <img src={value} alt="cover" class="field-preview-image" />
+                    <CoverPreview url={value} alt="cover" />
                   {:else}
                     <span class="field-value">{displayValue(value)}</span>
                   {/if}
@@ -830,11 +829,7 @@
                               {getFieldLabel(key)}:
                             </label>
                             {#if isPictureField(key, value)}
-                              <img
-                                src={value}
-                                alt="cover"
-                                class="field-preview-image"
-                              />
+                              <CoverPreview url={value} alt="cover" />
                             {:else}
                               <span class="field-value"
                                 >{displayValue(value)}</span
@@ -895,11 +890,7 @@
                       {getFieldLabel(key)}:
                     </label>
                     {#if isPictureField(key, value)}
-                      <img
-                        src={value}
-                        alt="cover"
-                        class="field-preview-image"
-                      />
+                      <CoverPreview url={value} alt="cover" />
                     {:else}
                       <span class="field-value">{displayValue(value)}</span>
                     {/if}
@@ -1071,13 +1062,6 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .result-cover {
-    width: 40px;
-    height: 40px;
-    object-fit: cover;
-    border-radius: 4px;
-    margin-left: 8px;
-  }
 
   .metadata-preview {
     margin-top: 20px;
@@ -1133,11 +1117,6 @@
     color: #555;
     word-break: break-word;
     white-space: pre-wrap;
-  }
-  .field-preview-image {
-    max-width: 80px;
-    max-height: 80px;
-    border-radius: 4px;
   }
 
   .batch-container {
