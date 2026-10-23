@@ -18,6 +18,7 @@ import threading
 import zipfile
 
 from logger_config import log_error, log_warning
+from paths import is_within
 
 # Chunks handed to the WSGI server.
 CHUNK_SIZE = 256 * 1024
@@ -86,17 +87,6 @@ def _signal_finished(chunks, stop):
             continue
 
 
-def _is_within(base_path, candidate_path):
-    """Return True when *candidate_path* resolves to *base_path* or below it."""
-    try:
-        base = os.path.realpath(base_path)
-        candidate = os.path.realpath(candidate_path)
-        return os.path.commonpath([base, candidate]) == base
-    except ValueError:
-        # Different drives on Windows cannot share a common path.
-        return False
-
-
 def _write_archive(root_path, destination):
     """Write every file under *root_path* into the archive at *destination*."""
     base_path = os.path.dirname(root_path)
@@ -118,7 +108,7 @@ def _write_archive(root_path, destination):
 
                 # A symlinked file is only included when it still resolves
                 # inside the folder being downloaded, mirroring safe_path().
-                if os.path.islink(full_path) and not _is_within(root_path, full_path):
+                if os.path.islink(full_path) and not is_within(root_path, full_path):
                     log_warning(
                         f'Skipping {full_path} in ZIP download: '
                         'symlink points outside the folder'

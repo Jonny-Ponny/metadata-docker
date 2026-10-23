@@ -176,10 +176,12 @@ def test_cover_from_url_checks_the_format_before_fetching(
 
 
 def test_root_folder_cover_uses_the_resolved_library_root(
-    client, auth_headers, app_module, monkeypatch
+    client, auth_headers, app_module, monkeypatch, tmp_path
 ):
-    """A relative MUSIC_FOLDER must not break the root folder routes (B-16)."""
-    monkeypatch.setattr(app_module, "MUSIC_FOLDER", "relative-music")
+    """A relative library root must not break the root folder routes (B-16)."""
+    (tmp_path / "relative-music").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(app_module, "MUSIC_ROOT", "relative-music")
     monkeypatch.setattr(
         app_module,
         "update_folder_pictures",

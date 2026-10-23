@@ -4,9 +4,11 @@ from pathlib import Path
 
 import pytest
 
+import paths
+
 
 def test_safe_path_rejects_nul_bytes(app_module):
-    with pytest.raises(app_module.AccessDenied):
+    with pytest.raises(paths.AccessDenied):
         app_module.safe_path("song\0.mp3")
 
 
@@ -22,7 +24,7 @@ def test_safe_path_treats_absolute_input_as_library_relative(
 
 @pytest.mark.parametrize("path", ["../outside.mp3", "album/../../outside.mp3"])
 def test_safe_path_rejects_parent_traversal(app_module, path):
-    with pytest.raises(app_module.AccessDenied):
+    with pytest.raises(paths.AccessDenied):
         app_module.safe_path(path)
 
 
@@ -84,3 +86,50 @@ def test_generated_rename_path_accepts_a_bare_name(app_module, music_root):
     resolved = app_module._generated_rename_path(music_root, "Artist - Title")
 
     assert Path(resolved) == music_root / "Artist - Title"
+
+
+def test_safe_path_uses_the_root_it_is_given(tmp_path):
+    """The helpers take the library root instead of reading module state."""
+    library = tmp_path / "library"
+    library.mkdir()
+
+    assert Path(paths.safe_path("album/song.mp3", str(library))) == (
+        library / "album" / "song.mp3"
+    )
+    with pytest.raises(paths.AccessDenied):
+        paths.safe_path("../outside.mp3", str(library))
+
+
+def test_generated_rename_path_stays_inside_the_given_root(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (library / "link").symlink_to(outside)
+
+    assert Path(paths.generated_rename_path(str(library), "name", str(library))) == (
+        library / "name"
+    )
+    with pytest.raises(ValueError):
+        paths.generated_rename_path(
+            str(library / "link"), "escaped", str(library)
+        )
+
+
+def test_is_library_root_compares_resolved_paths(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(library)
+
+    assert paths.is_library_root(link, str(library))
+    assert not paths.is_library_root(library, str(tmp_path / "other"))
+
+
+def test_unique_path_returns_the_first_free_variant(tmp_path):
+    taken = tmp_path / "song.mp3"
+    taken.write_bytes(b"audio")
+
+    assert Path(paths.unique_path(str(taken))) == tmp_path / "song (1).mp3"
+    (tmp_path / "song (1).mp3").write_bytes(b"audio")
+    assert Path(paths.unique_path(str(taken))) == tmp_path / "song (2).mp3"

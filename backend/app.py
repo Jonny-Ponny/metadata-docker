@@ -17,6 +17,19 @@ from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
 from formats import is_supported_audio, mime_for
+from errors import (
+    _json_object,
+    _permission_error,
+    _server_error,
+    register_error_handlers,
+)
+from paths import (
+    generated_rename_path,
+    is_library_root,
+    is_within as _is_within,
+    safe_path as resolve_safe_path,
+    unique_path as _unique_path,
+)
 from pathlib import Path
 from zip_stream import iter_zip
 from safe_fetch import fetch_image, UnsafeURLError, ImageTooLargeError
@@ -27,6 +40,29 @@ from logger_config import log_info, log_error, log_warning, LOG_DIR
 
 from plugin_manager import PluginManager
 from addon_base import EXTRA_INFO_FIELD
+from config import (
+    APP_GIT_SHA,
+    APP_VERSION,
+    AUTH_PASSWORD,
+    AUTH_PASSWORD_HASH,
+    AUTH_USERNAME,
+    CACHE_TTL_SECONDS,
+    COVER_UPLOAD_BYTES,
+    COVER_UPLOAD_PATHS,
+    DEBUG,
+    DISABLE_VERSION_CHECK,
+    GITHUB_REPO_NAME,
+    GITHUB_REPO_OWNER,
+    JWT_SECRET_KEY,
+    MAX_UPLOAD_BYTES,
+    MUSIC_ROOT,
+    PGID,
+    PUID,
+    STORAGE_HEADROOM_BYTES,
+    TEXT_MAX_BYTES,
+    TOKEN_EXPIRE_HOURS,
+    format_size as _format_size,
+)
 
 log_info("STARTING")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -35,89 +71,7 @@ STATIC_DIR = os.path.join(BASE_DIR, 'static')
 # and shadows it. It is disabled so `serve` is the single place that applies
 # cache headers and the SPA fallback.
 app = Flask(__name__, static_folder=None)
-
-# Auth config from environment. Missing or empty credentials never fall back
-# to a known default. Instead, generate temporary random credentials for this
-# process and log them once, so an unconfigured deployment cannot be accessed
-# with a guessable password. Set AUTH_USERNAME and AUTH_PASSWORD (or
-# AUTH_PASSWORD_HASH) for a stable login.
-AUTH_USERNAME = os.getenv('AUTH_USERNAME') or ''
-AUTH_PASSWORD = os.getenv('AUTH_PASSWORD') or ''
-AUTH_PASSWORD_HASH = os.getenv('AUTH_PASSWORD_HASH') or ''
-
-_generated_username = not AUTH_USERNAME
-_generated_password = False
-
-if _generated_username:
-    AUTH_USERNAME = f'admin_{secrets.token_hex(4)}'
-
-if AUTH_PASSWORD_HASH and AUTH_PASSWORD:
-    log_warning('Both AUTH_PASSWORD and AUTH_PASSWORD_HASH are set; using AUTH_PASSWORD_HASH')
-    AUTH_PASSWORD = ''
-
-if AUTH_PASSWORD_HASH:
-    # Validate the hash at startup so a typo fails loudly instead of every
-    # login returning a 500 or silently never matching. Werkzeug hashes look
-    # like "scrypt:...$salt$hash" (or the older pbkdf2 format).
-    hash_error = None
-    if AUTH_PASSWORD_HASH.count('$') < 2:
-        hash_error = 'expected "method$salt$hash"'
-    else:
-        try:
-            check_password_hash(AUTH_PASSWORD_HASH, 'startup-validation')
-        except (ValueError, TypeError) as e:
-            hash_error = str(e)
-    if hash_error:
-        raise RuntimeError(
-            f'AUTH_PASSWORD_HASH is not a valid Werkzeug password hash ({hash_error}). '
-            'Generate one with: python -c "from werkzeug.security import '
-            'generate_password_hash; print(generate_password_hash(\'your-password\'))"'
-        )
-elif not AUTH_PASSWORD:
-    AUTH_PASSWORD = secrets.token_urlsafe(24)
-    _generated_password = True
-
-if _generated_username or _generated_password:
-    log_warning('=' * 70)
-    log_warning('AUTH_USERNAME/AUTH_PASSWORD are not fully configured.')
-    log_warning('Temporary credentials for this run (they change on every restart):')
-    log_warning(f'  username: {AUTH_USERNAME}{" (generated)" if _generated_username else ""}')
-    if _generated_password:
-        log_warning(f'  password: {AUTH_PASSWORD} (generated)')
-    elif AUTH_PASSWORD_HASH:
-        log_warning('  password: (from AUTH_PASSWORD_HASH)')
-    else:
-        log_warning('  password: (from AUTH_PASSWORD)')
-    log_warning('Set AUTH_USERNAME and AUTH_PASSWORD (or AUTH_PASSWORD_HASH) for a stable login.')
-    log_warning('=' * 70)
-
-if not AUTH_PASSWORD_HASH and (
-    AUTH_PASSWORD.lower() in ('admin', 'password', 'changeme')
-    or AUTH_PASSWORD == AUTH_USERNAME
-):
-    log_warning('AUTH_PASSWORD is weak or matches the username. Set a strong password before exposing the app.')
-
-def _env_int(name, default, minimum=1, unit=''):
-    """Read an integer >= *minimum* from the environment, or use *default*."""
-    raw = os.getenv(name)
-    if raw is None or not raw.strip():
-        return default
-
-    try:
-        value = int(raw)
-    except ValueError:
-        value = 0
-
-    if value < minimum:
-        suffix = f' {unit}' if unit else ''
-        log_warning(f'Invalid {name}={raw!r}; using {default}{suffix}')
-        return default
-    return value
-
-
-TOKEN_EXPIRE_HOURS = _env_int('TOKEN_EXPIRE_HOURS', 12)
-
-JWT_SECRET_KEY = os.urandom(24).hex()
+register_error_handlers(app)
 
 # Token scopes. Session tokens authenticate API requests; download tokens only
 # authorize a single download via the /api/download?token=... URL. Keeping the
@@ -126,68 +80,7 @@ JWT_SECRET_KEY = os.urandom(24).hex()
 TOKEN_SCOPE_SESSION = 'session'
 TOKEN_SCOPE_DOWNLOAD = 'download'
 
-# If not in environment docker will run as root
-PUID = os.getenv('PUID', '0')
-PGID = os.getenv('PGID', '0')
-
 app.config['SECRET_KEY'] = JWT_SECRET_KEY
-
-# Defense-in-depth headers for the SPA and API. The SPA has no inline scripts
-# (Vite emits external module files), but Svelte uses inline style attributes,
-# so styles still need 'unsafe-inline'. Remote cover art is proxied through
-# /api/metadata/picture/preview, so the browser only loads same-origin, data:
-# and blob: images.
-CONTENT_SECURITY_POLICY = (
-    "default-src 'self'; "
-    "script-src 'self'; "
-    "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: blob:; "
-    "media-src 'self' blob:; "
-    "connect-src 'self' data:; "
-    "font-src 'self' data:; "
-    "object-src 'none'; "
-    "base-uri 'self'; "
-    "form-action 'self'; "
-    "frame-ancestors 'none'"
-)
-
-
-@app.after_request
-def add_security_headers(response):
-    response.headers['Content-Security-Policy'] = CONTENT_SECURITY_POLICY
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['Referrer-Policy'] = 'no-referrer'
-    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
-    return response
-
-DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
-MUSIC_FOLDER = os.getenv('MUSIC_FOLDER') or '/music'
-MUSIC_ROOT = os.path.abspath(MUSIC_FOLDER)
-
-
-def _env_size_mib(name, default_mib):
-    """Read a positive size in MiB from the environment."""
-    return _env_int(name, default_mib, unit='MiB') * 1024 * 1024
-
-
-def _format_size(size):
-    """Render a byte limit as GiB or MiB for user-facing messages."""
-    if size >= 1024 ** 3 and size % (1024 ** 3) == 0:
-        return f'{size // (1024 ** 3)} GiB'
-    return f'{size // (1024 ** 2)} MiB'
-
-
-def _unique_path(path):
-    """Return *path* or the first free "name (n).ext" variant."""
-    base, ext = os.path.splitext(path)
-    counter = 1
-    candidate = path
-    while os.path.exists(candidate):
-        candidate = f'{base} ({counter}){ext}'
-        counter += 1
-    return candidate
-
 
 def _stream_size(file_storage):
     """Return the size of the uploaded part without consuming it.
@@ -309,14 +202,6 @@ def _save_upload_atomic(file_storage, directory, filename, conflict, size=None):
                 pass
 
 
-# Body limits are per request. Drag-and-drop folder uploads send one request
-# per file, so this caps a single file rather than the whole library.
-MAX_UPLOAD_BYTES = _env_size_mib('MAX_UPLOAD_MB', 4096)
-COVER_UPLOAD_BYTES = 20 * 1024 * 1024
-# Text files (lyrics, notes) are edited in the browser, so keep them small
-# enough to read and write in one request.
-TEXT_MAX_BYTES = 1024 * 1024
-
 # Upload conflict policy. "skip-identical" leaves an existing file untouched
 # when the incoming file has the same size, so re-dropping a folder is
 # idempotent; anything else gets the usual " (1)" suffix. "keep-both" always
@@ -336,14 +221,6 @@ MKDIR_CONFLICT_RENAME = 'rename'
 MKDIR_CONFLICTS = frozenset({MKDIR_CONFLICT_MERGE, MKDIR_CONFLICT_RENAME})
 DEFAULT_MKDIR_CONFLICT = MKDIR_CONFLICT_RENAME
 
-# Free-space preflight leaves this much headroom in the library.
-STORAGE_HEADROOM_BYTES = 256 * 1024 * 1024
-COVER_UPLOAD_PATHS = frozenset({
-    '/api/metadata/picture/file',
-    '/api/metadata/picture/folder',
-    '/api/metadata/picture/folder/current',
-})
-
 app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
 
 
@@ -354,142 +231,11 @@ def limit_cover_upload_size():
         request.max_content_length = COVER_UPLOAD_BYTES
 
 
-class AccessDenied(PermissionError):
-    """A user-supplied path attempted to leave the music library."""
-
-
-def _public_error_message(exc, fallback):
-    """Map an exception to a short, non-sensitive message and status code.
-
-    Exception details belong in the server log. The client only needs to know
-    which category failed so it can explain the problem: permission, missing
-    file, network, disk capacity, or an unexpected error.
-    """
-    if isinstance(exc, AccessDenied):
-        return str(exc), 403
-    if isinstance(exc, PermissionError):
-        return 'Permission denied while accessing the library.', 403
-    if isinstance(exc, FileNotFoundError):
-        return 'The requested file or folder no longer exists.', 404
-    if isinstance(exc, requests.exceptions.Timeout):
-        return 'The external service did not respond in time.', 504
-    if isinstance(exc, requests.exceptions.RequestException):
-        return 'The external service request failed.', 502
-    if isinstance(exc, OSError):
-        if exc.errno in (errno.EACCES, errno.EPERM):
-            return 'Permission denied while accessing the library.', 403
-        if exc.errno == errno.ENOENT:
-            return 'The requested file or folder no longer exists.', 404
-        if exc.errno == errno.EISDIR:
-            return 'The requested path is a folder, not a file.', 400
-        if exc.errno == errno.ENOTDIR:
-            return 'The requested path is not a folder.', 400
-        if exc.errno == errno.EEXIST:
-            return 'The destination already exists.', 409
-        if exc.errno == errno.ENOSPC:
-            return 'The server is out of disk space.', 500
-        if exc.errno == errno.EROFS:
-            return 'The filesystem is read-only.', 500
-        if exc.errno in (errno.EMFILE, errno.ENFILE):
-            return 'The server is temporarily unable to open more files.', 503
-    return fallback, 500
-
-
-def _server_error(exc, fallback='An unexpected server error occurred.', *, success=None):
-    """Log the real exception and return a generic JSON error response.
-
-    ``success`` is set for endpoints whose response schema includes it (the
-    addon routes). Other routes keep the plain ``{'error': ...}`` shape.
-    """
-    log_error(f'{request.method} {request.path}: {exc.__class__.__name__}: {exc}')
-    message, status = _public_error_message(exc, fallback)
-    payload = {'error': message}
-    if success is not None:
-        payload['success'] = success
-    return jsonify(payload), status
-
-
-def _permission_error(exc):
-    """Return 403 for path denials without exposing operating-system text."""
-    if isinstance(exc, AccessDenied):
-        return jsonify({'error': str(exc)}), 403
-    log_error(f'{request.method} {request.path}: PermissionError: {exc}')
-    return jsonify({'error': 'Permission denied while accessing the library.'}), 403
-
-
-def _json_object():
-    """Return ``(data, error_response)`` for a JSON object request body.
-
-    ``request.get_json()`` raises before the route can validate anything when
-    the ``Content-Type`` or the body is wrong, and a JSON list or string then
-    breaks ``data.get()`` with a 500. Every JSON route uses this helper so
-    those cases stay JSON with a 4xx status.
-    """
-    if not request.is_json:
-        return None, (jsonify({
-            'error': 'Request body must be JSON (Content-Type: application/json).'
-        }), 415)
-
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return None, (jsonify({'error': 'Request body must be a JSON object.'}), 400)
-
-    return data, None
-
-
-@app.errorhandler(400)
-def handle_bad_request(error):
-    """Return JSON for malformed requests instead of Flask's HTML page."""
-    return jsonify({'error': 'Invalid request.'}), 400
-
-
-@app.errorhandler(415)
-def handle_unsupported_media_type(error):
-    """Return JSON when a request body has an unsupported content type."""
-    return jsonify({'error': 'Unsupported request body; send JSON.'}), 415
-
-
-@app.errorhandler(500)
-def handle_internal_server_error(error):
-    """Return JSON for unhandled errors instead of Flask's HTML page."""
-    original = getattr(error, 'original_exception', None)
-    if original is not None:
-        log_error(
-            f'{request.method} {request.path}: Unhandled '
-            f'{original.__class__.__name__}: {original}'
-        )
-    else:
-        log_error(f'{request.method} {request.path}: Unhandled server error')
-    message, status = _public_error_message(
-        original,
-        'An unexpected server error occurred.',
-    )
-    return jsonify({'error': message}), status
-
-
-@app.errorhandler(413)
-def handle_request_too_large(error):
-    """Return JSON for oversized request bodies instead of an HTML page."""
-    if request.path in COVER_UPLOAD_PATHS:
-        limit = COVER_UPLOAD_BYTES
-        message = f'The image is too large. The maximum size is {_format_size(limit)}.'
-    elif request.path == '/api/upload':
-        limit = MAX_UPLOAD_BYTES
-        message = f'The uploaded file is too large. The maximum size is {_format_size(limit)}.'
-    else:
-        limit = MAX_UPLOAD_BYTES
-        message = f'The request is too large. The maximum size is {_format_size(limit)}.'
-
-    log_warning(
-        f'{request.method} {request.path}: body exceeded {_format_size(limit)}'
-    )
-    return jsonify({'error': message}), 413
-
 log_info(f'Debug set to {DEBUG}')
 log_info(f'PUID set to {PUID}')
 log_info(f'PGID set to {PGID}')
 
-log_info(f'Music folder: {Path(MUSIC_FOLDER).absolute()}')
+log_info(f'Music folder: {Path(MUSIC_ROOT).absolute()}')
 log_info(f'Log folder:{Path(LOG_DIR).absolute()}')
 log_info(
     f'Upload limit: {_format_size(MAX_UPLOAD_BYTES)} per request; '
@@ -502,17 +248,6 @@ plugin_manager = PluginManager()
 plugin_manager.discover_plugins()
 
 # ---------------------VERSION CHECK---------------------#
-
-APP_VERSION = 'v1.0.5'
-# Commit the image was built from, set at build time (see Dockerfile). Lets
-# users compare a running container against the build-provenance attestation.
-APP_GIT_SHA = os.getenv('APP_GIT_SHA', 'unknown')
-GITHUB_REPO_OWNER = 'Jonny-Ponny'
-GITHUB_REPO_NAME = 'metadata-docker'
-
-CACHE_TTL_SECONDS = _env_int('CACHE_TTL_SECONDS', 3600)
-
-DISABLE_VERSION_CHECK = os.getenv('DISABLE_VERSION_CHECK', 'False').lower() in ('true', '1', 'yes', 'on')
 
 # Cache for version info
 _version_cache = {
@@ -896,73 +631,22 @@ def build_tree(current_path, relative_path):
 
     return items
 
-def _is_within(base_path, candidate_path):
-    """Return True when *candidate_path* is *base_path* or lives below it.
 
-    Both paths are resolved with ``realpath`` first, so a symlink cannot be
-    used to point outside *base_path*. ``commonpath`` is used instead of
-    ``startswith`` so a sibling such as ``/music-other`` is not treated as
-    being inside ``/music``.
-    """
-    try:
-        base = os.path.realpath(base_path)
-        candidate = os.path.realpath(candidate_path)
-        return os.path.commonpath([base, candidate]) == base
-    except ValueError:
-        # Different drives on Windows cannot share a common path.
-        return False
-
-
+# Path helpers live in paths.py. These wrappers bind the library root until
+# create_app() passes the settings through (Phase 3, step 10).
 def _is_library_root(path):
-    """Return True when *path* resolves to the music library root itself.
-
-    ``safe_path()`` maps ``""``, ``"."`` and ``"/"`` to the root. Removing that
-    tree, or deriving a sibling name from it, would act outside the library.
-    """
-    try:
-        return os.path.realpath(path) == os.path.realpath(MUSIC_ROOT)
-    except (OSError, ValueError):
-        return False
+    """Return True when *path* resolves to the music library root itself."""
+    return is_library_root(path, MUSIC_ROOT)
 
 
 def _generated_rename_path(parent, name):
-    """Validate a generated rename target and return its full path.
-
-    Smart rename builds names from tag values, so the result is not a
-    user-typed filename. Reject empty names, ``.``/``..``, separators and
-    names that would resolve outside the music library.
-    """
-    if not isinstance(name, str) or not name or '\0' in name:
-        raise ValueError('Invalid generated name')
-    if name in ('.', '..') or name.strip() != name:
-        raise ValueError('Invalid generated name')
-    if os.path.isabs(name) or '/' in name or '\\' in name:
-        raise ValueError('Invalid generated name')
-
-    new_path = os.path.join(parent, name)
-    if not _is_within(MUSIC_ROOT, new_path):
-        raise ValueError('Invalid generated name')
-    return new_path
+    """Validate a generated rename target and return its full path."""
+    return generated_rename_path(parent, name, MUSIC_ROOT)
 
 
 def safe_path(file_path):
-    """Resolve a user-supplied path and keep it inside the music folder.
-
-    Leading slashes are ignored so both ``/album/song.mp3`` and
-    ``album/song.mp3`` refer to the library root. Symlinks are resolved for
-    the containment check, so a link inside the library cannot point outside
-    it. Raises ``PermissionError`` when the resolved path would escape
-    ``MUSIC_FOLDER``.
-    """
-    if file_path is None or '\0' in str(file_path):
-        raise AccessDenied('Invalid path.')
-
-    full_path = os.path.abspath(
-        os.path.join(MUSIC_ROOT, str(file_path).lstrip('/'))
-    )
-    if not _is_within(MUSIC_ROOT, full_path):
-        raise AccessDenied('Path is outside the music library.')
-    return full_path
+    """Resolve a user-supplied path and keep it inside the music folder."""
+    return resolve_safe_path(file_path, MUSIC_ROOT)
 
 # -------------------------API ENDPOINTS------------------------- #
 
@@ -984,7 +668,7 @@ def health():
 @token_required
 def list_files():
     try:
-        tree = build_tree(MUSIC_FOLDER, '')
+        tree = build_tree(MUSIC_ROOT, '')
         return jsonify(tree)
     except Exception as e:
         return _server_error(e)
@@ -1176,7 +860,7 @@ def upload_file():
     except Exception as e:
         return _server_error(e)
 
-    rel_path = os.path.relpath(file_path, MUSIC_FOLDER).replace('\\', '/')
+    rel_path = os.path.relpath(file_path, MUSIC_ROOT).replace('\\', '/')
     renamed = file_path != os.path.join(target_dir, filename)
 
     if skipped:
@@ -1279,7 +963,7 @@ def create_directory():
         if not _is_within(MUSIC_ROOT, full_path):
             return jsonify({'error': 'Invalid destination'}), 400
 
-        rel_path = os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/')
+        rel_path = os.path.relpath(full_path, MUSIC_ROOT).replace('\\', '/')
 
         log_info(
             f"{'Created new directory' if created else 'Reused directory'} {full_path}"
@@ -1341,7 +1025,7 @@ def rename_item():
         log_info(f"Renamed {full_old} to {full_new}")
 
         # Return the new relative path
-        new_rel = os.path.relpath(full_new, MUSIC_FOLDER).replace('\\', '/')
+        new_rel = os.path.relpath(full_new, MUSIC_ROOT).replace('\\', '/')
         return jsonify({'success': True, 'newPath': new_rel})
     except PermissionError as e:
         return _permission_error(e)
@@ -1438,7 +1122,7 @@ def move_item():
         log_info(f"Moved {source_full} to {new_full}")
 
         # Return the new relative path
-        new_rel = os.path.relpath(new_full, MUSIC_FOLDER).replace('\\', '/')
+        new_rel = os.path.relpath(new_full, MUSIC_ROOT).replace('\\', '/')
         return jsonify({'success': True, 'newPath': new_rel})
 
     except PermissionError as e:
@@ -1955,7 +1639,7 @@ def save_cover_art_as_file():
         return jsonify({
             'success': True,
             'message': f'Cover art saved as {os.path.basename(output_path)}',
-            'path': os.path.relpath(output_path, MUSIC_FOLDER).replace('\\', '/')
+            'path': os.path.relpath(output_path, MUSIC_ROOT).replace('\\', '/')
         })
         
     except PermissionError as e:
@@ -2215,7 +1899,7 @@ def apply_renaming_scheme():
             if _same_path(new_path, full_path):
                 return jsonify({
                     'success': True,
-                    'newPath': os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/'),
+                    'newPath': os.path.relpath(full_path, MUSIC_ROOT).replace('\\', '/'),
                     'newName': os.path.basename(full_path)
                 })
             
@@ -2235,7 +1919,7 @@ def apply_renaming_scheme():
             
             return jsonify({
                 'success': True,
-                'newPath': os.path.relpath(new_path, MUSIC_FOLDER).replace('\\', '/'),
+                'newPath': os.path.relpath(new_path, MUSIC_ROOT).replace('\\', '/'),
                 'newName': new_name
             })
             
@@ -2279,7 +1963,7 @@ def apply_renaming_scheme():
             if _same_path(new_path, full_path):
                 return jsonify({
                     'success': True,
-                    'newPath': os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/'),
+                    'newPath': os.path.relpath(full_path, MUSIC_ROOT).replace('\\', '/'),
                     'newName': os.path.basename(full_path)
                 })
 
@@ -2299,7 +1983,7 @@ def apply_renaming_scheme():
             
             return jsonify({
                 'success': True,
-                'newPath': os.path.relpath(new_path, MUSIC_FOLDER).replace('\\', '/'),
+                'newPath': os.path.relpath(new_path, MUSIC_ROOT).replace('\\', '/'),
                 'newName': os.path.basename(new_path)
             })
             
