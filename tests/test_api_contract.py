@@ -7,6 +7,8 @@ a JSON list or string reached ``data.get()`` and produced a 500.
 
 import pytest
 
+import errors
+
 
 PUBLIC_ENDPOINTS = {
     ("GET", "/api/ping"),
@@ -141,14 +143,14 @@ def test_unknown_api_paths_are_json_404_without_the_spa(client, path):
 def test_public_error_message_table(
     app_module, exc, expected_status, expected_message
 ):
-    message, status = app_module._public_error_message(exc, "fallback")
+    message, status = errors._public_error_message(exc, "fallback")
 
     assert (message, status) == (expected_message, expected_status)
 
 
 def test_public_error_message_keeps_the_access_denied_text(app_module):
-    message, status = app_module._public_error_message(
-        app_module.AccessDenied("Path is outside the music library."),
+    message, status = errors._public_error_message(
+        errors.AccessDenied("Path is outside the music library."),
         "fallback",
     )
 
@@ -161,7 +163,7 @@ def test_public_error_message_keeps_the_access_denied_text(app_module):
 def test_public_error_message_maps_network_errors(app_module):
     import requests
 
-    message, status = app_module._public_error_message(
+    message, status = errors._public_error_message(
         requests.exceptions.Timeout("slow"), "fallback"
     )
     assert (message, status) == (
@@ -169,7 +171,7 @@ def test_public_error_message_maps_network_errors(app_module):
         504,
     )
 
-    message, status = app_module._public_error_message(
+    message, status = errors._public_error_message(
         requests.exceptions.ConnectionError("down"), "fallback"
     )
     assert (message, status) == ("The external service request failed.", 502)

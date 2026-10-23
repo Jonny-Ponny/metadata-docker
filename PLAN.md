@@ -2,7 +2,7 @@
 
 Status: **Phase 1 complete. Phase 2 complete** on `main`
 (599 tests green locally and in CI). Phase 3 is in progress on
-`refactor/phase-3-modules`; steps 1-2 are done.
+`refactor/phase-3-modules`; steps 1-3 are done.
 
 This file replaces the "Security patches plan" and "Suggested improvements
 (backlog)" sections This file describes what to change, in what order.
@@ -506,9 +506,9 @@ duplication (see step 7).
 
 ## Steps, in order
 
-Steps 2 and 3 landed in the opposite order: `config.py` first, because the 413
-handler needs the upload limits and `errors.py` must not import `app.py`. The
-numbering below is unchanged.
+Step 2 landed after step 3: `config.py` first, because the 413 handler needs
+the upload limits and `errors.py` must not import `app.py`. The numbering below
+is unchanged.
 
 1. **`paths.py`.** Move `safe_path`, `_is_within`, `_unique_path`,
    `_generated_rename_path`, plus the new root guard from B-01..B-03. Delete the

@@ -8,7 +8,7 @@ import paths
 
 
 def test_safe_path_rejects_nul_bytes(app_module):
-    with pytest.raises(app_module.AccessDenied):
+    with pytest.raises(paths.AccessDenied):
         app_module.safe_path("song\0.mp3")
 
 
@@ -24,7 +24,7 @@ def test_safe_path_treats_absolute_input_as_library_relative(
 
 @pytest.mark.parametrize("path", ["../outside.mp3", "album/../../outside.mp3"])
 def test_safe_path_rejects_parent_traversal(app_module, path):
-    with pytest.raises(app_module.AccessDenied):
+    with pytest.raises(paths.AccessDenied):
         app_module.safe_path(path)
 
 

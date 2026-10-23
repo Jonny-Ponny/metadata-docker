@@ -11,6 +11,8 @@ import uuid
 
 import pytest
 
+import errors
+
 
 def _relative(path, music_root):
     return Path(path).relative_to(music_root).as_posix()
@@ -162,10 +164,10 @@ def test_safe_path_rejects_symlink_escapes(app_module, music_root, tmp_path):
     link = music_root / f"outside-{uuid.uuid4().hex}"
     link.symlink_to(outside)
 
-    with pytest.raises(app_module.AccessDenied):
+    with pytest.raises(errors.AccessDenied):
         app_module.safe_path(link.name)
 
-    with pytest.raises(app_module.AccessDenied):
+    with pytest.raises(errors.AccessDenied):
         app_module.safe_path("../outside.mp3")
 
 

@@ -1,7 +1,10 @@
 """Shared fixtures for the backend security tests."""
 
 from pathlib import Path
+import atexit
+import os
 import shutil
+import tempfile
 import uuid
 
 import pytest
@@ -10,37 +13,42 @@ import pytest
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 AUDIO_FIXTURES = FIXTURES / "audio"
 
+# The environment has to be in place before *any* backend module is imported,
+# not just before the app fixture runs. ``config.py`` reads every value once at
+# import time, and test modules import backend helpers (``paths``,
+# ``zip_stream``, ...) during collection, which pulls ``config`` in through the
+# ``errors`` module. Setting the variables here — conftest is imported before
+# the test modules — keeps that order-independent.
+SESSION_ROOT = Path(tempfile.mkdtemp(prefix="metadata-tests-"))
+atexit.register(shutil.rmtree, SESSION_ROOT, ignore_errors=True)
+for _directory in ("music", "logs", "work"):
+    (SESSION_ROOT / _directory).mkdir()
+
+os.environ.update({
+    "MUSIC_FOLDER": str(SESSION_ROOT / "music"),
+    "LOG_DIR": str(SESSION_ROOT / "logs"),
+    "DISABLE_VERSION_CHECK": "true",
+    "AUTH_USERNAME": "test-admin",
+    "AUTH_PASSWORD": "test-password",
+    "AUTH_PASSWORD_HASH": "",
+    "PYTHONDONTWRITEBYTECODE": "1",
+})
+
 
 @pytest.fixture(scope="session")
-def app_module(tmp_path_factory):
+def app_module():
     """Import the Flask app once with an isolated library and log directory."""
-    root = tmp_path_factory.mktemp("metadata-app")
-    music = root / "music"
-    logs = root / "logs"
-    work = root / "work"
-    for directory in (music, logs, work):
-        directory.mkdir()
-
-    env = {
-        "MUSIC_FOLDER": str(music),
-        "LOG_DIR": str(logs),
-        "DISABLE_VERSION_CHECK": "true",
-        "AUTH_USERNAME": "test-admin",
-        "AUTH_PASSWORD": "test-password",
-        "AUTH_PASSWORD_HASH": "",
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
-
-    # Environment variables must be set before importing app: the module reads
-    # them at import time and starts the plugin manager relative to the CWD.
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        for key, value in env.items():
-            monkeypatch.setenv(key, value)
-        monkeypatch.chdir(work)
-
+    # The plugin manager is discovered relative to the CWD, so the import has to
+    # happen from the throwaway work directory.
+    work = SESSION_ROOT / "work"
+    previous = os.getcwd()
+    os.chdir(work)
+    try:
         import app
 
         yield app
+    finally:
+        os.chdir(previous)
 
 
 @pytest.fixture(scope="session")
