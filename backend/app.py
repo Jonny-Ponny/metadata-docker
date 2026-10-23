@@ -1280,7 +1280,7 @@ def move_item():
             if not os.path.isdir(dest_full):
                 return jsonify({'error': 'Destination is not a directory or does not exist'}), 400
         else:
-            dest_full = MUSIC_FOLDER
+            dest_full = MUSIC_ROOT
 
         # New full path: destination + basename of source
         new_full = os.path.join(dest_full, os.path.basename(source_full))
@@ -1289,10 +1289,13 @@ def move_item():
         if not _is_within(MUSIC_ROOT, new_full):
             return jsonify({'error': 'Invalid destination'}), 400
 
-        # If source is a directory, ensure destination is not inside source
-        if os.path.isdir(source_full):
-            if new_full.startswith(source_full + os.sep):
-                return jsonify({'error': 'Cannot move a folder into its own subfolder'}), 400
+        # If source is a directory, ensure destination is not inside source.
+        # realpath containment also catches the same folder reached through a
+        # symlink alias, which a string prefix check would miss.
+        if os.path.isdir(source_full) and _is_within(source_full, dest_full):
+            return jsonify({
+                'error': 'Cannot move a folder into itself or its own subfolder'
+            }), 400
 
         # Handle name conflict
         if os.path.exists(new_full):
