@@ -349,7 +349,7 @@ every non-trivial helper at least once, and make CI run the suite.
   (B-01..B-03).
 - [x] `tests/test_api_contract.py` — every JSON route rejects a missing body,
   `text/plain`, malformed JSON, `[]` and `"x"` with a JSON 400/415 (B-08).
-- [ ] `tests/test_api_contract.py` (remaining)
+- [x] `tests/test_api_contract.py` (remaining)
   - every `/api/*` route without a token → 401 (table asserted against
     `app.url_map` so a new unprotected route fails the test);
   - security headers on a normal response;
@@ -393,7 +393,7 @@ every non-trivial helper at least once, and make CI run the suite.
     invariant: `set(FIELD_SCHEMA) == set(empty_metadata()) - {'customFields'}`.
 - [x] `tests/test_tag_backends.py` — magic-byte MIME detection and LRC/SYLT
   timestamp parsing (B-22, B-23).
-- [ ] `tests/test_downloads.py`
+- [x] `tests/test_downloads.py`
   - file download headers, Unicode filenames (`_content_disposition`),
     folder ZIP contents, symlink exclusion, empty folder, `iter_zip` error
     before/after first byte, expired/tampered token, token path escape.
