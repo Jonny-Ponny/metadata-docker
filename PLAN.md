@@ -44,14 +44,14 @@ queued in Phase 2 (or added with the fix for P0 items).
 
 ## 1.1 Library root and path containment
 
-- [ ] **B-01 (P0) `DELETE /api/delete` can delete the whole library.**
+- [x] **B-01 (P0) `DELETE /api/delete` can delete the whole library.**
   `delete_item()` (`app.py:1204`) accepts `path: "/"`, `"."` or `"./"`;
   `safe_path()` resolves them to `MUSIC_ROOT` and `shutil.rmtree()` removes it.
   **Fix:** refuse to delete the library root itself (`realpath(full_path) ==
   realpath(MUSIC_ROOT)`) with `400`.
   **Test:** delete `"."` and `"/"` → 400, `MUSIC_ROOT` still exists.
 
-- [ ] **B-02 (P0) `POST /api/mkdir` can create a folder outside the library.**
+- [x] **B-02 (P0) `POST /api/mkdir` can create a folder outside the library.**
   `create_directory()` (`app.py:1129-1143`) validates `path`, then
   `_unique_path()` turns `MUSIC_ROOT` into `<parent>/music (1)` and creates it.
   **Fix:** reject a resolved path equal to `MUSIC_ROOT`, and re-check
@@ -59,14 +59,14 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** `path: "/"` and `"."` with default and `merge` conflict → 400; no
   sibling folder appears.
 
-- [ ] **B-03 (P0) `POST /api/copy` copies the library to its parent.**
+- [x] **B-03 (P0) `POST /api/copy` copies the library to its parent.**
   `copy_item()` (`app.py:1318-1330`) builds `MUSIC_ROOT + " - Copy"` without a
   containment check, so copying `"/"` writes outside the library.
   **Fix:** reject the root item; re-check the generated destination with
   `_is_within()` before `shutil.copytree()` / `copy2()`.
   **Test:** copy `"/"` and `"."` → 400 and no `music - Copy` sibling.
 
-- [ ] **B-04 (P1) An empty `MUSIC_FOLDER` disables path containment.**
+- [x] **B-04 (P1) An empty `MUSIC_FOLDER` disables path containment.**
   `app.py:148` accepts `MUSIC_FOLDER=""`; `safe_path()` (`app.py:821`) then
   returns the raw user path (`if not MUSIC_FOLDER: return file_path`), so
   `/etc/passwd` and absolute upload targets are accepted.
@@ -75,7 +75,7 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** subprocess import with `MUSIC_FOLDER=""`; `safe_path("/etc/passwd")`
   raises `AccessDenied`.
 
-- [ ] **B-05 (P1) `POST /api/rename` silently overwrites an existing file.**
+- [x] **B-05 (P1) `POST /api/rename` silently overwrites an existing file.**
   On Linux `os.rename()` replaces the destination. Renaming `a.mp3` to an
   existing `b.mp3` (`app.py:1184-1188`) destroys `b.mp3` with no error.
   **Fix:** if the destination exists and is not the same file, return `409`
@@ -83,7 +83,7 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** rename onto an existing file → 409, both files unchanged; rename
   to the same name → 200.
 
-- [ ] **B-06 (P1) `POST /api/move` uses `startswith` for self-containment.**
+- [x] **B-06 (P1) `POST /api/move` uses `startswith` for self-containment.**
   `app.py:1267-1269` checks `new_full.startswith(source_full + os.sep)`; the
   same folder reached through a symlink component bypasses the check and can
   be moved into its own subtree.
@@ -317,6 +317,9 @@ every non-trivial helper at least once, and make CI run the suite.
 
 ## 2.2 Test files
 
+- [x] `tests/test_security.py` / `tests/test_library_root.py` — empty
+  `MUSIC_FOLDER` defaults to `/music` (B-04); root delete/mkdir/copy guards
+  (B-01..B-03).
 - [ ] `tests/test_api_contract.py`
   - every `/api/*` route without a token → 401 (table asserted against
     `app.url_map` so a new unprotected route fails the test);
@@ -331,17 +334,18 @@ every non-trivial helper at least once, and make CI run the suite.
     only by `/api/download?token=`.
 - [ ] `tests/test_paths.py`
   - `safe_path` NUL, absolute `/etc/passwd`, `..`, sibling prefix
-    (`/music-other`), inside/outside symlinks, empty root (B-04);
+    (`/music-other`), inside/outside symlinks;
   - `_is_within` prefix and symlink cases;
-  - `_generated_rename_path` separators, `.`/`..`, NUL, whitespace, escape;
-  - root-operation guards for delete/mkdir/copy (B-01..B-03).
+  - `_generated_rename_path` separators, `.`/`..`, NUL, whitespace, escape.
 - [ ] `tests/test_files.py`
   - `build_tree` classification (`audio`/`image`/`text`/`other`), natural sort
     incl. B-10, `.upload-*.part` hidden, symlinked dir skipped, outside symlink
     skipped, permission error yields `[]`, disappearing entry (B-11);
-  - rename overwrite (B-05), move self-containment (B-06), copy naming/
-    symlinks, delete symlink vs target, mkdir rename/merge (existing cases
-    stay), upload race (B-07).
+  - copy naming/symlinks, delete symlink vs target, mkdir rename/merge
+    (existing cases stay), upload race (B-07).
+- [x] `tests/test_rename.py` — overwrite rejection, same-name no-op, normal
+  rename (B-05).
+- [x] `tests/test_move.py` — self-move, symlink alias, normal move (B-06).
 - [ ] `tests/test_metadata.py`
   - tag round-trip for every `FIELD_SCHEMA` field on MP3/WAV/AIFF/FLAC/
     OGG/Opus/M4A/M4B using committed small fixtures (`tests/fixtures/`);
