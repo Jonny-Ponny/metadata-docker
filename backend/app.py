@@ -1199,6 +1199,16 @@ def rename_item():
         if not _is_within(MUSIC_ROOT, full_new):
             return jsonify({'error': 'Invalid new name'}), 400
 
+        # os.rename() replaces an existing destination on POSIX. Refuse that
+        # unless both names refer to the same item (a no-op rename).
+        if os.path.lexists(full_new) and full_new != full_old:
+            try:
+                same_item = os.path.samefile(full_old, full_new)
+            except OSError:
+                same_item = False
+            if not same_item:
+                return jsonify({'error': 'An item with that name already exists'}), 409
+
         os.rename(full_old, full_new)
 
         log_info(f"Renamed {full_old} to {full_new}")
