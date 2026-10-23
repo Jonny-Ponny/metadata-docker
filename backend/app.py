@@ -789,6 +789,18 @@ def _is_within(base_path, candidate_path):
         return False
 
 
+def _is_library_root(path):
+    """Return True when *path* resolves to the music library root itself.
+
+    ``safe_path()`` maps ``""``, ``"."`` and ``"/"`` to the root. Removing that
+    tree, or deriving a sibling name from it, would act outside the library.
+    """
+    try:
+        return os.path.realpath(path) == os.path.realpath(MUSIC_ROOT)
+    except (OSError, ValueError):
+        return False
+
+
 def _generated_rename_path(parent, name):
     """Validate a generated rename target and return its full path.
 
@@ -1211,6 +1223,8 @@ def delete_item():
 
     try:
         full_path = safe_path(path)
+        if _is_library_root(full_path):
+            return jsonify({'error': 'Cannot delete the library root'}), 400
         if not os.path.lexists(full_path):
             return jsonify({'error': 'Path not found'}), 404
 
