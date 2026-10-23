@@ -270,10 +270,12 @@ def test_version_reports_the_upload_limit(client, app_module):
 def test_failed_write_leaves_no_partial_file(
     client, auth_headers, test_dir, music_root, app_module, monkeypatch
 ):
-    def fail_replace(source, destination):
+    def fail_link(source, destination):
         raise OSError(errno.ENOSPC, "No space left on device")
 
-    monkeypatch.setattr(app_module.os, "replace", fail_replace)
+    # The upload claims its destination with os.link() so it cannot overwrite
+    # a file another upload just created.
+    monkeypatch.setattr(app_module.os, "link", fail_link)
 
     response = _upload(
         client,
@@ -286,6 +288,75 @@ def test_failed_write_leaves_no_partial_file(
     assert "disk space" in response.get_json()["error"].lower()
     # Neither the destination nor the hidden temp file may survive.
     assert list(test_dir.iterdir()) == []
+
+
+def test_concurrent_upload_keeps_both_files(
+    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+):
+    """Two workers uploading the same name must not overwrite each other.
+
+    ``_unique_path()`` used to check and return a name, so both workers could
+    pick "song.mp3" and the second ``os.replace()`` clobbered the first. The
+    race is simulated by having "the other worker" create the file between the
+    existence check and the atomic claim.
+    """
+    real_link = app_module.os.link
+    other = test_dir / "song.mp3"
+    raced = []
+
+    def racing_link(source, destination):
+        if not raced:
+            raced.append(True)
+            other.write_bytes(b"other payload")
+        return real_link(source, destination)
+
+    monkeypatch.setattr(app_module.os, "link", racing_link)
+
+    response = _upload(
+        client,
+        auth_headers,
+        content=b"second payload",
+        target=_relative(test_dir, music_root),
+        conflict="keep-both",
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["skipped"] is False
+    assert body["renamed"] is True
+    assert body["filename"] == "song (1).mp3"
+    assert other.read_bytes() == b"other payload"
+    assert (test_dir / "song (1).mp3").read_bytes() == b"second payload"
+
+
+def test_concurrent_identical_upload_is_skipped(
+    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+):
+    real_link = app_module.os.link
+    other = test_dir / "song.mp3"
+    raced = []
+
+    def racing_link(source, destination):
+        if not raced:
+            raced.append(True)
+            other.write_bytes(b"other payload")
+        return real_link(source, destination)
+
+    monkeypatch.setattr(app_module.os, "link", racing_link)
+
+    response = _upload(
+        client,
+        auth_headers,
+        content=b"first payload",
+        target=_relative(test_dir, music_root),
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["skipped"] is True
+    assert body["filename"] == "song.mp3"
+    assert other.read_bytes() == b"other payload"
+    assert not (test_dir / "song (1).mp3").exists()
 
 
 def test_upload_creates_the_target_folder(

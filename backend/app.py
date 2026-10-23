@@ -203,15 +203,76 @@ def _stream_size(file_storage):
         return None
 
 
-def _save_upload_atomic(file_storage, destination):
-    """Write an upload to a hidden temp file and move it into place.
+# Filesystems without hard-link support fall back to an exclusive create.
+_HARDLINK_UNSUPPORTED = frozenset({
+    errno.EPERM,
+    errno.EACCES,
+    errno.EMLINK,
+    errno.ENOSYS,
+    errno.EOPNOTSUPP,
+    errno.ENOTSUP,
+})
 
-    An interrupted client, a full disk or a killed process must never leave a
-    truncated track in the library, where ``build_tree`` would list it as a
-    normal file. The hidden name also keeps the temporary file out of the tree
-    while the bytes are still being written.
+
+def _claim_upload(temp_path, destination):
+    """Give *temp_path* the name *destination* without replacing anything.
+
+    ``os.replace()`` overwrites an existing destination, so two uploads that
+    picked the same free name would lose one of the files. ``os.link()`` is
+    atomic and fails with ``EEXIST`` instead, which lets the caller try the
+    next name. On filesystems without hard links, the destination is claimed
+    with an exclusive create before the rename.
     """
-    directory = os.path.dirname(destination) or '.'
+    try:
+        os.link(temp_path, destination)
+    except FileExistsError:
+        return False
+    except OSError as error:
+        if error.errno not in _HARDLINK_UNSUPPORTED:
+            raise
+        try:
+            descriptor = os.open(
+                destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644
+            )
+        except FileExistsError:
+            return False
+        os.close(descriptor)
+        try:
+            os.replace(temp_path, destination)
+        except OSError:
+            # Do not leave the zero-byte claim behind if the rename fails.
+            try:
+                os.remove(destination)
+            except OSError:
+                pass
+            raise
+    return True
+
+
+def _same_size(path, size):
+    """Return True when *path* is a file whose size equals *size*."""
+    if size is None:
+        return False
+    try:
+        return os.path.isfile(path) and os.path.getsize(path) == size
+    except OSError:
+        return False
+
+
+def _save_upload_atomic(file_storage, directory, filename, conflict, size=None):
+    """Write an upload to the first free name in *directory*.
+
+    The bytes go to a hidden temp file first, then the destination is claimed
+    atomically, so an interrupted client, a full disk or a killed process
+    never leaves a truncated track in the library (where ``build_tree`` would
+    list it as a normal file) and two concurrent uploads of the same name
+    cannot overwrite each other.
+
+    Returns ``(path, skipped)``. Under the "skip-identical" policy, a
+    destination that already holds a file of the same size is reported as
+    skipped even when it appeared after the initial existence check.
+    """
+    base, ext = os.path.splitext(filename)
     temp_path = os.path.join(directory, f'.upload-{secrets.token_hex(8)}.part')
     stream = getattr(file_storage, 'stream', None)
     if stream is not None:
@@ -221,7 +282,20 @@ def _save_upload_atomic(file_storage, destination):
             pass
     try:
         file_storage.save(temp_path)
-        os.replace(temp_path, destination)
+
+        counter = 0
+        candidate = filename
+        while True:
+            destination = os.path.join(directory, candidate)
+            if counter == 0 and os.path.isdir(destination):
+                raise IsADirectoryError(destination)
+            if _claim_upload(temp_path, destination):
+                return destination, False
+            if counter == 0 and conflict == UPLOAD_CONFLICT_SKIP_IDENTICAL:
+                if _same_size(destination, size):
+                    return destination, True
+            counter += 1
+            candidate = f'{base} ({counter}){ext}'
     finally:
         if os.path.exists(temp_path):
             try:
@@ -1028,28 +1102,24 @@ def upload_file():
 
     incoming_size = _stream_size(file)
 
-    # Resolve duplicate names according to the conflict policy. Comparing the
-    # size makes re-dropping an unchanged folder a no-op instead of producing
-    # "name (1).ext" copies.
-    skipped = False
-    renamed = False
-    if os.path.exists(file_path):
-        if os.path.isdir(file_path):
-            return jsonify({'error': 'A folder with that name already exists'}), 400
-
-        same_size = (
-            incoming_size is not None
-            and os.path.isfile(file_path)
-            and os.path.getsize(file_path) == incoming_size
+    # Resolve duplicate names and claim the destination in one atomic step.
+    # Comparing the size makes re-dropping an unchanged folder a no-op instead
+    # of producing "name (1).ext" copies.
+    try:
+        file_path, skipped = _save_upload_atomic(
+            file,
+            target_dir,
+            filename,
+            conflict,
+            incoming_size,
         )
-        if conflict == UPLOAD_CONFLICT_SKIP_IDENTICAL and same_size:
-            skipped = True
-        else:
-            new_path = _unique_path(file_path)
-            renamed = new_path != file_path
-            file_path = new_path
+    except IsADirectoryError:
+        return jsonify({'error': 'A folder with that name already exists'}), 400
+    except Exception as e:
+        return _server_error(e)
 
     rel_path = os.path.relpath(file_path, MUSIC_FOLDER).replace('\\', '/')
+    renamed = file_path != os.path.join(target_dir, filename)
 
     if skipped:
         log_info(f"Skipped identical upload {file_path}")
@@ -1062,21 +1132,16 @@ def upload_file():
             'original_filename': original_filename,
         })
 
-    try:
-        _save_upload_atomic(file, file_path)
+    log_info(f"Successfully uploaded {file_path}")
 
-        log_info(f"Successfully uploaded {file_path}")
-        
-        return jsonify({
-            'success': True,
-            'skipped': False,
-            'renamed': renamed,
-            'path': rel_path,  # Normalize path separators
-            'filename': os.path.basename(file_path),
-            'original_filename': original_filename
-        })
-    except Exception as e:
-        return _server_error(e)
+    return jsonify({
+        'success': True,
+        'skipped': False,
+        'renamed': renamed,
+        'path': rel_path,  # Normalize path separators
+        'filename': os.path.basename(file_path),
+        'original_filename': original_filename
+    })
 
 # GET /api/storage
 # Free space in the library and the temp directory used for upload spooling
