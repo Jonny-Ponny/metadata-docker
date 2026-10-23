@@ -367,7 +367,7 @@ every non-trivial helper at least once, and make CI run the suite.
     (`/music-other`), inside/outside symlinks;
   - `_is_within` prefix and symlink cases;
   - `_generated_rename_path` separators, `.`/`..`, NUL, whitespace, escape.
-- [ ] `tests/test_files.py`
+- [x] `tests/test_files.py`
   - `build_tree` classification (`audio`/`image`/`text`/`other`),
     `.upload-*.part` hidden, symlinked dir skipped, outside symlink
     skipped, permission error yields `[]`;
