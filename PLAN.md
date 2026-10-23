@@ -455,6 +455,7 @@ of `tests/` (or keep it here) mapping bug → test.
 | B-27 | `test_text_logs.py::test_text_save_rejects_oversized_content` |
 | B-28 | `test_upload.py::test_invalid_filename_does_not_create_the_target_folder` |
 | B-29 | `test_config.py::test_installed_flask_supports_per_request_upload_limits` |
+| B-30 | `test_zip_stream.py::test_sentinel_waits_for_queue_space` |
 
 ## Phase 2 exit criteria
 
