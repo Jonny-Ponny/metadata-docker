@@ -97,8 +97,25 @@ if not AUTH_PASSWORD_HASH and (
 ):
     log_warning('AUTH_PASSWORD is weak or matches the username. Set a strong password before exposing the app.')
 
-TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 12
-TOKEN_EXPIRE_HOURS = TOKEN_EXPIRE_HOURS if TOKEN_EXPIRE_HOURS > 0 else 12
+def _env_int(name, default, minimum=1, unit=''):
+    """Read an integer >= *minimum* from the environment, or use *default*."""
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+
+    if value < minimum:
+        suffix = f' {unit}' if unit else ''
+        log_warning(f'Invalid {name}={raw!r}; using {default}{suffix}')
+        return default
+    return value
+
+
+TOKEN_EXPIRE_HOURS = _env_int('TOKEN_EXPIRE_HOURS', 12)
 
 JWT_SECRET_KEY = os.urandom(24).hex()
 
@@ -151,19 +168,7 @@ MUSIC_ROOT = os.path.abspath(MUSIC_FOLDER)
 
 def _env_size_mib(name, default_mib):
     """Read a positive size in MiB from the environment."""
-    raw = os.getenv(name)
-    if raw is None or not raw.strip():
-        return default_mib * 1024 * 1024
-
-    try:
-        value = int(raw)
-    except ValueError:
-        value = 0
-
-    if value <= 0:
-        log_warning(f'Invalid {name}={raw!r}; using {default_mib} MiB')
-        return default_mib * 1024 * 1024
-    return value * 1024 * 1024
+    return _env_int(name, default_mib, unit='MiB') * 1024 * 1024
 
 
 def _format_size(size):
@@ -470,8 +475,7 @@ APP_GIT_SHA = os.getenv('APP_GIT_SHA', 'unknown')
 GITHUB_REPO_OWNER = 'Jonny-Ponny'
 GITHUB_REPO_NAME = 'metadata-docker'
 
-CACHE_TTL_SECONDS = int(os.getenv('CACHE_TTL_SECONDS', '3600'))
-CACHE_TTL_SECONDS = CACHE_TTL_SECONDS if CACHE_TTL_SECONDS > 0 else 3600
+CACHE_TTL_SECONDS = _env_int('CACHE_TTL_SECONDS', 3600)
 
 DISABLE_VERSION_CHECK = os.getenv('DISABLE_VERSION_CHECK', 'False').lower() in ('true', '1', 'yes', 'on')
 
