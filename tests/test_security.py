@@ -91,6 +91,56 @@ def test_unset_credentials_never_become_admin_admin(app_module, tmp_path):
     assert username != "admin"
 
 
+def test_empty_music_folder_falls_back_to_the_default(app_module, tmp_path):
+    """An empty MUSIC_FOLDER must not disable the path containment check.
+
+    A missing default used to leave ``safe_path()`` returning the raw user
+    path, so an absolute path could escape the library.
+    """
+    backend_dir = Path(app_module.__file__).resolve().parent
+    logs = tmp_path / "logs"
+    work = tmp_path / "work"
+    for directory in (logs, work):
+        directory.mkdir()
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "PYTHONPATH": str(backend_dir),
+            "MUSIC_FOLDER": "",
+            "LOG_DIR": str(logs),
+            "DISABLE_VERSION_CHECK": "true",
+            "AUTH_USERNAME": "test-admin",
+            "AUTH_PASSWORD": "test-password",
+            "AUTH_PASSWORD_HASH": "",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+    )
+
+    script = (
+        "import app\n"
+        "print('ROOT=' + app.MUSIC_ROOT)\n"
+        "path = app.safe_path('/etc/passwd')\n"
+        "print('PATH=' + path)\n"
+        "print('INSIDE=' + str(app._is_within(app.MUSIC_ROOT, path)))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=work,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+
+    output = dict(
+        line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
+    )
+    assert output["ROOT"] == "/music"
+    assert output["INSIDE"] == "True"
+
+
 def test_safe_path_allows_symlinks_inside_the_library(
     app_module, music_root, test_dir
 ):

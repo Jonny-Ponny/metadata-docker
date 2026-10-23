@@ -145,7 +145,7 @@ def add_security_headers(response):
     return response
 
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
-MUSIC_FOLDER = os.getenv('MUSIC_FOLDER', '/music')
+MUSIC_FOLDER = os.getenv('MUSIC_FOLDER') or '/music'
 MUSIC_ROOT = os.path.abspath(MUSIC_FOLDER)
 
 
@@ -830,9 +830,6 @@ def safe_path(file_path):
     it. Raises ``PermissionError`` when the resolved path would escape
     ``MUSIC_FOLDER``.
     """
-    if not MUSIC_FOLDER:
-        return file_path
-
     if file_path is None or '\0' in str(file_path):
         raise AccessDenied('Invalid path.')
 
