@@ -1,4 +1,4 @@
-"""The library root itself must not be deleted, recreated or copied.
+"""The library root itself must not be deleted, recreated or copied (B-01, B-02, B-03).
 
 ``safe_path()`` maps ``""``, ``"."`` and ``"/"`` to the music root, so routes
 that derive a new name from the resolved path (mkdir, copy) or remove it

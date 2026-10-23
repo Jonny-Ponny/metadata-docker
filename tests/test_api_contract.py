@@ -8,6 +8,15 @@ a JSON list or string reached ``data.get()`` and produced a 500.
 import pytest
 
 
+PUBLIC_ENDPOINTS = {
+    ("GET", "/api/ping"),
+    ("GET", "/api/version"),
+    ("POST", "/api/login"),
+    # Authorized by the short-lived token in the query string, not a Bearer
+    # header (see tests/test_downloads.py).
+    ("GET", "/api/download"),
+}
+
 ROUTES = [
     "/api/metadata/file",
     "/api/metadata/folder",
@@ -54,3 +63,114 @@ def test_json_routes_reject_invalid_bodies(
     assert response.status_code == status
     assert response.is_json
     assert "error" in response.get_json()
+
+
+def test_every_api_route_except_the_public_ones_requires_a_token(
+    client, app_module
+):
+    """A newly added route must opt in to being public.
+
+    Walking ``app.url_map`` means a route added without ``@token_required``
+    fails this test instead of silently serving data.
+    """
+    checked = set()
+
+    for rule in app_module.app.url_map.iter_rules():
+        if not rule.rule.startswith("/api/"):
+            continue
+        methods = rule.methods - {"HEAD", "OPTIONS"}
+        for method in sorted(methods):
+            if (method, rule.rule) in PUBLIC_ENDPOINTS:
+                continue
+
+            path = (
+                rule.rule.replace("<fetcher_id>", "fake")
+                .replace("<song_id>", "1")
+                .replace("<album_id>", "1")
+            )
+            response = client.open(path, method=method)
+
+            assert response.status_code == 401, (method, rule.rule)
+            assert response.is_json, (method, rule.rule)
+            checked.add((method, rule.rule))
+
+    # The table is useful only if the walk actually found the protected routes.
+    assert ("GET", "/api/files") in checked
+    assert ("POST", "/api/upload") in checked
+
+
+def test_security_headers_are_present_on_a_normal_response(client):
+    response = client.get("/api/ping")
+
+    assert response.status_code == 200
+    assert "'self'" in response.headers["Content-Security-Policy"]
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert "camera=()" in response.headers["Permissions-Policy"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/api/does-not-exist", "/api/does/not/exist", "/api/files/extra"],
+)
+def test_unknown_api_paths_are_json_404_without_the_spa(client, path):
+    response = client.get(path)
+
+    assert response.status_code == 404
+    assert response.is_json
+    assert response.get_json() == {"success": False, "error": "Not found"}
+
+
+@pytest.mark.parametrize(
+    "exc,expected_status,expected_message",
+    [
+        (PermissionError("secret path"), 403, "Permission denied while accessing the library."),
+        (FileNotFoundError("secret path"), 404, "The requested file or folder no longer exists."),
+        (OSError(13, "denied"), 403, "Permission denied while accessing the library."),
+        (OSError(2, "missing"), 404, "The requested file or folder no longer exists."),
+        (OSError(21, "is a folder"), 400, "The requested path is a folder, not a file."),
+        (OSError(20, "not a folder"), 400, "The requested path is not a folder."),
+        (OSError(17, "exists"), 409, "The destination already exists."),
+        (OSError(28, "full"), 500, "The server is out of disk space."),
+        (OSError(30, "read-only"), 500, "The filesystem is read-only."),
+        (OSError(24, "too many files"), 503, "The server is temporarily unable to open more files."),
+        (ValueError("boom"), 500, "fallback"),
+    ],
+)
+def test_public_error_message_table(
+    app_module, exc, expected_status, expected_message
+):
+    message, status = app_module._public_error_message(exc, "fallback")
+
+    assert (message, status) == (expected_message, expected_status)
+
+
+def test_public_error_message_keeps_the_access_denied_text(app_module):
+    message, status = app_module._public_error_message(
+        app_module.AccessDenied("Path is outside the music library."),
+        "fallback",
+    )
+
+    assert (message, status) == (
+        "Path is outside the music library.",
+        403,
+    )
+
+
+def test_public_error_message_maps_network_errors(app_module):
+    import requests
+
+    message, status = app_module._public_error_message(
+        requests.exceptions.Timeout("slow"), "fallback"
+    )
+    assert (message, status) == (
+        "The external service did not respond in time.",
+        504,
+    )
+
+    message, status = app_module._public_error_message(
+        requests.exceptions.ConnectionError("down"), "fallback"
+    )
+    assert (message, status) == ("The external service request failed.", 502)
+

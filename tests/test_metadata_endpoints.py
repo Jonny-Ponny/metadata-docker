@@ -1,4 +1,4 @@
-"""Metadata and cover endpoints must return clear errors (B-12..B-15)."""
+"""Metadata and cover endpoints must return clear errors (B-12, B-13, B-14, B-15, B-17, B-18)."""
 
 import io
 from pathlib import Path

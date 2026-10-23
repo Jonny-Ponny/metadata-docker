@@ -1,4 +1,4 @@
-"""Move guardrails for the file tree."""
+"""Move guardrails for the file tree (B-06)."""
 
 from pathlib import Path
 

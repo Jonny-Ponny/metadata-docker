@@ -1,7 +1,7 @@
 # Metadata Docker — improvement plan
 
-Status: **Phase 1 complete.** Phase 2 (tests) is in progress; see the
-checkboxes below.
+Status: **Phase 1 complete. Phase 2 complete** on `test/phase-2-coverage`
+(595 tests green locally and in CI). Phase 3 has not started.
 
 This file replaces the "Security patches plan" and "Suggested improvements
 (backlog)" sections This file describes what to change, in what order.
@@ -20,6 +20,17 @@ The order is fixed:
    behaviour.
 4. **Phase 4 — optional security hardening**.
 5. **Phase 5 — feature backlog**.
+
+Branches:
+
+- Each phase lives on its own branch, stacked on the previous one because the
+  later phases assert the behaviour of the earlier fixes:
+  `fix/phase-1-bugs` → `test/phase-2-coverage` → `refactor/phase-3-modules`.
+- A phase branch is merged only after its exit criteria are met and its
+  `pytest` run is green. Phase 3 starts from the merged Phase 2 branch, so
+  the refactor is checked against the complete suite.
+- Release/version commits stay off these branches; the app version is bumped
+  separately when a phase is merged.
 
 Rules:
 
@@ -317,11 +328,11 @@ every non-trivial helper at least once, and make CI run the suite.
 
 ## 2.1 Infrastructure
 
-- [ ] Add a CI job to `.github/workflows/container-release.yml` (or a separate
+- [x] Add a CI job to `.github/workflows/container-release.yml` (or a separate
       `tests.yml`) that runs `pip install -r requirements-dev.txt` and
       `python -m pytest -q` on pull requests and pushes. The release job stays
       independent.
-- [ ] `tests/conftest.py`:
+- [x] `tests/conftest.py`:
   - autouse fixture resetting `_login_failures` and `_version_cache`;
   - a `library` fixture that guarantees each test starts with a clean,
     uniquely named subtree (keep the session-wide app import for now);
@@ -338,7 +349,7 @@ every non-trivial helper at least once, and make CI run the suite.
   (B-01..B-03).
 - [x] `tests/test_api_contract.py` — every JSON route rejects a missing body,
   `text/plain`, malformed JSON, `[]` and `"x"` with a JSON 400/415 (B-08).
-- [ ] `tests/test_api_contract.py` (remaining)
+- [x] `tests/test_api_contract.py` (remaining)
   - every `/api/*` route without a token → 401 (table asserted against
     `app.url_map` so a new unprotected route fails the test);
   - security headers on a normal response;
@@ -346,17 +357,17 @@ every non-trivial helper at least once, and make CI run the suite.
   - `_public_error_message` table (403/404/409/500/502/503/504).
 - [x] `tests/test_config.py` — invalid integer environment values fall back
   instead of crashing at import (B-09).
-- [ ] `tests/test_auth.py`
+- [x] `tests/test_auth.py`
   - 5 failures → 429 + `Retry-After`; success clears the counter;
   - expired session token → 401; tampered signature → 401;
   - download token rejected on session routes (already covered) and accepted
     only by `/api/download?token=`.
-- [ ] `tests/test_paths.py`
+- [x] `tests/test_paths.py`
   - `safe_path` NUL, absolute `/etc/passwd`, `..`, sibling prefix
     (`/music-other`), inside/outside symlinks;
   - `_is_within` prefix and symlink cases;
   - `_generated_rename_path` separators, `.`/`..`, NUL, whitespace, escape.
-- [ ] `tests/test_files.py`
+- [x] `tests/test_files.py`
   - `build_tree` classification (`audio`/`image`/`text`/`other`),
     `.upload-*.part` hidden, symlinked dir skipped, outside symlink
     skipped, permission error yields `[]`;
@@ -372,7 +383,9 @@ every non-trivial helper at least once, and make CI run the suite.
 - [x] `tests/test_metadata_endpoints.py` — missing path → 404, unreadable
   metadata on smart rename, `None` metadata after cover changes, corrupt
   base64, image/audio type guards, root folder palettes (B-12..B-18).
-- [ ] `tests/test_metadata.py`
+- [x] `tests/test_metadata_routes.py` — authenticated success and failure cases
+  for the metadata, cover, folder, delete and text-save routes.
+- [x] `tests/test_metadata.py`
   - tag round-trip for every `FIELD_SCHEMA` field on MP3/WAV/AIFF/FLAC/
     OGG/Opus/M4A/M4B using committed small fixtures (`tests/fixtures/`);
   - comment vs description vs custom fields; lyrics (SYLT) and unsynced
@@ -382,27 +395,27 @@ every non-trivial helper at least once, and make CI run the suite.
     invariant: `set(FIELD_SCHEMA) == set(empty_metadata()) - {'customFields'}`.
 - [x] `tests/test_tag_backends.py` — magic-byte MIME detection and LRC/SYLT
   timestamp parsing (B-22, B-23).
-- [ ] `tests/test_downloads.py`
+- [x] `tests/test_downloads.py`
   - file download headers, Unicode filenames (`_content_disposition`),
     folder ZIP contents, symlink exclusion, empty folder, `iter_zip` error
     before/after first byte, expired/tampered token, token path escape.
 - [x] `tests/test_text_logs.py` — invalid UTF-8, size caps, non-string
   content, atomic write, log line clamping (B-19, B-20, B-21, B-27).
-- [ ] `tests/test_text_logs.py` (remaining) — log level/search filters, clear,
+- [x] `tests/test_text_logs.py` (remaining) — log level/search filters, clear,
   no log file → empty result.
 - [x] `tests/test_addons.py` — GitHub URL validation and limit clamping
   (B-24, B-25).
-- [ ] `tests/test_addons.py` (remaining)
+- [x] `tests/test_addons.py` (remaining)
   - list shape, legacy metadata normalisation, unimplemented methods → 400,
     failing fetcher → JSON error with `success: false`;
   - `PluginManager` discovery: underscore files ignored, broken module skipped,
     duplicate id last-wins.
-- [ ] `tests/test_formats.py`
+- [x] `tests/test_formats.py`
   - unique extensions, every family has a backend, MIME non-empty,
     case-insensitive lookup, default MIME.
 - [x] `tests/test_version.py` — import does not fetch, first check is cached
   (B-26).
-- [ ] `tests/test_version.py` (remaining) — `_compare_versions` table and
+- [x] `tests/test_version.py` (remaining) — `_compare_versions` table and
   `DISABLE_VERSION_CHECK`.
 
 ## 2.3 Regression matrix
@@ -410,6 +423,39 @@ every non-trivial helper at least once, and make CI run the suite.
 Every `B-xx` item from Phase 1 must appear in at least one test name or
 docstring, so the fix cannot be reverted silently. Add a short table at the end
 of `tests/` (or keep it here) mapping bug → test.
+
+| Bug | Test |
+| --- | --- |
+| B-01 | `test_library_root.py::test_delete_cannot_remove_the_library_root` |
+| B-02 | `test_library_root.py::test_mkdir_cannot_create_the_library_root` |
+| B-03 | `test_library_root.py::test_copy_cannot_duplicate_the_library_root` |
+| B-04 | `test_security.py::test_empty_music_folder_falls_back_to_the_default` |
+| B-05 | `test_rename.py::test_rename_cannot_overwrite_an_existing_file` |
+| B-06 | `test_move.py::test_move_cannot_move_a_folder_into_itself` |
+| B-07 | `test_upload.py::test_concurrent_upload_keeps_both_files` |
+| B-08 | `test_api_contract.py::test_json_routes_reject_invalid_bodies` |
+| B-09 | `test_config.py::test_invalid_integer_env_falls_back_to_the_default` |
+| B-10 | `test_tree.py::test_natural_key_handles_digits_int_rejects` |
+| B-11 | `test_tree.py::test_file_tree_skips_a_file_that_disappears_mid_walk` |
+| B-12 | `test_metadata_endpoints.py::test_delete_field_from_a_missing_path_returns_404` |
+| B-13 | `test_metadata_endpoints.py::test_smart_rename_rejects_unreadable_metadata_for_a_file` |
+| B-14 | `test_metadata_endpoints.py::test_cover_upload_can_reread_missing_metadata` |
+| B-15 | `test_metadata_endpoints.py::test_cover_from_url_checks_the_format_before_fetching` |
+| B-16 | `test_metadata_endpoints.py::test_root_folder_cover_uses_the_resolved_library_root` |
+| B-17 | `test_metadata_endpoints.py::test_save_cover_as_file_rejects_corrupt_base64` |
+| B-18 | `test_metadata_endpoints.py::test_image_endpoint_only_serves_images` |
+| B-19 | `test_text_logs.py::test_text_save_rejects_non_string_content` |
+| B-20 | `test_text_logs.py::test_text_read_replaces_invalid_utf8` |
+| B-21 | `test_text_logs.py::test_log_line_count_is_clamped` |
+| B-22 | `test_tag_backends.py::test_detect_image_mime_reads_magic_bytes` |
+| B-23 | `test_tag_backends.py::test_lrc_timestamps_accept_the_common_subset` |
+| B-24 | `test_addons.py::test_addon_github_url_rejects_unsafe_values` |
+| B-25 | `test_addons.py::test_addon_limit_is_clamped` |
+| B-26 | `test_version.py::test_import_does_not_call_github_and_the_first_check_is_cached` |
+| B-27 | `test_text_logs.py::test_text_save_rejects_oversized_content` |
+| B-28 | `test_upload.py::test_invalid_filename_does_not_create_the_target_folder` |
+| B-29 | `test_config.py::test_installed_flask_supports_per_request_upload_limits` |
+| B-30 | `test_zip_stream.py::test_sentinel_waits_for_queue_space` |
 
 ## Phase 2 exit criteria
 
