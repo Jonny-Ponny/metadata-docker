@@ -339,6 +339,10 @@ every non-trivial helper at least once, and make CI run the suite.
   - a `fake_fetcher` fixture that injects a class into
     `plugin_manager.fetchers` without writing files;
   - a helper for creating a valid audio file per format.
+- [x] Gate the release build on the test workflow: `container-release.yml`
+      calls `tests.yml` (declared `workflow_call`) as a `test` job and
+      `build-and-push` declares `needs: test`, so a failed, cancelled or
+      timed-out suite publishes no image.
 - [ ] Optional: `pytest-cov` (non-blocking) and `pytest-xdist` after Phase 3
       removes import-time globals.
 

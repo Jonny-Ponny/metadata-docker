@@ -8,11 +8,14 @@ on:
       - 'fix/**'
       - 'test/**'
       - 'refactor/**'
+      - 'ci/**'
   pull_request:
+  workflow_call:
 
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
