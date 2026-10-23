@@ -328,11 +328,11 @@ every non-trivial helper at least once, and make CI run the suite.
 
 ## 2.1 Infrastructure
 
-- [ ] Add a CI job to `.github/workflows/container-release.yml` (or a separate
+- [x] Add a CI job to `.github/workflows/container-release.yml` (or a separate
       `tests.yml`) that runs `pip install -r requirements-dev.txt` and
       `python -m pytest -q` on pull requests and pushes. The release job stays
       independent.
-- [ ] `tests/conftest.py`:
+- [x] `tests/conftest.py`:
   - autouse fixture resetting `_login_failures` and `_version_cache`;
   - a `library` fixture that guarantees each test starts with a clean,
     uniquely named subtree (keep the session-wide app import for now);
