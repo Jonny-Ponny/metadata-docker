@@ -7,6 +7,8 @@ that derive a new name from the resolved path (mkdir, copy) or remove it
 
 from pathlib import Path
 
+import pytest
+
 
 def _relative(path, music_root):
     return Path(path).relative_to(music_root).as_posix()
@@ -37,3 +39,34 @@ def test_delete_still_removes_a_file(client, auth_headers, music_root, test_dir)
 
     assert response.status_code == 200
     assert not song.exists()
+
+
+@pytest.mark.parametrize('path', ['.', '/', './'])
+@pytest.mark.parametrize('conflict', [None, 'merge'])
+def test_mkdir_cannot_create_the_library_root(
+    client, auth_headers, music_root, path, conflict
+):
+    payload = {'path': path}
+    if conflict:
+        payload['conflict'] = conflict
+
+    response = client.post('/api/mkdir', headers=auth_headers, json=payload)
+
+    assert response.status_code == 400, (path, conflict)
+    assert response.get_json()['error'] == 'Cannot create the library root'
+    assert music_root.is_dir()
+    assert not music_root.with_name(f'{music_root.name} (1)').exists()
+
+
+def test_mkdir_still_creates_a_folder(client, auth_headers, music_root, test_dir):
+    album = test_dir / 'Album'
+
+    response = client.post(
+        '/api/mkdir',
+        headers=auth_headers,
+        json={'path': _relative(album, music_root)},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()['created'] is True
+    assert album.is_dir()

@@ -1120,6 +1120,8 @@ def create_directory():
 
     try:
         full_path = safe_path(desired_path)
+        if _is_library_root(full_path):
+            return jsonify({'error': 'Cannot create the library root'}), 400
 
         if conflict == MKDIR_CONFLICT_MERGE:
             # Idempotent by design: concurrent uploads of the same new folder
@@ -1151,6 +1153,9 @@ def create_directory():
                     break
                 except FileExistsError:
                     full_path = _unique_path(full_path)
+
+        if not _is_within(MUSIC_ROOT, full_path):
+            return jsonify({'error': 'Invalid destination'}), 400
 
         rel_path = os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/')
 
