@@ -399,11 +399,11 @@ every non-trivial helper at least once, and make CI run the suite.
     before/after first byte, expired/tampered token, token path escape.
 - [x] `tests/test_text_logs.py` — invalid UTF-8, size caps, non-string
   content, atomic write, log line clamping (B-19, B-20, B-21, B-27).
-- [ ] `tests/test_text_logs.py` (remaining) — log level/search filters, clear,
+- [x] `tests/test_text_logs.py` (remaining) — log level/search filters, clear,
   no log file → empty result.
 - [x] `tests/test_addons.py` — GitHub URL validation and limit clamping
   (B-24, B-25).
-- [ ] `tests/test_addons.py` (remaining)
+- [x] `tests/test_addons.py` (remaining)
   - list shape, legacy metadata normalisation, unimplemented methods → 400,
     failing fetcher → JSON error with `success: false`;
   - `PluginManager` discovery: underscore files ignored, broken module skipped,
@@ -413,7 +413,7 @@ every non-trivial helper at least once, and make CI run the suite.
     case-insensitive lookup, default MIME.
 - [x] `tests/test_version.py` — import does not fetch, first check is cached
   (B-26).
-- [ ] `tests/test_version.py` (remaining) — `_compare_versions` table and
+- [x] `tests/test_version.py` (remaining) — `_compare_versions` table and
   `DISABLE_VERSION_CHECK`.
 
 ## 2.3 Regression matrix

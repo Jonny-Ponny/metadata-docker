@@ -101,7 +101,9 @@ def fake_fetcher(app_module, monkeypatch):
     """
 
     def register(fetcher_id='fake', **attributes):
-        class Fetcher:
+        from addon_base import MetadataFetcher
+
+        class Fetcher(MetadataFetcher):
             id = fetcher_id
             name = attributes.pop('name', fetcher_id)
             description = attributes.pop('description', '')
