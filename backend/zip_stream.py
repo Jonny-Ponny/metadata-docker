@@ -70,6 +70,22 @@ class _QueueWriter(io.RawIOBase):
         pass
 
 
+def _signal_finished(chunks, stop):
+    """Deliver the end-of-stream sentinel, waiting for queue space.
+
+    ``put_nowait()`` drops the sentinel whenever the consumer has not drained
+    the last chunks yet, which leaves ``iter_zip()`` blocked on ``chunks.get()``
+    forever. Retry instead, and give up only when the consumer is gone, in
+    which case ``stop`` is set and there is nobody left to notify.
+    """
+    while not stop.is_set():
+        try:
+            chunks.put(_SENTINEL, timeout=_POLL_INTERVAL)
+            return
+        except queue.Full:
+            continue
+
+
 def _is_within(base_path, candidate_path):
     """Return True when *candidate_path* resolves to *base_path* or below it."""
     try:
@@ -149,11 +165,7 @@ def iter_zip(folder_path, chunk_size=CHUNK_SIZE):
             errors.append(exc)
             log_error(f'ZIP streaming failed for {folder_path}: {exc}')
         finally:
-            try:
-                chunks.put_nowait(_SENTINEL)
-            except queue.Full:
-                # The consumer is gone; the daemon thread can exit now.
-                pass
+            _signal_finished(chunks, stop)
 
     worker = threading.Thread(
         target=produce,
@@ -166,7 +178,14 @@ def iter_zip(folder_path, chunk_size=CHUNK_SIZE):
     pending_size = 0
     try:
         while True:
-            item = chunks.get()
+            try:
+                item = chunks.get(timeout=_POLL_INTERVAL)
+            except queue.Empty:
+                # A lost sentinel must never hang the response: if the producer
+                # is gone, the archive is finished no matter what it queued.
+                if not worker.is_alive():
+                    break
+                continue
             if item is _SENTINEL:
                 break
             pending.append(item)

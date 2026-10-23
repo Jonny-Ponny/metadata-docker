@@ -283,6 +283,20 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** import-time assertion that the Flask version satisfies the floor;
   CI installs from the pinned requirements.
 
+- [x] **B-30 (P0) Folder downloads can hang forever.**
+  `iter_zip()` (`zip_stream.py:151`) announced completion with
+  `chunks.put_nowait(_SENTINEL)`. When the consumer had not drained the last
+  chunks, the bounded queue was full, the sentinel was silently dropped and the
+  response generator blocked on `chunks.get()` for good: the worker thread
+  finished, but the client never received the end of the archive. Found while
+  running CI: `tests/test_downloads.py` hung in roughly one run out of four.
+  **Fix:** deliver the sentinel with a bounded retry (give up only when the
+  consumer is gone and `stop` is set) and let the consumer stop polling when
+  the producer thread has exited.
+  **Test:** `tests/test_zip_stream.py` — sentinel delivery on a full queue,
+  no signal when the consumer left, and a full `iter_zip()` over a one-slot
+  queue.
+
 ## Phase 1 exit criteria
 
 - Every P0/P1 item above is fixed.
