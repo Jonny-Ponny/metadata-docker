@@ -697,6 +697,26 @@ def _is_within(base_path, candidate_path):
         return False
 
 
+def _generated_rename_path(parent, name):
+    """Validate a generated rename target and return its full path.
+
+    Smart rename builds names from tag values, so the result is not a
+    user-typed filename. Reject empty names, ``.``/``..``, separators and
+    names that would resolve outside the music library.
+    """
+    if not isinstance(name, str) or not name or '\0' in name:
+        raise ValueError('Invalid generated name')
+    if name in ('.', '..') or name.strip() != name:
+        raise ValueError('Invalid generated name')
+    if os.path.isabs(name) or '/' in name or '\\' in name:
+        raise ValueError('Invalid generated name')
+
+    new_path = os.path.join(parent, name)
+    if not _is_within(MUSIC_ROOT, new_path):
+        raise ValueError('Invalid generated name')
+    return new_path
+
+
 def safe_path(file_path):
     """Resolve a user-supplied path and keep it inside the music folder.
 
@@ -1729,7 +1749,7 @@ def apply_renaming_scheme():
             for var, field in variable_map.items():
                 value = ''
                 if field == 'date':
-                    value = extracted_year
+                    value = extracted_year or ''
                 elif field == 'trackNumber' and metadata.get('trackNumber'):
                     track = str(metadata['trackNumber']).split('/')[0]
                     value = track.zfill(2)
@@ -1802,9 +1822,13 @@ def apply_renaming_scheme():
             if not new_name:
                 return jsonify({'error': 'Generated name is empty'}), 400
             
-            # Rename folder
+            # Rename folder. The generated name is validated like any other
+            # destination so tag values cannot redirect the rename.
             parent = os.path.dirname(full_path)
-            new_path = os.path.join(parent, new_name)
+            try:
+                new_path = _generated_rename_path(parent, new_name)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
 
             # If it already matches the scheme, do not rename
             if _same_path(new_path, full_path):
@@ -1822,6 +1846,8 @@ def apply_renaming_scheme():
                     new_path = f'{base} ({counter})'
                     counter += 1
             
+            if not _is_within(MUSIC_ROOT, new_path):
+                return jsonify({'error': 'Invalid generated name'}), 400
             os.rename(full_path, new_path)
             
             log_info(f"Smart renamed folder {full_path} to {new_path}")
@@ -1851,14 +1877,20 @@ def apply_renaming_scheme():
             
             if not new_name_without_ext:
                 return jsonify({'error': 'Generated name is empty'}), 400
+            if new_name_without_ext in ('.', '..'):
+                return jsonify({'error': 'Invalid generated name'}), 400
             
             # Add original extension
             ext = os.path.splitext(full_path)[1]
             new_name = new_name_without_ext + ext
             
-            # Rename file
+            # Rename file. The generated name is validated as a bare filename
+            # and the destination must stay inside the library.
             parent = os.path.dirname(full_path)
-            new_path = os.path.join(parent, new_name)
+            try:
+                new_path = _generated_rename_path(parent, new_name)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
 
             # If it already matches the scheme, do not rename
             if _same_path(new_path, full_path):
@@ -1876,6 +1908,8 @@ def apply_renaming_scheme():
                     new_path = f'{base} ({counter}){ext}'
                     counter += 1
 
+            if not _is_within(MUSIC_ROOT, new_path):
+                return jsonify({'error': 'Invalid generated name'}), 400
             os.rename(full_path, new_path)
             
             log_info(f"Smart renamed file {full_path} to {new_path}")
