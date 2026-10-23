@@ -357,12 +357,12 @@ every non-trivial helper at least once, and make CI run the suite.
   - `_public_error_message` table (403/404/409/500/502/503/504).
 - [x] `tests/test_config.py` — invalid integer environment values fall back
   instead of crashing at import (B-09).
-- [ ] `tests/test_auth.py`
+- [x] `tests/test_auth.py`
   - 5 failures → 429 + `Retry-After`; success clears the counter;
   - expired session token → 401; tampered signature → 401;
   - download token rejected on session routes (already covered) and accepted
     only by `/api/download?token=`.
-- [ ] `tests/test_paths.py`
+- [x] `tests/test_paths.py`
   - `safe_path` NUL, absolute `/etc/passwd`, `..`, sibling prefix
     (`/music-other`), inside/outside symlinks;
   - `_is_within` prefix and symlink cases;
@@ -408,7 +408,7 @@ every non-trivial helper at least once, and make CI run the suite.
     failing fetcher → JSON error with `success: false`;
   - `PluginManager` discovery: underscore files ignored, broken module skipped,
     duplicate id last-wins.
-- [ ] `tests/test_formats.py`
+- [x] `tests/test_formats.py`
   - unique extensions, every family has a backend, MIME non-empty,
     case-insensitive lookup, default MIME.
 - [x] `tests/test_version.py` — import does not fetch, first check is cached
