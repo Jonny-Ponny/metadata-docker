@@ -21,6 +21,17 @@ The order is fixed:
 4. **Phase 4 — optional security hardening**.
 5. **Phase 5 — feature backlog**.
 
+Branches:
+
+- Each phase lives on its own branch, stacked on the previous one because the
+  later phases assert the behaviour of the earlier fixes:
+  `fix/phase-1-bugs` → `test/phase-2-coverage` → `refactor/phase-3-modules`.
+- A phase branch is merged only after its exit criteria are met and its
+  `pytest` run is green. Phase 3 starts from the merged Phase 2 branch, so
+  the refactor is checked against the complete suite.
+- Release/version commits stay off these branches; the app version is bumped
+  separately when a phase is merged.
+
 Rules:
 
 - Phase 1 does not move or rename modules. No refactoring while fixing bugs.
