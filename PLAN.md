@@ -106,7 +106,7 @@ queued in Phase 2 (or added with the fix for P0 items).
 
 ## 1.2 Requests, config, errors
 
-- [ ] **B-08 (P1) JSON body handling returns HTML or 500.**
+- [x] **B-08 (P1) JSON body handling returns HTML or 500.**
   Twelve routes call `request.get_json()` without `silent=True` or a dict
   check (`app.py:895, 927, 1162, 1206, 1239, 1294, 1509, 1585, 1632, 1706,
   1862, 2297`; `1390` already uses `or {}`). Consequences: no/wrong
@@ -117,7 +117,7 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** for each route: no body, `text/plain` body, malformed JSON, `[]` and
   `"x"` → JSON error with 400/415, never HTML and never 500.
 
-- [ ] **B-09 (P1) Invalid integer env vars crash the app at import.**
+- [x] **B-09 (P1) Invalid integer env vars crash the app at import.**
   `TOKEN_EXPIRE_HOURS` (`app.py:100`) and `CACHE_TTL_SECONDS` (`app.py:399`)
   use bare `int(os.getenv(...))`. `TOKEN_EXPIRE_HOURS=abc` or
   `CACHE_TTL_SECONDS=soon` raises `ValueError` before Flask starts.
@@ -125,13 +125,13 @@ queued in Phase 2 (or added with the fix for P0 items).
   default, minimum)` that warns and falls back.
   **Test:** subprocess imports with invalid/zero/negative values and succeeds.
 
-- [ ] **B-10 (P1) `natural_key()` crashes on some Unicode digits.**
+- [x] **B-10 (P1) `natural_key()` crashes on some Unicode digits.**
   `part.isdigit()` is true for `²` but `int("²")` raises `ValueError`, so a file
   named `track².mp3` makes `/api/files` return 500 (`app.py:679`).
   **Fix:** `part.isascii() and part.isdigit()`, or a `try/except ValueError`.
   **Test:** library containing `a².mp3` and `a10.mp3` lists in natural order.
 
-- [ ] **B-11 (P1) `build_tree()` returns 500 when an entry disappears mid-walk.**
+- [x] **B-11 (P1) `build_tree()` returns 500 when an entry disappears mid-walk.**
   Only `PermissionError` is caught (`app.py:683-771`); a concurrent delete/rename
   between `listdir()` and `os.stat()` raises `FileNotFoundError`.
   **Fix:** wrap each entry's stat/classification in `try/except OSError:
@@ -321,13 +321,16 @@ every non-trivial helper at least once, and make CI run the suite.
 - [x] `tests/test_security.py` / `tests/test_library_root.py` — empty
   `MUSIC_FOLDER` defaults to `/music` (B-04); root delete/mkdir/copy guards
   (B-01..B-03).
-- [ ] `tests/test_api_contract.py`
+- [x] `tests/test_api_contract.py` — every JSON route rejects a missing body,
+  `text/plain`, malformed JSON, `[]` and `"x"` with a JSON 400/415 (B-08).
+- [ ] `tests/test_api_contract.py` (remaining)
   - every `/api/*` route without a token → 401 (table asserted against
     `app.url_map` so a new unprotected route fails the test);
-  - JSON body cases from B-08;
   - security headers on a normal response;
   - unknown `/api/*` and `/api/*/*` → JSON 404, never HTML/SPA;
   - `_public_error_message` table (403/404/409/500/502/503/504).
+- [x] `tests/test_config.py` — invalid integer environment values fall back
+  instead of crashing at import (B-09).
 - [ ] `tests/test_auth.py`
   - 5 failures → 429 + `Retry-After`; success clears the counter;
   - expired session token → 401; tampered signature → 401;
@@ -339,11 +342,13 @@ every non-trivial helper at least once, and make CI run the suite.
   - `_is_within` prefix and symlink cases;
   - `_generated_rename_path` separators, `.`/`..`, NUL, whitespace, escape.
 - [ ] `tests/test_files.py`
-  - `build_tree` classification (`audio`/`image`/`text`/`other`), natural sort
-    incl. B-10, `.upload-*.part` hidden, symlinked dir skipped, outside symlink
-    skipped, permission error yields `[]`, disappearing entry (B-11);
+  - `build_tree` classification (`audio`/`image`/`text`/`other`),
+    `.upload-*.part` hidden, symlinked dir skipped, outside symlink
+    skipped, permission error yields `[]`;
   - copy naming/symlinks, delete symlink vs target, mkdir rename/merge
     (existing cases stay).
+- [x] `tests/test_tree.py` — natural sort with `²` names and entries that
+  disappear between `listdir()` and `stat()` (B-10, B-11).
 - [x] `tests/test_upload.py` — existing conflict/atomicity cases plus the
   simulated concurrent upload race (B-07).
 - [x] `tests/test_rename.py` — overwrite rejection, same-name no-op, normal
