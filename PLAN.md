@@ -1,7 +1,8 @@
 # Metadata Docker — improvement plan
 
-Status: **Phase 1 complete. Phase 2 complete** on `test/phase-2-coverage`
-(595 tests green locally and in CI). Phase 3 has not started.
+Status: **Phase 1 complete. Phase 2 complete** on `main`
+(599 tests green locally and in CI). Phase 3 is in progress on
+`refactor/phase-3-modules`; step 1 is done.
 
 This file replaces the "Security patches plan" and "Suggested improvements
 (backlog)" sections This file describes what to change, in what order.
