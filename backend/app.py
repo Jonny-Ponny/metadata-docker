@@ -1536,7 +1536,7 @@ def update_file_picture_endpoint():
             return jsonify({
                 'success': True, 
                 'message': f'Updated cover art for {os.path.basename(file_path)}',
-                'picture': metadata.get('picture')
+                'picture': (metadata or {}).get('picture')
             })
         else:
             return jsonify({'error': 'Failed to update cover art'}), 500
@@ -1564,7 +1564,12 @@ def update_file_picture_from_url_endpoint():
         full_path = safe_path(file_path)
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
-        
+
+        # Check the format before spending a network request: an unsupported
+        # target cannot store a picture and would only produce a 500 later.
+        if not is_supported_audio(full_path):
+            return jsonify({'error': 'Unsupported file format'}), 400
+
         # 1. Fetch the image through the SSRF guard (public http/https only,
         # validated redirects, streamed with a size cap and timeouts).
         user_agent = f'metadata-docker/{APP_VERSION}'
@@ -1578,7 +1583,7 @@ def update_file_picture_from_url_endpoint():
             return jsonify({
                 'success': True, 
                 'message': f'Updated cover art for {os.path.basename(file_path)}',
-                'picture': metadata.get('picture')
+                'picture': (metadata or {}).get('picture')
             })
         return jsonify({'error': 'Failed to update cover art'}), 500
             
@@ -1762,7 +1767,10 @@ def delete_metadata_field():
     
     try:
         full_path = safe_path(path)
-        
+
+        if not os.path.isdir(full_path) and not os.path.isfile(full_path):
+            return jsonify({'error': 'Path not found'}), 404
+
         # Check if it's a folder
         if os.path.isdir(full_path):
             # Delete field from all files in folder
@@ -1827,7 +1835,7 @@ def delete_cover_art():
             return jsonify({
                 'success': True, 
                 'message': f'Deleted cover art from {os.path.basename(file_path)}',
-                'picture': metadata.get('picture')
+                'picture': (metadata or {}).get('picture')
             })
         else:
             return jsonify({'error': 'Failed to delete cover art'}), 500
@@ -2041,8 +2049,14 @@ def apply_renaming_scheme():
     is_folder = data.get('isFolder', True)
     replace_spaces = data.get('replaceSpaces', False)
     
-    if not path or not scheme:
+    if not isinstance(path, str) or not path:
         return jsonify({'error': 'Missing path or scheme'}), 400
+    if not isinstance(scheme, str) or not scheme:
+        return jsonify({'error': 'Missing path or scheme'}), 400
+    if not isinstance(is_folder, bool):
+        return jsonify({'error': 'isFolder must be a boolean'}), 400
+    if not isinstance(replace_spaces, bool):
+        return jsonify({'error': 'replaceSpaces must be a boolean'}), 400
     
     try:
         full_path = safe_path(path)
@@ -2162,6 +2176,8 @@ def apply_renaming_scheme():
             
             # Extract metadata from first file
             metadata = extract_metadata(first_audio)
+            if metadata is None:
+                return jsonify({'error': 'Could not read metadata from the audio file'}), 400
             
             try:
                 # Generate new folder name (this will raise ValueError if fields are missing)
@@ -2218,6 +2234,8 @@ def apply_renaming_scheme():
             
             # Extract metadata from the file itself
             metadata = extract_metadata(full_path)
+            if metadata is None:
+                return jsonify({'error': 'Could not read metadata from the audio file'}), 400
             
             try:
                 # Generate new file name (this will raise ValueError if fields are missing)
