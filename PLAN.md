@@ -91,17 +91,18 @@ queued in Phase 2 (or added with the fix for P0 items).
   **Test:** move `album` into `album/sub` → 400; do the same through an
   inside-pointing symlink alias → 400.
 
-- [ ] **B-07 (P1) Concurrent uploads can overwrite each other.**
-  `_unique_path()` (`app.py:176`) checks then returns a name; two threads
-  uploading the same name can both pick `song (1).mp3` and the second
-  `os.replace()` (`app.py:1057`) clobbers the first. The same check-then-act
-  pattern exists in `copy_item()` and in the duplicate-name loops of smart
-  rename (`mkdir` already retries on `FileExistsError`).
-  **Fix:** claim the destination atomically (create the target with
-  `O_CREAT | O_EXCL`, or retry the rename on `EEXIST`) and loop on conflict.
-  **Test:** monkeypatch existence checks to simulate the race (same style as
-  `test_mkdir_*` in `tests/test_upload.py`); assert both files survive under
-  different names.
+- [x] **B-07 (P1) Concurrent uploads can overwrite each other.**
+  `_unique_path()` (`app.py:176`) checked then returned a name; two threads
+  uploading the same name could both pick `song (1).mp3` and the second
+  `os.replace()` (`app.py:1057`) clobbered the first. Uploads now write the
+  temp file first and claim the destination with an atomic `os.link()` that
+  fails on `EEXIST`, then retry the next free name. The same check-then-act
+  pattern still exists in `copy_item()` and in the duplicate-name loops of
+  smart rename; those only copy or rename the same source, so they are tracked
+  for Phase 3 rather than treated as data loss.
+  **Test:** simulated race between the existence check and the claim; both
+  files survive under different names, and an identical concurrent upload is
+  skipped.
 
 ## 1.2 Requests, config, errors
 
@@ -342,7 +343,9 @@ every non-trivial helper at least once, and make CI run the suite.
     incl. B-10, `.upload-*.part` hidden, symlinked dir skipped, outside symlink
     skipped, permission error yields `[]`, disappearing entry (B-11);
   - copy naming/symlinks, delete symlink vs target, mkdir rename/merge
-    (existing cases stay), upload race (B-07).
+    (existing cases stay).
+- [x] `tests/test_upload.py` — existing conflict/atomicity cases plus the
+  simulated concurrent upload race (B-07).
 - [x] `tests/test_rename.py` — overwrite rejection, same-name no-op, normal
   rename (B-05).
 - [x] `tests/test_move.py` — self-move, symlink alias, normal move (B-06).
