@@ -15,6 +15,7 @@ services:
       # Optional alternative to AUTH_PASSWORD: a Werkzeug password hash.
       - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH:-}
       - TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS:-12}  # Optional
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}          # Per-file request limit (optional)
       - PUID=1000                                     # User(optional)
       - PGID=1000                                     # Group(optional)
       - TZ=UTC                                        # Timezone(optional)

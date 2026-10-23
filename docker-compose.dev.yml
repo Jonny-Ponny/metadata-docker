@@ -11,6 +11,7 @@ services:
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}               # Password; random if empty
       - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH:-}     # Optional hash instead of password
       - TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS:-12}   # Optional
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}           # Per-file request limit
       - PUID=1000
       - PGID=1000
       - TZ=UTC

@@ -143,6 +143,50 @@ MUSIC_FOLDER = os.getenv('MUSIC_FOLDER', '/music')
 MUSIC_ROOT = os.path.abspath(MUSIC_FOLDER)
 
 
+def _env_size_mib(name, default_mib):
+    """Read a positive size in MiB from the environment."""
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default_mib * 1024 * 1024
+
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+
+    if value <= 0:
+        log_warning(f'Invalid {name}={raw!r}; using {default_mib} MiB')
+        return default_mib * 1024 * 1024
+    return value * 1024 * 1024
+
+
+def _format_size(size):
+    """Render a byte limit as GiB or MiB for user-facing messages."""
+    if size >= 1024 ** 3 and size % (1024 ** 3) == 0:
+        return f'{size // (1024 ** 3)} GiB'
+    return f'{size // (1024 ** 2)} MiB'
+
+
+# Body limits are per request. Drag-and-drop folder uploads send one request
+# per file, so this caps a single file rather than the whole library.
+MAX_UPLOAD_BYTES = _env_size_mib('MAX_UPLOAD_MB', 4096)
+COVER_UPLOAD_BYTES = 20 * 1024 * 1024
+COVER_UPLOAD_PATHS = frozenset({
+    '/api/metadata/picture/file',
+    '/api/metadata/picture/folder',
+    '/api/metadata/picture/folder/current',
+})
+
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
+
+
+@app.before_request
+def limit_cover_upload_size():
+    """Apply the smaller body limit to cover-art uploads."""
+    if request.path in COVER_UPLOAD_PATHS:
+        request.max_content_length = COVER_UPLOAD_BYTES
+
+
 class AccessDenied(PermissionError):
     """A user-supplied path attempted to leave the music library."""
 
@@ -223,12 +267,35 @@ def handle_internal_server_error(error):
     )
     return jsonify({'error': message}), status
 
+
+@app.errorhandler(413)
+def handle_request_too_large(error):
+    """Return JSON for oversized request bodies instead of an HTML page."""
+    if request.path in COVER_UPLOAD_PATHS:
+        limit = COVER_UPLOAD_BYTES
+        message = f'The image is too large. The maximum size is {_format_size(limit)}.'
+    elif request.path == '/api/upload':
+        limit = MAX_UPLOAD_BYTES
+        message = f'The uploaded file is too large. The maximum size is {_format_size(limit)}.'
+    else:
+        limit = MAX_UPLOAD_BYTES
+        message = f'The request is too large. The maximum size is {_format_size(limit)}.'
+
+    log_warning(
+        f'{request.method} {request.path}: body exceeded {_format_size(limit)}'
+    )
+    return jsonify({'error': message}), 413
+
 log_info(f'Debug set to {DEBUG}')
 log_info(f'PUID set to {PUID}')
 log_info(f'PGID set to {PGID}')
 
 log_info(f'Music folder: {Path(MUSIC_FOLDER).absolute()}')
 log_info(f'Log folder:{Path(LOG_DIR).absolute()}')
+log_info(
+    f'Upload limit: {_format_size(MAX_UPLOAD_BYTES)} per request; '
+    f'cover images: {_format_size(COVER_UPLOAD_BYTES)}'
+)
 
 # ------------------------ADDONS------------------------ #
 

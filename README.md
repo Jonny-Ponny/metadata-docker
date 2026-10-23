@@ -132,8 +132,11 @@ AUTH_USERNAME|Login username. Generated and logged if empty|random for this run
 AUTH_PASSWORD|Login password. Generated and logged if empty|random for this run
 AUTH_PASSWORD_HASH|Werkzeug password hash, used instead of `AUTH_PASSWORD`|unset
 TOKEN_EXPIRE_HOURS|JWT token expiry|12
+MAX_UPLOAD_MB|Maximum size of a single upload request. Limits a single file. Cover images have a separate 20 MiB cap|4096
 PUID|User ID for file permissions|1000
 PGID|Group ID for file permissions|1000
+
+Uploads are capped per request, not per library: dragging a 50 GB folder still works as long as each file is under `MAX_UPLOAD_MB`. If a reverse proxy sits in front of the app, make sure its request-body limit is at least as large as this value.
 
 Make sure user/group ID has proper file permissions. The container runs as an unprivileged user by default; set `PUID`/`PGID` to match the owner of your music folder, or set both to `0` to run as root (not recommended).
 
