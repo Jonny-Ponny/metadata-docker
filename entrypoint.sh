@@ -137,7 +137,8 @@ fi
 # touching library/log ownership.
 if [ "$PUID" = "0" ] && [ "$PGID" = "0" ]; then
     echo "Starting gunicorn as root..."
-    exec gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} --workers 1 --threads 8 app:app
+    exec gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} --workers 1 --threads 8 \
+        --no-control-socket app:app
 fi
 
 # Change ownership so the unprivileged user can read/write the library and logs.
@@ -148,6 +149,9 @@ for dir in /music /logs; do
 done
 
 echo "Starting gunicorn as user $USER_NAME..."
+# The control socket defaults to $HOME/.gunicorn, but /app is root-owned and
+# must stay read-only for the runtime user. The app does not use gunicornc.
 exec gosu "$USER_NAME" env HOME="$USER_HOME" PYTHONUSERBASE="$USER_SITE" \
     PATH="$USER_SITE/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 \
-    gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} --workers 1 --threads 8 app:app
+    gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} --workers 1 --threads 8 \
+    --no-control-socket app:app
