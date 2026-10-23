@@ -281,6 +281,35 @@
                     </div>
                 </div>
 
+                <!-- Uploads -->
+                <div class="settings-section">
+                    <h3>Uploads</h3>
+                    <div class="setting-item">
+                        <label class="select-label" for="upload-conflict">
+                            When the destination file already exists
+                        </label>
+                        <select
+                            id="upload-conflict"
+                            class="setting-select"
+                            bind:value={localSettings.uploadDuplicates}
+                        >
+                            <option value="skip-identical"
+                                >Skip identical, rename different</option
+                            >
+                            <option value="keep-both"
+                                >Keep both (rename the new file)</option
+                            >
+                        </select>
+                        <p class="setting-description">
+                            "Skip identical" leaves a file with the same name
+                            and size untouched, so re-dropping a folder only
+                            uploads what changed. A file with the same name but
+                            a different size is added as "name (1)". "Keep both"
+                            always renames the incoming file.
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Folder Renaming Scheme -->
                 <div class="settings-section">
                     <h3>Folder Renaming Scheme</h3>
@@ -777,6 +806,31 @@
         color: #888;
     }
 
+    .select-label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+        color: #333;
+    }
+
+    .setting-select {
+        width: 100%;
+        max-width: 360px;
+        padding: 7px 10px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        background: #fff;
+        color: #333;
+        font-size: 13px;
+        cursor: pointer;
+    }
+
+    .setting-select:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px var(--color-primary-transparent);
+    }
+
     .scheme-input-group {
         margin-bottom: 16px;
         width: 100%;
@@ -1264,6 +1318,16 @@
     }
 
     :global(body.dark) .checkbox-label {
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .select-label {
+        color: #e0e0e0;
+    }
+
+    :global(body.dark) .setting-select {
+        background: #3d3d3d;
+        border-color: #555;
         color: #e0e0e0;
     }
 

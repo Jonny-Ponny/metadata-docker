@@ -14,6 +14,7 @@
   import SettingsModal from "./components/SettingsModal.svelte";
   import TextEditor from "./components/TextEditor.svelte";
   import FolderOverview from "./components/FolderOverview.svelte";
+  import UploadTray from "./components/UploadTray.svelte";
 
   import {
     sortItems,
@@ -30,7 +31,10 @@
     applyThemeFromSettings,
     isAudioFile,
     readApiError,
-    readJsonResponse,
+    upload,
+    startDrop,
+    buildExistingIndex,
+    loadUploadLimit,
   } from "./utils/index.js";
 
   import "./app.css";
@@ -65,15 +69,31 @@
 
   // ========== DRAG AND DROP STATE ==========
   let isDragging = $state(false);
-  let dragCounter = $state(0); // To handle drag enter/leave on child elements
-  let uploadOverallProgress = $state({
-    total: 0,
-    completed: 0,
-    isActive: false,
-  });
   let dragOverElement = $state(null); // Track which element is being hovered
-  let isUploading = $state(false);
   let hoverTimer = null;
+  let folderInput = $state(null);
+
+  // Upload state lives in the upload store. The flag is only used to warn
+  // before closing the tab, since there is no resume yet.
+  let isUploading = $derived(
+    $upload.phase === "preparing" ||
+      $upload.phase === "running" ||
+      $upload.phase === "cancelling" ||
+      $upload.phase === "blocked",
+  );
+
+  let uploadPercent = $derived(
+    $upload.totalBytes > 0
+      ? Math.min(100, ($upload.doneBytes / $upload.totalBytes) * 100)
+      : 0,
+  );
+
+  let showProgressBar = $derived(
+    $upload.phase === "preparing" ||
+      $upload.phase === "running" ||
+      $upload.phase === "cancelling" ||
+      $upload.phase === "refreshing",
+  );
 
   // Ref for the file tree container
   let fileTreeContainer = $state(null);
@@ -181,37 +201,118 @@
   let audioFilesInFolder = $derived(getAudioFilesInFolder());
 
   // ========== DRAG AND DROP HANDLERS ==========
+  // Only `dragenter` arms the overlay; `dragover` merely keeps an active drag
+  // alive. Firefox does not always deliver a balanced dragenter/dragleave pair
+  // and does not send dragend for drags that started outside the page, so
+  // counting leaves used to leave `isDragging` on forever (and a stray
+  // dragover kept re-arming it). Every terminal signal (drop, dragend, blur,
+  // Esc, a pointer event) clears it outright, and a watchdog clears it if
+  // dragover stops.
+  let dragWatchdog = null;
+  let lastDragOverAt = 0;
+  // Set right after a drop: Firefox can deliver stray dragenter/dragover
+  // events *after* the drop (notably when the drop target is a folder row),
+  // which re-armed the overlay that had just been cleared.
+  let dropGuardUntil = 0;
+
+  // `DataTransfer.types` is an array in current browsers but was a
+  // DOMStringList (with `contains`, not `includes`) in older Firefox. Never
+  // throw here: an exception in a drag handler skips the state reset and is
+  // exactly how the blur used to get stuck.
+  function hasType(types, type) {
+    if (!types) return false;
+    if (typeof types.includes === "function") return types.includes(type);
+    if (typeof types.contains === "function") return types.contains(type);
+    return Array.from(types).includes(type);
+  }
+
+  function hasFiles(e) {
+    return hasType(e?.dataTransfer?.types, "Files");
+  }
+
+  function resetDragState() {
+    isDragging = false;
+
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+
+    if (dragOverElement) {
+      dragOverElement.classList.remove("drag-target");
+      dragOverElement = null;
+    }
+
+    if (dragWatchdog) {
+      clearInterval(dragWatchdog);
+      dragWatchdog = null;
+    }
+  }
+
+  function startDragWatchdog() {
+    if (dragWatchdog) return;
+    dragWatchdog = setInterval(() => {
+      // dragover is repeated every few hundred milliseconds while a drag is
+      // actually over the page; if it stops, the drag was dropped elsewhere,
+      // cancelled or left the window.
+      if (Date.now() - lastDragOverAt > 1500) resetDragState();
+    }, 300);
+  }
+
+  // The current drag has ended. The short guard keeps late drag events from
+  // the browser from switching the overlay back on.
+  function endDrag() {
+    dropGuardUntil = Date.now() + 1000;
+    resetDragState();
+  }
+
   function handleDragEnter(e) {
     if (isTextDrag) return;
+    if (!hasFiles(e)) return;
+
     e.preventDefault();
     e.stopPropagation();
 
-    // Only treat as external if the drag contains files
-    if (e.dataTransfer.types.includes("Files")) {
-      dragCounter++;
-      if (dragCounter === 1) {
-        isDragging = true;
-      }
-    }
+    // A stray enter right after a drop must not re-arm the overlay. The drop
+    // itself is still allowed (see handleDragOver).
+    if (Date.now() < dropGuardUntil) return;
+    if (isDragging) return;
+
+    lastDragOverAt = Date.now();
+    isDragging = true;
+    startDragWatchdog();
   }
 
   function handleDragOver(e) {
     if (isTextDrag) return;
+
+    // Determine if this is an internal drag (our custom data type present)
+    const types = e.dataTransfer?.types;
+    const isInternal = hasType(types, "application/x-music-player-item");
+    const hasFileDrag = hasType(types, "Files");
+
+    // Ignore anything that is neither an internal move nor a file upload
+    if (!isInternal && !hasFileDrag) return;
+
     e.preventDefault();
     e.stopPropagation();
 
-    // Determine if this is an internal drag (our custom data type present)
-    const types = e.dataTransfer.types;
-    const isInternal = types.includes("application/x-music-player-item");
-    const hasFiles = types.includes("Files");
+    // Only override the effect for internal moves. For an external file drag
+    // the browser already picked the effect the source allows; forcing "copy"
+    // can make Firefox treat the drop as invalid and keep the drag session
+    // (and the blur) alive.
+    if (e.dataTransfer && isInternal) {
+      e.dataTransfer.dropEffect = "move";
+    }
 
-    // Ignore anything that is neither an internal move nor a file upload
-    if (!isInternal && !hasFiles) return;
+    if (hasFileDrag && isDragging) {
+      // dragover keeps the active drag alive; it must never *arm* the
+      // overlay, or a stray event after the drag ended re-blurs the app.
+      lastDragOverAt = Date.now();
+    }
 
-    // Set drop effect: move for internal, copy for external uploads
-    e.dataTransfer.dropEffect = isInternal ? "move" : "copy";
-
-    const newTarget = e.target.closest("[data-folder-path], [data-file-path]");
+    const newTarget =
+      e.target?.closest?.("[data-folder-path], [data-file-path]") ?? null;
 
     // Only act if the hovered element actually changed
     if (newTarget !== dragOverElement) {
@@ -250,48 +351,33 @@
     e.preventDefault();
     e.stopPropagation();
 
-    // Clear expansion timer
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-      hoverTimer = null;
-    }
+    // Firefox sends dragleave when the pointer merely moves between child
+    // elements, so a leave event is only terminal when the pointer is outside
+    // the viewport. Everything else is caught by the drop/pointer handlers or
+    // the watchdog.
+    const leftWindow =
+      e.clientX < 0 ||
+      e.clientY < 0 ||
+      e.clientX >= window.innerWidth ||
+      e.clientY >= window.innerHeight;
 
-    // Remove drag-target class
-    if (dragOverElement) {
-      dragOverElement.classList.remove("drag-target");
-      dragOverElement = null;
-    }
-
-    // Only decrement counter for file drags
-    if (e.dataTransfer.types.includes("Files")) {
-      dragCounter--;
-      if (dragCounter === 0) {
-        isDragging = false;
-      }
-    }
+    if (leftWindow) endDrag();
   }
 
   function handleDrop(e) {
+    // End the drag state before anything else: the rest of this handler can
+    // throw (missing DataTransfer, unreadable entries) and a stuck blur is
+    // far worse than a dropped upload.
+    resetDragState();
+
     if (isTextDrag) return;
     e.preventDefault();
     e.stopPropagation();
 
-    const types = e.dataTransfer.types;
-    const isInternal = types.includes("application/x-music-player-item");
-    const hasFiles = types.includes("Files");
-    if (!isInternal && !hasFiles) return;
-
-    // Clear the expansion timer
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-      hoverTimer = null;
-    }
-
-    // Remove drag-target class
-    if (dragOverElement) {
-      dragOverElement.classList.remove("drag-target");
-      dragOverElement = null;
-    }
+    const types = e.dataTransfer?.types;
+    const isInternal = hasType(types, "application/x-music-player-item");
+    const hasFileDrag = hasType(types, "Files");
+    if (!isInternal && !hasFileDrag) return;
 
     // --- Check for internal move first ---
     const internalData = e.dataTransfer.getData(
@@ -303,11 +389,11 @@
 
         // Determine target folder (same logic as for uploads)
         let targetFolder = "";
-        const dropTarget = e.target.closest("[data-folder-path]");
+        const dropTarget = e.target?.closest?.("[data-folder-path]") ?? null;
         if (dropTarget) {
           targetFolder = dropTarget.dataset.folderPath;
         } else {
-          const fileTarget = e.target.closest("[data-file-path]");
+          const fileTarget = e.target?.closest?.("[data-file-path]") ?? null;
           if (fileTarget) {
             targetFolder = fileTarget.dataset.folderPath;
           }
@@ -335,251 +421,65 @@
       }
     }
 
-    // --- Existing external upload logic ---
-    if (isUploading) {
-      toast.warning("Upload in progress. Please wait.");
-      return;
-    }
+    // --- External upload ---
+    const items = Array.from(e.dataTransfer.items || []);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (!items.length && !files.length) return;
 
-    // Remove drag-target class
-    if (dragOverElement) {
-      dragOverElement.classList.remove("drag-target");
-      dragOverElement = null;
-    }
-
-    // Reset drag state
-    dragCounter = 0;
-    isDragging = false;
-
-    const items = e.dataTransfer.items;
-    const files = e.dataTransfer.files;
-
-    if (items.length === 0 && files.length === 0) return;
-
-    // Determine target folder path
+    // Determine the target folder: the hovered folder, the parent folder of a
+    // hovered file, or the library root.
     let targetPath = "";
-
-    // Check if dropped on a folder element
-    const dropTarget = e.target.closest("[data-folder-path]");
+    const dropTarget = e.target?.closest?.("[data-folder-path]") ?? null;
     if (dropTarget) {
       targetPath = dropTarget.dataset.folderPath;
     } else {
-      // Check if dropped on a file element (use its parent folder)
-      const fileTarget = e.target.closest("[data-file-path]");
+      const fileTarget = e.target?.closest?.("[data-file-path]") ?? null;
       if (fileTarget) {
-        targetPath = fileTarget.dataset.folderPath;
+        targetPath = fileTarget.dataset.folderPath || "";
       }
     }
 
-    // Handle dropped items
-    handleDroppedItems(items, files, targetPath);
-  }
-
-  async function handleDroppedItems(items, files, targetPath) {
-    if (isUploading) return; // double-check
-    isUploading = true;
-    try {
-      // --- Count total files first ---
-      let totalFiles = 0;
-      if (items.length > 0) {
-        for (let i = 0; i < items.length; i++) {
-          const entry = items[i].webkitGetAsEntry?.();
-          if (entry) {
-            totalFiles += await countFilesInEntry(entry);
-          }
+    // webkitGetAsEntry() is only valid while the drop event is still being
+    // dispatched, so resolve the entries before handing off to the async
+    // upload queue.
+    const entries = items
+      .map((item) => {
+        try {
+          return item.webkitGetAsEntry?.();
+        } catch {
+          return null;
         }
-      } else if (files.length > 0) {
-        // Fallback: count all files (including those with webkitRelativePath)
-        totalFiles = files.length;
-      }
+      })
+      .filter(Boolean);
 
-      // Activate overall progress bar
-      uploadOverallProgress = {
-        total: totalFiles,
-        completed: 0,
-        isActive: true,
-      };
-
-      // --- Proceed with uploads ---
-      const uploads = [];
-
-      if (items.length > 0) {
-        for (let i = 0; i < items.length; i++) {
-          const entry = items[i].webkitGetAsEntry?.();
-          if (entry) {
-            if (entry.isDirectory) {
-              uploads.push(uploadDirectory(entry, targetPath));
-            } else {
-              uploads.push(uploadFileEntry(entry, targetPath));
-            }
-          }
-        }
-      } else if (files.length > 0) {
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          if (file.webkitRelativePath) {
-            const relativePath = file.webkitRelativePath;
-            const pathParts = relativePath.split("/");
-            const fileName = pathParts.pop();
-            const folderPath = pathParts.join("/");
-            const fullTargetPath = targetPath
-              ? `${targetPath}/${folderPath}`
-              : folderPath;
-            uploads.push(uploadFile(file, fullTargetPath, fileName));
-          } else {
-            uploads.push(uploadFile(file, targetPath, file.name));
-          }
-        }
-      }
-
-      try {
-        const results = (await Promise.all(uploads)).flat();
-        const successCount = results.filter((r) => r && r.success).length;
-        const failCount = results.filter((r) => r && !r.success).length;
-
-        if (failCount === 0) {
-          toast.success(`Successfully uploaded ${successCount} file(s)`);
-        } else {
-          toast.warning(
-            `Uploaded ${successCount} file(s), ${failCount} failed`,
-          );
-        }
-
-        await loadFileTree();
-      } catch (error) {
-        toast.error(`Upload failed: ${error.message}`);
-        console.error("Upload error:", error);
-      } finally {
-        // Deactivate progress bar
-        uploadOverallProgress.isActive = false;
-      }
-    } finally {
-      isUploading = false;
-      uploadOverallProgress.isActive = false;
-    }
-  }
-
-  async function uploadDirectory(entry, parentPath) {
-    const dirPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-
-    // Create the directory on the server (skip if dirPath is empty)
-    if (dirPath) {
-      await createDirectory(dirPath);
-    }
-
-    return new Promise((resolve) => {
-      const reader = entry.createReader();
-      const uploadPromises = [];
-
-      function readEntries() {
-        reader.readEntries(async (entries) => {
-          if (entries.length === 0) {
-            // All entries processed – wait for all pending uploads
-            const results = await Promise.all(uploadPromises);
-            resolve(results.flat()); // Flatten nested arrays
-          } else {
-            for (const childEntry of entries) {
-              if (childEntry.isDirectory) {
-                uploadPromises.push(uploadDirectory(childEntry, dirPath));
-              } else {
-                uploadPromises.push(uploadFileEntry(childEntry, dirPath));
-              }
-            }
-            // Continue reading next batch (required by FileSystem API)
-            readEntries();
-          }
-        });
-      }
-
-      readEntries();
+    startDrop({
+      entries,
+      files,
+      targetPath,
+      existing: buildExistingIndex(treeData),
+      conflict: $settings.uploadDuplicates || "skip-identical",
+      onComplete: loadFileTree,
+    }).catch((error) => {
+      console.error("Upload failed:", error);
+      toast.error(`Upload failed: ${error.message}`);
     });
   }
 
-  async function uploadFileEntry(entry, targetPath) {
-    // Convert entry.file() callback to a Promise
-    const file = await new Promise((resolve, reject) => {
-      entry.file(resolve, reject);
+  async function handleFolderInput(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = ""; // allow picking the same folder twice
+    if (!files.length) return;
+
+    startDrop({
+      files,
+      targetPath: selectedFolder || "",
+      existing: buildExistingIndex(treeData),
+      conflict: $settings.uploadDuplicates || "skip-identical",
+      onComplete: loadFileTree,
+    }).catch((error) => {
+      console.error("Upload failed:", error);
+      toast.error(`Upload failed: ${error.message}`);
     });
-    // Upload the file with the correct target path and original filename
-    return uploadFile(file, targetPath, file.name);
-  }
-
-  async function uploadFile(file, targetPath, originalFilename) {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("targetPath", targetPath || "");
-    formData.append("originalFilename", originalFilename || file.name);
-
-    try {
-      const api_url = "/api/upload"; // build
-      const response = await fetch(api_url, {
-        method: "POST",
-        body: formData,
-      });
-
-      const contentType = response.headers.get("content-type");
-      let result;
-      if (contentType && contentType.includes("application/json")) {
-        result = await readJsonResponse(response, "Upload failed");
-      } else {
-        const message = await readApiError(response, "Upload failed");
-        console.error("Non-JSON upload response:", response.status, message);
-        throw new Error(message);
-      }
-
-      if (!response.ok) {
-        throw new Error(result.error || "Upload failed");
-      }
-
-      return {
-        success: true,
-        file: originalFilename || file.name,
-        path: result.path,
-      };
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error(
-        `Failed to upload ${originalFilename || file.name}: ${error.message}`,
-      );
-      return {
-        success: false,
-        file: originalFilename || file.name,
-        error: error.message,
-      };
-    } finally {
-      // Increment overall progress (success or fail)
-      uploadOverallProgress.completed += 1;
-    }
-  }
-
-  async function createDirectory(path) {
-    const api_url = "/api/mkdir"; // build
-    const response = await fetch(api_url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path }),
-    });
-    if (!response.ok) {
-      throw new Error(
-        await readApiError(response, "Could not create the folder"),
-      );
-    }
-    return response.json();
-  }
-
-  // Count total files in a dropped entry (file or directory)
-  async function countFilesInEntry(entry) {
-    if (entry.isFile) return 1;
-    // Directory: recursively count children
-    let count = 0;
-    const reader = entry.createReader();
-    const entries = await new Promise((resolve) => {
-      reader.readEntries(resolve);
-    });
-    for (const child of entries) {
-      count += await countFilesInEntry(child);
-    }
-    return count;
   }
 
   // ========== LOAD FILE TREE ==========
@@ -1043,6 +943,8 @@
 
   function handleDocumentDragEnd() {
     isTextDrag = false;
+    // An internal drag can be released anywhere; never leave the overlay on.
+    endDrag();
   }
 
   onMount(() => {
@@ -1071,15 +973,73 @@
     scrollSelectedIntoView();
 
     checkVersion();
+    loadUploadLimit();
+
+    // There is no resume yet, so warn before a reload drops the queue.
+    const handleBeforeUnload = (event) => {
+      if (!isUploading) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     document.addEventListener("dragstart", handleDocumentDragStart);
     document.addEventListener("dragend", handleDocumentDragEnd);
 
+    // Drag state is also reset from capture-phase window listeners: a child
+    // handler that calls stopPropagation() (or throws) can no longer keep the
+    // overlay on. Capture also runs before the container's own drop handler,
+    // so the overlay is already gone while the upload is being set up.
+    const handleWindowDragOverCapture = (event) => {
+      if (hasFiles(event)) event.preventDefault();
+    };
+    const handleWindowDropCapture = (event) => {
+      if (hasFiles(event)) event.preventDefault();
+      endDrag();
+    };
+    const handleWindowDragEnd = () => endDrag();
+    const handleWindowBlur = () => resetDragState();
+    const handleWindowKeyDown = (event) => {
+      // Esc cancels a native drag; Firefox may not send dragleave for it.
+      if (event.key === "Escape" && isDragging) endDrag();
+    };
+    const handleWindowPointer = (event) => {
+      if (!isDragging) return;
+      // A pointerdown means the previous drag session is definitely over.
+      // While a native drag is running the browser suppresses mouse/pointer
+      // events, so one arriving with no button held is also terminal.
+      if (event.type === "pointerdown" || event.buttons === 0) endDrag();
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) resetDragState();
+    };
+
+    window.addEventListener("dragover", handleWindowDragOverCapture, true);
+    window.addEventListener("drop", handleWindowDropCapture, true);
+    window.addEventListener("dragend", handleWindowDragEnd, true);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("keydown", handleWindowKeyDown, true);
+    window.addEventListener("pointerdown", handleWindowPointer, true);
+    window.addEventListener("pointerup", handleWindowPointer, true);
+    window.addEventListener("pointermove", handleWindowPointer, true);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       window.fetch = originalFetch; // Restore original fetch
       window.removeEventListener("refreshFileTree", loadFileTree);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("dragstart", handleDocumentDragStart);
       document.removeEventListener("dragend", handleDocumentDragEnd);
+      window.removeEventListener("dragover", handleWindowDragOverCapture, true);
+      window.removeEventListener("drop", handleWindowDropCapture, true);
+      window.removeEventListener("dragend", handleWindowDragEnd, true);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("keydown", handleWindowKeyDown, true);
+      window.removeEventListener("pointerdown", handleWindowPointer, true);
+      window.removeEventListener("pointerup", handleWindowPointer, true);
+      window.removeEventListener("pointermove", handleWindowPointer, true);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      resetDragState();
     };
   });
 
@@ -1191,19 +1151,20 @@
       </button>
     </div>
 
-    <!-- Overall upload progress bar -->
-    {#if uploadOverallProgress.isActive}
+    <!-- Byte progress bar for uploads -->
+    {#if showProgressBar}
       <div
         class="upload-progress-bar"
-        style="width: {uploadOverallProgress.total > 0
-          ? (uploadOverallProgress.completed / uploadOverallProgress.total) *
-            100
-          : 0}%;"
+        class:indeterminate={$upload.phase === "preparing" ||
+          $upload.phase === "refreshing" ||
+          $upload.totalBytes === 0}
+        style="width: {uploadPercent}%;"
       ></div>
     {/if}
 
     <!-- Toast notifications -->
     <ToastContainer />
+    <UploadTray />
 
     <!-- Main split layout -->
     <div class="split-container" class:blurred={isDragging}>
@@ -1279,6 +1240,35 @@
               </svg>
               <span>New Folder</span>
             </button>
+
+            <!-- Upload folder button -->
+            <button
+              class="create-folder-btn"
+              onclick={() => folderInput?.click()}
+              title="Upload a folder from this computer"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span>Upload</span>
+            </button>
+            <input
+              bind:this={folderInput}
+              type="file"
+              webkitdirectory
+              multiple
+              class="hidden-file-input"
+              onchange={handleFolderInput}
+            />
 
             <!-- Search input -->
             <div class="search-container">

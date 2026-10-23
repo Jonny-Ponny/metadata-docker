@@ -138,6 +138,8 @@ PGID|Group ID for file permissions|1000
 
 Uploads are capped per request, not per library: dragging a 50 GB folder still works as long as each file is under `MAX_UPLOAD_MB`. If a reverse proxy sits in front of the app, make sure its request-body limit is at least as large as this value.
 
+The upload tray shows per-byte progress (GB sent rather than only a file count), can cancel the batch and can retry failed files. A dropped folder is read item by item first (the tray reports how many files and bytes were found so far); that read is cancellable, and cancelling during it sends nothing. After the bytes are saved, the tray shows "Refreshing library…" while `/api/files` rebuilds the tree. Before starting, it checks free space in the library and in the container's temp directory, which holds the spooled request bodies. Windows/macOS junk files (`.DS_Store`, `._*`, `Thumbs.db`, `__MACOSX`, …) are skipped. By default a file that already exists with the same name and size is skipped, so re-dropping a folder only uploads what changed; a file with the same name but a different size is saved as `name (1).ext`. Switch to "Keep both" under Settings → Uploads to always rename the incoming file.
+
 Make sure user/group ID has proper file permissions. The container runs as an unprivileged user by default; set `PUID`/`PGID` to match the owner of your music folder, or set both to `0` to run as root (not recommended).
 
 To avoid storing a plaintext password in `.env`, generate a Werkzeug hash and set `AUTH_PASSWORD_HASH` instead of `AUTH_PASSWORD`:

@@ -10,6 +10,7 @@ import datetime
 import base64
 import re
 import requests
+import tempfile
 import time
 from urllib.parse import quote, urlparse
 from functools import wraps
@@ -28,7 +29,12 @@ from plugin_manager import PluginManager
 from addon_base import EXTRA_INFO_FIELD
 
 log_info("STARTING")
-app = Flask(__name__, static_folder='static', static_url_path='')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, 'static')
+# Flask's built-in static route has the same `/<path>` shape as `serve` below
+# and shadows it. It is disabled so `serve` is the single place that applies
+# cache headers and the SPA fallback.
+app = Flask(__name__, static_folder=None)
 
 # Auth config from environment. Missing or empty credentials never fall back
 # to a known default. Instead, generate temporary random credentials for this
@@ -167,10 +173,89 @@ def _format_size(size):
     return f'{size // (1024 ** 2)} MiB'
 
 
+def _unique_path(path):
+    """Return *path* or the first free "name (n).ext" variant."""
+    base, ext = os.path.splitext(path)
+    counter = 1
+    candidate = path
+    while os.path.exists(candidate):
+        candidate = f'{base} ({counter}){ext}'
+        counter += 1
+    return candidate
+
+
+def _stream_size(file_storage):
+    """Return the size of the uploaded part without consuming it.
+
+    ``Content-Length`` covers the whole multipart body, so it cannot be used
+    to compare an existing file. The parsed part is a seekable spooled file.
+    """
+    stream = getattr(file_storage, 'stream', None)
+    if stream is None:
+        return None
+    try:
+        position = stream.tell()
+        stream.seek(0, os.SEEK_END)
+        size = stream.tell()
+        stream.seek(position)
+        return size
+    except (OSError, AttributeError, ValueError):
+        return None
+
+
+def _save_upload_atomic(file_storage, destination):
+    """Write an upload to a hidden temp file and move it into place.
+
+    An interrupted client, a full disk or a killed process must never leave a
+    truncated track in the library, where ``build_tree`` would list it as a
+    normal file. The hidden name also keeps the temporary file out of the tree
+    while the bytes are still being written.
+    """
+    directory = os.path.dirname(destination) or '.'
+    temp_path = os.path.join(directory, f'.upload-{secrets.token_hex(8)}.part')
+    stream = getattr(file_storage, 'stream', None)
+    if stream is not None:
+        try:
+            stream.seek(0)
+        except (OSError, AttributeError, ValueError):
+            pass
+    try:
+        file_storage.save(temp_path)
+        os.replace(temp_path, destination)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
 # Body limits are per request. Drag-and-drop folder uploads send one request
 # per file, so this caps a single file rather than the whole library.
 MAX_UPLOAD_BYTES = _env_size_mib('MAX_UPLOAD_MB', 4096)
 COVER_UPLOAD_BYTES = 20 * 1024 * 1024
+
+# Upload conflict policy. "skip-identical" leaves an existing file untouched
+# when the incoming file has the same size, so re-dropping a folder is
+# idempotent; anything else gets the usual " (1)" suffix. "keep-both" always
+# creates a new name instead of skipping.
+UPLOAD_CONFLICT_SKIP_IDENTICAL = 'skip-identical'
+UPLOAD_CONFLICT_KEEP_BOTH = 'keep-both'
+UPLOAD_CONFLICTS = frozenset({
+    UPLOAD_CONFLICT_SKIP_IDENTICAL,
+    UPLOAD_CONFLICT_KEEP_BOTH,
+})
+DEFAULT_UPLOAD_CONFLICT = UPLOAD_CONFLICT_SKIP_IDENTICAL
+
+# Folder creation policy. Uploads merge into an existing folder ("merge"),
+# while the New Folder button keeps the previous rename-to-" (1)" behaviour.
+MKDIR_CONFLICT_MERGE = 'merge'
+MKDIR_CONFLICT_RENAME = 'rename'
+MKDIR_CONFLICTS = frozenset({MKDIR_CONFLICT_MERGE, MKDIR_CONFLICT_RENAME})
+DEFAULT_MKDIR_CONFLICT = MKDIR_CONFLICT_RENAME
+
+# Free-space preflight leaves this much headroom in the library.
+STORAGE_HEADROOM_BYTES = 256 * 1024 * 1024
 COVER_UPLOAD_PATHS = frozenset({
     '/api/metadata/picture/file',
     '/api/metadata/picture/folder',
@@ -409,7 +494,9 @@ def get_version():
         'current_version': info['current'],
         'latest_version': info['latest'],
         'update_available': info['update_available'],
-        'git_sha': APP_GIT_SHA
+        'git_sha': APP_GIT_SHA,
+        # Lets the upload UI reject an oversized file before sending it.
+        'max_upload_bytes': MAX_UPLOAD_BYTES
     })
 
 # -------------------------AUTH------------------------- #
@@ -598,6 +685,11 @@ def build_tree(current_path, relative_path):
     try:
         entries = sorted(os.listdir(current_path), key=natural_key)
         for entry in entries:
+            # Uploads are written to a hidden .upload-*.part file and renamed
+            # into place, so a tree reload during a long upload must not list
+            # the temporary file. Other dotfiles stay visible.
+            if entry.startswith('.upload-') and entry.endswith('.part'):
+                continue
             full = os.path.join(current_path, entry)
             rel = os.path.join(relative_path, entry).replace('\\', '/')
             if os.path.isdir(full):
@@ -893,7 +985,11 @@ def upload_file():
     file = request.files['file']
     target_path = request.form.get('targetPath', '')
     original_filename = request.form.get('originalFilename') or file.filename
-    
+    conflict = (request.form.get('conflict') or DEFAULT_UPLOAD_CONFLICT).strip()
+
+    if conflict not in UPLOAD_CONFLICTS:
+        return jsonify({'error': 'Invalid conflict policy'}), 400
+
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     
@@ -920,65 +1016,143 @@ def upload_file():
     file_path = os.path.join(target_dir, filename)
     if not _is_within(target_dir, file_path):
         return jsonify({'error': 'Invalid filename'}), 400
-    
-    # Handle duplicate filenames
-    counter = 1
-    original_path = file_path
-    while os.path.exists(file_path):
-        name, ext = os.path.splitext(original_path)
-        file_path = f'{name} ({counter}){ext}'
-        counter += 1
-    
+
+    incoming_size = _stream_size(file)
+
+    # Resolve duplicate names according to the conflict policy. Comparing the
+    # size makes re-dropping an unchanged folder a no-op instead of producing
+    # "name (1).ext" copies.
+    skipped = False
+    renamed = False
+    if os.path.exists(file_path):
+        if os.path.isdir(file_path):
+            return jsonify({'error': 'A folder with that name already exists'}), 400
+
+        same_size = (
+            incoming_size is not None
+            and os.path.isfile(file_path)
+            and os.path.getsize(file_path) == incoming_size
+        )
+        if conflict == UPLOAD_CONFLICT_SKIP_IDENTICAL and same_size:
+            skipped = True
+        else:
+            new_path = _unique_path(file_path)
+            renamed = new_path != file_path
+            file_path = new_path
+
+    rel_path = os.path.relpath(file_path, MUSIC_FOLDER).replace('\\', '/')
+
+    if skipped:
+        log_info(f"Skipped identical upload {file_path}")
+        return jsonify({
+            'success': True,
+            'skipped': True,
+            'renamed': False,
+            'path': rel_path,
+            'filename': os.path.basename(file_path),
+            'original_filename': original_filename,
+        })
+
     try:
-        file.save(file_path)
-        
-        # Get relative path for response
-        rel_path = os.path.relpath(file_path, MUSIC_FOLDER)
+        _save_upload_atomic(file, file_path)
 
         log_info(f"Successfully uploaded {file_path}")
         
         return jsonify({
             'success': True,
-            'path': rel_path.replace('\\', '/'),  # Normalize path separators
+            'skipped': False,
+            'renamed': renamed,
+            'path': rel_path,  # Normalize path separators
             'filename': os.path.basename(file_path),
             'original_filename': original_filename
         })
     except Exception as e:
         return _server_error(e)
 
+# GET /api/storage
+# Free space in the library and the temp directory used for upload spooling
+@app.route('/api/storage', methods=['GET'])
+@token_required
+def get_storage():
+    """Report free space so the client can reject an oversized drop early."""
+    try:
+        music = shutil.disk_usage(MUSIC_ROOT)
+        temp = shutil.disk_usage(tempfile.gettempdir())
+    except OSError as e:
+        return _server_error(e)
+
+    return jsonify({
+        'music': {'free': music.free, 'total': music.total},
+        'temp': {'free': temp.free, 'total': temp.total},
+        'headroom': STORAGE_HEADROOM_BYTES,
+    })
+
 # POST /api/mkdir
 # Create a new directory
 @app.route('/api/mkdir', methods=['POST'])
 @token_required
 def create_directory():
-    """Create a new directory. If the path already exists, generate a unique name."""
-    data = request.get_json()
+    """Create a new directory.
+
+    ``conflict="rename"`` (the default, used by the New Folder button) appends
+    " (n)" to an existing name. ``conflict="merge"`` returns the existing
+    folder so an upload writes into it instead of creating a stray copy.
+    """
+    data = request.get_json(silent=True) or {}
     desired_path = data.get('path', '')
+    conflict = (data.get('conflict') or DEFAULT_MKDIR_CONFLICT).strip()
     if not desired_path:
         return jsonify({'error': 'No path provided'}), 400
+    if conflict not in MKDIR_CONFLICTS:
+        return jsonify({'error': 'Invalid conflict policy'}), 400
 
     try:
         full_path = safe_path(desired_path)
-        # If it exists, append a number in parentheses until a free name is found
-        if os.path.exists(full_path):
-            base = full_path
-            counter = 1
-            while os.path.exists(full_path):
-                full_path = f'{base} ({counter})'
-                counter += 1
 
-        os.makedirs(full_path, exist_ok=False)  # now it definitely doesn't exist
+        if conflict == MKDIR_CONFLICT_MERGE:
+            # Idempotent by design: concurrent uploads of the same new folder
+            # all call this route. A "does it exist?" check followed by a
+            # non-exclusive makedirs would race - the second worker sees no
+            # folder, then gets FileExistsError - which surfaced as
+            # "The destination already exists." on a brand-new folder.
+            existed = os.path.isdir(full_path)
+            try:
+                os.makedirs(full_path, exist_ok=True)
+            except FileExistsError:
+                # A file (not a folder) occupies the name.
+                return jsonify({'error': 'A file with that name already exists'}), 400
+            except NotADirectoryError:
+                return jsonify({'error': 'A file with that name already exists'}), 400
+            if not os.path.isdir(full_path):
+                return jsonify({'error': 'A file with that name already exists'}), 400
+            created = not existed
+        else:
+            # New Folder button: keep the historical rename-to-" (1)" policy,
+            # but retry if another request claims the name between the free
+            # name search and the actual creation.
+            created = True
+            if os.path.exists(full_path):
+                full_path = _unique_path(full_path)
+            while True:
+                try:
+                    os.makedirs(full_path, exist_ok=False)
+                    break
+                except FileExistsError:
+                    full_path = _unique_path(full_path)
+
         rel_path = os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/')
 
-        log_info(f"Created new directory {full_path}")
+        log_info(
+            f"{'Created new directory' if created else 'Reused directory'} {full_path}"
+        )
 
-        return jsonify({'success': True, 'path': rel_path})
+        return jsonify({'success': True, 'path': rel_path, 'created': created})
 
     except PermissionError as e:
         return _permission_error(e)
     except Exception as e:
         return _server_error(e)
-    
+
 # POST /api/rename
 # Rename a file or directory
 @app.route('/api/rename', methods=['POST'])
@@ -2318,9 +2492,31 @@ def fetch_album_metadata(fetcher_id, album_id):
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    if path and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    return send_from_directory(app.static_folder, 'index.html')
+    # Unknown API routes are never the SPA: a JSON parse error in the browser
+    # would be more confusing than a clear 404.
+    if path.startswith('api/'):
+        return jsonify({'success': False, 'error': 'Not found'}), 404
+
+    if path and os.path.isfile(os.path.join(STATIC_DIR, path)):
+        response = send_from_directory(STATIC_DIR, path)
+        # Vite fingerprints the files under assets/, so a given name never
+        # changes; everything else is revalidated.
+        if path.startswith('assets/'):
+            response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        else:
+            response.headers['Cache-Control'] = 'no-cache'
+        return response
+
+    # A missing hashed asset must not fall back to HTML; the browser would
+    # report a MIME-type error instead of a missing file.
+    if path.startswith('assets/'):
+        return '', 404
+
+    response = send_from_directory(STATIC_DIR, 'index.html')
+    # index.html references hashed asset names. If it is cached, a rebuilt
+    # image keeps loading the previous JS bundle after an update.
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=DEBUG)

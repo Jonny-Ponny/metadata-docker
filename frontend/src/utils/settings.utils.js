@@ -50,6 +50,7 @@ const defaultSettings = {
     enablePlayer: true,                                          // Player enabled by default
     overviewFields: [...OVERVIEW_FIELD_NAMES],                   // All fields selected by default
     recursiveOverview: false,                                    // Recursive overview flag
+    uploadDuplicates: "skip-identical",                          // Uploads: skip-identical | keep-both
     ...defaultColors,                                            // Color defaults
 };
 

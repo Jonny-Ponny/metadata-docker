@@ -293,6 +293,26 @@ body.dark .retry-btn:hover {
   pointer-events: none;
 }
 
+.upload-progress-bar.indeterminate {
+  opacity: 0.5;
+  animation: upload-bar-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes upload-bar-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+/* Hidden folder picker used by the Upload button */
+.hidden-file-input {
+  display: none;
+}
+
 /* Drag target highlight for folders */
 .drag-target {
   outline: 2px solid var(--color-primary) !important;

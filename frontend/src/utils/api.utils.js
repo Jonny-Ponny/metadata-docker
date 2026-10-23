@@ -13,7 +13,7 @@ function withStatus(fallback, status) {
  * Proxies and crashes can still return HTML or plain text, so markup and
  * oversized bodies are ignored in favour of the caller's fallback.
  */
-function messageFromBody(body) {
+export function messageFromBody(body) {
   const text = (body || "").trim();
   if (!text) return "";
 
@@ -38,6 +38,16 @@ function messageFromBody(body) {
   if (text.startsWith("<")) return "";
   if (text.length > MAX_PLAIN_TEXT_LENGTH) return "";
   return text;
+}
+
+/**
+ * Build a readable message from a raw response body and status code.
+ *
+ * XHR responses do not produce a `Response` object, so uploads need the same
+ * parsing that `readApiError` applies to fetch responses.
+ */
+export function formatApiErrorMessage(body, fallback = "Request failed", status) {
+  return messageFromBody(body) || withStatus(fallback, status);
 }
 
 /**

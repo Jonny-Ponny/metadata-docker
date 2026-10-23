@@ -5,6 +5,7 @@ export * from "../stores/theme.store";
 export * from "../stores/toast.store";
 export * from "../stores/context.store";
 export * from "../stores/auth.store";
+export * from "../stores/upload.store";
 
 // utils
 export * from "./timestamp.utils";
@@ -20,3 +21,4 @@ export * from "./color.utils"
 export * from "./favicon.utils"
 export * from "./preview.utils";
 export * from "./api.utils";
+export * from "./upload.utils";
