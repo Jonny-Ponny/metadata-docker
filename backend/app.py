@@ -97,8 +97,25 @@ if not AUTH_PASSWORD_HASH and (
 ):
     log_warning('AUTH_PASSWORD is weak or matches the username. Set a strong password before exposing the app.')
 
-TOKEN_EXPIRE_HOURS = int(os.getenv('TOKEN_EXPIRE_HOURS')) if os.getenv('TOKEN_EXPIRE_HOURS') else 12
-TOKEN_EXPIRE_HOURS = TOKEN_EXPIRE_HOURS if TOKEN_EXPIRE_HOURS > 0 else 12
+def _env_int(name, default, minimum=1, unit=''):
+    """Read an integer >= *minimum* from the environment, or use *default*."""
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+
+    if value < minimum:
+        suffix = f' {unit}' if unit else ''
+        log_warning(f'Invalid {name}={raw!r}; using {default}{suffix}')
+        return default
+    return value
+
+
+TOKEN_EXPIRE_HOURS = _env_int('TOKEN_EXPIRE_HOURS', 12)
 
 JWT_SECRET_KEY = os.urandom(24).hex()
 
@@ -145,25 +162,13 @@ def add_security_headers(response):
     return response
 
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
-MUSIC_FOLDER = os.getenv('MUSIC_FOLDER', '/music')
+MUSIC_FOLDER = os.getenv('MUSIC_FOLDER') or '/music'
 MUSIC_ROOT = os.path.abspath(MUSIC_FOLDER)
 
 
 def _env_size_mib(name, default_mib):
     """Read a positive size in MiB from the environment."""
-    raw = os.getenv(name)
-    if raw is None or not raw.strip():
-        return default_mib * 1024 * 1024
-
-    try:
-        value = int(raw)
-    except ValueError:
-        value = 0
-
-    if value <= 0:
-        log_warning(f'Invalid {name}={raw!r}; using {default_mib} MiB')
-        return default_mib * 1024 * 1024
-    return value * 1024 * 1024
+    return _env_int(name, default_mib, unit='MiB') * 1024 * 1024
 
 
 def _format_size(size):
@@ -203,15 +208,76 @@ def _stream_size(file_storage):
         return None
 
 
-def _save_upload_atomic(file_storage, destination):
-    """Write an upload to a hidden temp file and move it into place.
+# Filesystems without hard-link support fall back to an exclusive create.
+_HARDLINK_UNSUPPORTED = frozenset({
+    errno.EPERM,
+    errno.EACCES,
+    errno.EMLINK,
+    errno.ENOSYS,
+    errno.EOPNOTSUPP,
+    errno.ENOTSUP,
+})
 
-    An interrupted client, a full disk or a killed process must never leave a
-    truncated track in the library, where ``build_tree`` would list it as a
-    normal file. The hidden name also keeps the temporary file out of the tree
-    while the bytes are still being written.
+
+def _claim_upload(temp_path, destination):
+    """Give *temp_path* the name *destination* without replacing anything.
+
+    ``os.replace()`` overwrites an existing destination, so two uploads that
+    picked the same free name would lose one of the files. ``os.link()`` is
+    atomic and fails with ``EEXIST`` instead, which lets the caller try the
+    next name. On filesystems without hard links, the destination is claimed
+    with an exclusive create before the rename.
     """
-    directory = os.path.dirname(destination) or '.'
+    try:
+        os.link(temp_path, destination)
+    except FileExistsError:
+        return False
+    except OSError as error:
+        if error.errno not in _HARDLINK_UNSUPPORTED:
+            raise
+        try:
+            descriptor = os.open(
+                destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644
+            )
+        except FileExistsError:
+            return False
+        os.close(descriptor)
+        try:
+            os.replace(temp_path, destination)
+        except OSError:
+            # Do not leave the zero-byte claim behind if the rename fails.
+            try:
+                os.remove(destination)
+            except OSError:
+                pass
+            raise
+    return True
+
+
+def _same_size(path, size):
+    """Return True when *path* is a file whose size equals *size*."""
+    if size is None:
+        return False
+    try:
+        return os.path.isfile(path) and os.path.getsize(path) == size
+    except OSError:
+        return False
+
+
+def _save_upload_atomic(file_storage, directory, filename, conflict, size=None):
+    """Write an upload to the first free name in *directory*.
+
+    The bytes go to a hidden temp file first, then the destination is claimed
+    atomically, so an interrupted client, a full disk or a killed process
+    never leaves a truncated track in the library (where ``build_tree`` would
+    list it as a normal file) and two concurrent uploads of the same name
+    cannot overwrite each other.
+
+    Returns ``(path, skipped)``. Under the "skip-identical" policy, a
+    destination that already holds a file of the same size is reported as
+    skipped even when it appeared after the initial existence check.
+    """
+    base, ext = os.path.splitext(filename)
     temp_path = os.path.join(directory, f'.upload-{secrets.token_hex(8)}.part')
     stream = getattr(file_storage, 'stream', None)
     if stream is not None:
@@ -221,7 +287,20 @@ def _save_upload_atomic(file_storage, destination):
             pass
     try:
         file_storage.save(temp_path)
-        os.replace(temp_path, destination)
+
+        counter = 0
+        candidate = filename
+        while True:
+            destination = os.path.join(directory, candidate)
+            if counter == 0 and os.path.isdir(destination):
+                raise IsADirectoryError(destination)
+            if _claim_upload(temp_path, destination):
+                return destination, False
+            if counter == 0 and conflict == UPLOAD_CONFLICT_SKIP_IDENTICAL:
+                if _same_size(destination, size):
+                    return destination, True
+            counter += 1
+            candidate = f'{base} ({counter}){ext}'
     finally:
         if os.path.exists(temp_path):
             try:
@@ -234,6 +313,9 @@ def _save_upload_atomic(file_storage, destination):
 # per file, so this caps a single file rather than the whole library.
 MAX_UPLOAD_BYTES = _env_size_mib('MAX_UPLOAD_MB', 4096)
 COVER_UPLOAD_BYTES = 20 * 1024 * 1024
+# Text files (lyrics, notes) are edited in the browser, so keep them small
+# enough to read and write in one request.
+TEXT_MAX_BYTES = 1024 * 1024
 
 # Upload conflict policy. "skip-identical" leaves an existing file untouched
 # when the incoming file has the same size, so re-dropping a folder is
@@ -335,6 +417,38 @@ def _permission_error(exc):
     return jsonify({'error': 'Permission denied while accessing the library.'}), 403
 
 
+def _json_object():
+    """Return ``(data, error_response)`` for a JSON object request body.
+
+    ``request.get_json()`` raises before the route can validate anything when
+    the ``Content-Type`` or the body is wrong, and a JSON list or string then
+    breaks ``data.get()`` with a 500. Every JSON route uses this helper so
+    those cases stay JSON with a 4xx status.
+    """
+    if not request.is_json:
+        return None, (jsonify({
+            'error': 'Request body must be JSON (Content-Type: application/json).'
+        }), 415)
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None, (jsonify({'error': 'Request body must be a JSON object.'}), 400)
+
+    return data, None
+
+
+@app.errorhandler(400)
+def handle_bad_request(error):
+    """Return JSON for malformed requests instead of Flask's HTML page."""
+    return jsonify({'error': 'Invalid request.'}), 400
+
+
+@app.errorhandler(415)
+def handle_unsupported_media_type(error):
+    """Return JSON when a request body has an unsupported content type."""
+    return jsonify({'error': 'Unsupported request body; send JSON.'}), 415
+
+
 @app.errorhandler(500)
 def handle_internal_server_error(error):
     """Return JSON for unhandled errors instead of Flask's HTML page."""
@@ -396,8 +510,7 @@ APP_GIT_SHA = os.getenv('APP_GIT_SHA', 'unknown')
 GITHUB_REPO_OWNER = 'Jonny-Ponny'
 GITHUB_REPO_NAME = 'metadata-docker'
 
-CACHE_TTL_SECONDS = int(os.getenv('CACHE_TTL_SECONDS', '3600'))
-CACHE_TTL_SECONDS = CACHE_TTL_SECONDS if CACHE_TTL_SECONDS > 0 else 3600
+CACHE_TTL_SECONDS = _env_int('CACHE_TTL_SECONDS', 3600)
 
 DISABLE_VERSION_CHECK = os.getenv('DISABLE_VERSION_CHECK', 'False').lower() in ('true', '1', 'yes', 'on')
 
@@ -484,8 +597,6 @@ def get_version_info():
         'latest': _version_cache['latest'],
         'update_available': _version_cache['update_available']
     }
-
-get_version_info()
 
 @app.route('/api/version', methods=['GET'])
 def get_version():
@@ -677,8 +788,15 @@ def login():
 
 # Sort filetree
 def natural_key(text):
-    """Convert text into a list of strings and numbers for natural sorting."""
-    return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', text)]
+    """Convert text into a list of strings and numbers for natural sorting.
+
+    ``str.isdigit()`` is true for characters such as ``²`` that ``int()``
+    rejects, so only ASCII digits are converted (B-10).
+    """
+    return [
+        int(part) if part.isascii() and part.isdigit() else part.lower()
+        for part in re.split(r'(\d+)', text)
+    ]
 
 def build_tree(current_path, relative_path):
     items = []
@@ -692,6 +810,9 @@ def build_tree(current_path, relative_path):
                 continue
             full = os.path.join(current_path, entry)
             rel = os.path.join(relative_path, entry).replace('\\', '/')
+            # An entry can disappear between listdir() and stat() when a file
+            # is deleted or renamed concurrently. Skip it instead of failing
+            # the whole tree with a 500 (B-11).
             if os.path.isdir(full):
                 # Symlinked directories are skipped: following them can escape
                 # MUSIC_ROOT or recurse forever through a cycle. safe_path()
@@ -699,15 +820,18 @@ def build_tree(current_path, relative_path):
                 # not be opened through the API either.
                 if os.path.islink(full):
                     continue
-                children = build_tree(full, rel)
-                stat = os.stat(full)
+                try:
+                    children = build_tree(full, rel)
+                    info = os.stat(full)
+                except OSError:
+                    continue
                 items.append({
                     'name': entry,
                     'type': 'directory',
                     'path': rel,
                     'children': children,
-                    'created': stat.st_ctime,
-                    'modified': stat.st_mtime,
+                    'created': info.st_ctime,
+                    'modified': info.st_mtime,
                     'size': 0
                 })
             elif os.path.isfile(full):
@@ -716,57 +840,57 @@ def build_tree(current_path, relative_path):
                 # points at an arbitrary outside file.
                 if os.path.islink(full) and not _is_within(MUSIC_ROOT, full):
                     continue
+                try:
+                    info = os.stat(full)
+                except OSError:
+                    continue
                 # Check for audio files
                 if is_supported_audio(entry):
-                    stat = os.stat(full)
                     items.append({
                         'name': entry,
                         'type': 'file',
                         'file_type': 'audio',
                         'path': rel,
-                        'size': stat.st_size,
-                        'created': stat.st_ctime,
-                        'modified': stat.st_mtime
+                        'size': info.st_size,
+                        'created': info.st_ctime,
+                        'modified': info.st_mtime
                     })
                 # Check for image files
                 elif entry.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')):
-                    stat = os.stat(full)
                     items.append({
                         'name': entry,
                         'type': 'file',
                         'file_type': 'image',
                         'path': rel,
-                        'size': stat.st_size,
-                        'created': stat.st_ctime,
-                        'modified': stat.st_mtime
+                        'size': info.st_size,
+                        'created': info.st_ctime,
+                        'modified': info.st_mtime
                     })
 
                 elif entry.lower().endswith(('.txt', '.lrc')):
-                    stat = os.stat(full)
                     items.append({
                         'name': entry,
                         'type': 'file',
                         'file_type': 'text',
                         'path': rel,
-                        'size': stat.st_size,
-                        'created': stat.st_ctime,
-                        'modified': stat.st_mtime
+                        'size': info.st_size,
+                        'created': info.st_ctime,
+                        'modified': info.st_mtime
                     })
                 # Everything else is still listed so it can be inspected,
                 # renamed, downloaded or deleted. The metadata endpoint marks
                 # these files read-only.
                 else:
-                    stat = os.stat(full)
                     items.append({
                         'name': entry,
                         'type': 'file',
                         'file_type': 'other',
                         'path': rel,
-                        'size': stat.st_size,
-                        'created': stat.st_ctime,
-                        'modified': stat.st_mtime
+                        'size': info.st_size,
+                        'created': info.st_ctime,
+                        'modified': info.st_mtime
                     })
-        
+
     except PermissionError:
         pass
 
@@ -786,6 +910,18 @@ def _is_within(base_path, candidate_path):
         return os.path.commonpath([base, candidate]) == base
     except ValueError:
         # Different drives on Windows cannot share a common path.
+        return False
+
+
+def _is_library_root(path):
+    """Return True when *path* resolves to the music library root itself.
+
+    ``safe_path()`` maps ``""``, ``"."`` and ``"/"`` to the root. Removing that
+    tree, or deriving a sibling name from it, would act outside the library.
+    """
+    try:
+        return os.path.realpath(path) == os.path.realpath(MUSIC_ROOT)
+    except (OSError, ValueError):
         return False
 
 
@@ -818,9 +954,6 @@ def safe_path(file_path):
     it. Raises ``PermissionError`` when the resolved path would escape
     ``MUSIC_FOLDER``.
     """
-    if not MUSIC_FOLDER:
-        return file_path
-
     if file_path is None or '\0' in str(file_path):
         raise AccessDenied('Invalid path.')
 
@@ -892,7 +1025,9 @@ def get_metadata():
 @app.route('/api/metadata/file', methods=['POST'])
 @token_required
 def update_single_file():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     file_path = data.get('path')
     field = data.get('field')
     value = data.get('value')
@@ -924,7 +1059,9 @@ def update_single_file():
 @app.route('/api/metadata/folder', methods=['POST'])
 @token_required
 def update_folder_files():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     folder_path = data.get('path')
     field = data.get('field')
     value = data.get('value')
@@ -965,6 +1102,8 @@ def serve_audio():
         full_path = safe_path(file_path)
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
+        if not is_supported_audio(full_path):
+            return jsonify({'error': 'Not an audio file'}), 400
         log_info(f'Serving audio: {full_path}')
         return send_file(full_path, mimetype=mime_for(full_path), conditional=True)
     
@@ -1003,8 +1142,6 @@ def upload_file():
     if os.path.exists(target_dir) and not os.path.isdir(target_dir):
         return jsonify({'error': 'Upload target is not a folder'}), 400
 
-    os.makedirs(target_dir, exist_ok=True)
-
     # Keep only the base name - a client-supplied filename must never be able
     # to change the destination directory.
     filename = os.path.basename(str(original_filename).replace('\\', '/'))
@@ -1017,30 +1154,30 @@ def upload_file():
     if not _is_within(target_dir, file_path):
         return jsonify({'error': 'Invalid filename'}), 400
 
+    # Create the target folder only after the name is known to be valid, so a
+    # rejected upload does not leave an empty folder behind.
+    os.makedirs(target_dir, exist_ok=True)
+
     incoming_size = _stream_size(file)
 
-    # Resolve duplicate names according to the conflict policy. Comparing the
-    # size makes re-dropping an unchanged folder a no-op instead of producing
-    # "name (1).ext" copies.
-    skipped = False
-    renamed = False
-    if os.path.exists(file_path):
-        if os.path.isdir(file_path):
-            return jsonify({'error': 'A folder with that name already exists'}), 400
-
-        same_size = (
-            incoming_size is not None
-            and os.path.isfile(file_path)
-            and os.path.getsize(file_path) == incoming_size
+    # Resolve duplicate names and claim the destination in one atomic step.
+    # Comparing the size makes re-dropping an unchanged folder a no-op instead
+    # of producing "name (1).ext" copies.
+    try:
+        file_path, skipped = _save_upload_atomic(
+            file,
+            target_dir,
+            filename,
+            conflict,
+            incoming_size,
         )
-        if conflict == UPLOAD_CONFLICT_SKIP_IDENTICAL and same_size:
-            skipped = True
-        else:
-            new_path = _unique_path(file_path)
-            renamed = new_path != file_path
-            file_path = new_path
+    except IsADirectoryError:
+        return jsonify({'error': 'A folder with that name already exists'}), 400
+    except Exception as e:
+        return _server_error(e)
 
     rel_path = os.path.relpath(file_path, MUSIC_FOLDER).replace('\\', '/')
+    renamed = file_path != os.path.join(target_dir, filename)
 
     if skipped:
         log_info(f"Skipped identical upload {file_path}")
@@ -1053,21 +1190,16 @@ def upload_file():
             'original_filename': original_filename,
         })
 
-    try:
-        _save_upload_atomic(file, file_path)
+    log_info(f"Successfully uploaded {file_path}")
 
-        log_info(f"Successfully uploaded {file_path}")
-        
-        return jsonify({
-            'success': True,
-            'skipped': False,
-            'renamed': renamed,
-            'path': rel_path,  # Normalize path separators
-            'filename': os.path.basename(file_path),
-            'original_filename': original_filename
-        })
-    except Exception as e:
-        return _server_error(e)
+    return jsonify({
+        'success': True,
+        'skipped': False,
+        'renamed': renamed,
+        'path': rel_path,  # Normalize path separators
+        'filename': os.path.basename(file_path),
+        'original_filename': original_filename
+    })
 
 # GET /api/storage
 # Free space in the library and the temp directory used for upload spooling
@@ -1098,7 +1230,9 @@ def create_directory():
     " (n)" to an existing name. ``conflict="merge"`` returns the existing
     folder so an upload writes into it instead of creating a stray copy.
     """
-    data = request.get_json(silent=True) or {}
+    data, error = _json_object()
+    if error:
+        return error
     desired_path = data.get('path', '')
     conflict = (data.get('conflict') or DEFAULT_MKDIR_CONFLICT).strip()
     if not desired_path:
@@ -1108,6 +1242,8 @@ def create_directory():
 
     try:
         full_path = safe_path(desired_path)
+        if _is_library_root(full_path):
+            return jsonify({'error': 'Cannot create the library root'}), 400
 
         if conflict == MKDIR_CONFLICT_MERGE:
             # Idempotent by design: concurrent uploads of the same new folder
@@ -1140,6 +1276,9 @@ def create_directory():
                 except FileExistsError:
                     full_path = _unique_path(full_path)
 
+        if not _is_within(MUSIC_ROOT, full_path):
+            return jsonify({'error': 'Invalid destination'}), 400
+
         rel_path = os.path.relpath(full_path, MUSIC_FOLDER).replace('\\', '/')
 
         log_info(
@@ -1159,7 +1298,9 @@ def create_directory():
 @token_required
 def rename_item():
     """Rename a file or folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     old_path = data.get('oldPath')
     new_name = data.get('newName')   # only the new base name, not full path
 
@@ -1185,6 +1326,16 @@ def rename_item():
         if not _is_within(MUSIC_ROOT, full_new):
             return jsonify({'error': 'Invalid new name'}), 400
 
+        # os.rename() replaces an existing destination on POSIX. Refuse that
+        # unless both names refer to the same item (a no-op rename).
+        if os.path.lexists(full_new) and full_new != full_old:
+            try:
+                same_item = os.path.samefile(full_old, full_new)
+            except OSError:
+                same_item = False
+            if not same_item:
+                return jsonify({'error': 'An item with that name already exists'}), 409
+
         os.rename(full_old, full_new)
 
         log_info(f"Renamed {full_old} to {full_new}")
@@ -1203,7 +1354,9 @@ def rename_item():
 @token_required
 def delete_item():
     """Delete a file or folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
 
     if not path:
@@ -1211,6 +1364,8 @@ def delete_item():
 
     try:
         full_path = safe_path(path)
+        if _is_library_root(full_path):
+            return jsonify({'error': 'Cannot delete the library root'}), 400
         if not os.path.lexists(full_path):
             return jsonify({'error': 'Path not found'}), 404
 
@@ -1236,7 +1391,9 @@ def delete_item():
 @token_required
 def move_item():
     """Move a file or folder to a new destination folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     source = data.get('source')
     destination = data.get('destination')  # destination folder path (empty = root)
 
@@ -1254,7 +1411,7 @@ def move_item():
             if not os.path.isdir(dest_full):
                 return jsonify({'error': 'Destination is not a directory or does not exist'}), 400
         else:
-            dest_full = MUSIC_FOLDER
+            dest_full = MUSIC_ROOT
 
         # New full path: destination + basename of source
         new_full = os.path.join(dest_full, os.path.basename(source_full))
@@ -1263,10 +1420,13 @@ def move_item():
         if not _is_within(MUSIC_ROOT, new_full):
             return jsonify({'error': 'Invalid destination'}), 400
 
-        # If source is a directory, ensure destination is not inside source
-        if os.path.isdir(source_full):
-            if new_full.startswith(source_full + os.sep):
-                return jsonify({'error': 'Cannot move a folder into its own subfolder'}), 400
+        # If source is a directory, ensure destination is not inside source.
+        # realpath containment also catches the same folder reached through a
+        # symlink alias, which a string prefix check would miss.
+        if os.path.isdir(source_full) and _is_within(source_full, dest_full):
+            return jsonify({
+                'error': 'Cannot move a folder into itself or its own subfolder'
+            }), 400
 
         # Handle name conflict
         if os.path.exists(new_full):
@@ -1291,7 +1451,9 @@ def move_item():
 @app.route('/api/copy', methods=['POST'])
 @token_required
 def copy_item():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
 
     if not path:
@@ -1301,6 +1463,9 @@ def copy_item():
         full_path = safe_path(path)
         if not os.path.exists(full_path):
             return jsonify({'error': 'Path not found'}), 404
+
+        if _is_library_root(full_path):
+            return jsonify({'error': 'Cannot copy the library root'}), 400
 
         # File
         if os.path.isfile(full_path):
@@ -1313,6 +1478,8 @@ def copy_item():
                 while os.path.exists(new_name):
                     new_name = f'{base} - Copy({counter}){extension}'
                     counter += 1
+            if not _is_within(MUSIC_ROOT, new_name):
+                return jsonify({'error': 'Invalid destination'}), 400
             shutil.copy2(full_path, new_name)
             
         # Directory
@@ -1324,6 +1491,8 @@ def copy_item():
                 while os.path.exists(new_name):
                     new_name = f'{base} ({counter})'
                     counter += 1
+            if not _is_within(MUSIC_ROOT, new_name):
+                return jsonify({'error': 'Invalid destination'}), 400
             # Preserve symlinks as links. Following them would copy the target
             # from outside the library into the new folder.
             shutil.copytree(full_path, new_name, symlinks=True)
@@ -1372,7 +1541,7 @@ def update_file_picture_endpoint():
             return jsonify({
                 'success': True, 
                 'message': f'Updated cover art for {os.path.basename(file_path)}',
-                'picture': metadata.get('picture')
+                'picture': (metadata or {}).get('picture')
             })
         else:
             return jsonify({'error': 'Failed to update cover art'}), 500
@@ -1387,7 +1556,9 @@ def update_file_picture_endpoint():
 @app.route('/api/metadata/picture/url', methods=['POST'])
 @token_required
 def update_file_picture_from_url_endpoint():
-    data = request.get_json() or {}
+    data, error = _json_object()
+    if error:
+        return error
     image_url = data.get('url')
     file_path = data.get('path')
     
@@ -1398,7 +1569,12 @@ def update_file_picture_from_url_endpoint():
         full_path = safe_path(file_path)
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
-        
+
+        # Check the format before spending a network request: an unsupported
+        # target cannot store a picture and would only produce a 500 later.
+        if not is_supported_audio(full_path):
+            return jsonify({'error': 'Unsupported file format'}), 400
+
         # 1. Fetch the image through the SSRF guard (public http/https only,
         # validated redirects, streamed with a size cap and timeouts).
         user_agent = f'metadata-docker/{APP_VERSION}'
@@ -1412,7 +1588,7 @@ def update_file_picture_from_url_endpoint():
             return jsonify({
                 'success': True, 
                 'message': f'Updated cover art for {os.path.basename(file_path)}',
-                'picture': metadata.get('picture')
+                'picture': (metadata or {}).get('picture')
             })
         return jsonify({'error': 'Failed to update cover art'}), 500
             
@@ -1477,7 +1653,7 @@ def update_folder_pictures_endpoint():
         return jsonify({'error': 'Missing path parameter'}), 400
     
     try:
-        full_path = safe_path(folder_path) if folder_path else MUSIC_FOLDER
+        full_path = safe_path(folder_path)
         if not os.path.isdir(full_path):
             return jsonify({'error': 'Folder not found'}), 404
         
@@ -1506,7 +1682,9 @@ def update_folder_pictures_endpoint():
 @app.route('/api/metadata/folder/current', methods=['POST'])
 @token_required
 def update_folder_files_current_only():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     folder_path = data.get('path')
     field = data.get('field')
     value = data.get('value')
@@ -1551,7 +1729,7 @@ def update_folder_pictures_current_only_endpoint():
         return jsonify({'error': 'Missing path parameter'}), 400
     
     try:
-        full_path = safe_path(folder_path) if folder_path else MUSIC_FOLDER
+        full_path = safe_path(folder_path)
         if not os.path.isdir(full_path):
             return jsonify({'error': 'Folder not found'}), 404
         
@@ -1582,7 +1760,9 @@ def update_folder_pictures_current_only_endpoint():
 @token_required
 def delete_metadata_field():
     """Delete a specific metadata field from a file or all files in a folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
     field = data.get('field')
     recursive = data.get('recursive', False)  # Add recursive flag
@@ -1592,7 +1772,10 @@ def delete_metadata_field():
     
     try:
         full_path = safe_path(path)
-        
+
+        if not os.path.isdir(full_path) and not os.path.isfile(full_path):
+            return jsonify({'error': 'Path not found'}), 404
+
         # Check if it's a folder
         if os.path.isdir(full_path):
             # Delete field from all files in folder
@@ -1629,7 +1812,9 @@ def delete_metadata_field():
 @token_required
 def delete_cover_art():
     """Delete cover art from a file."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     file_path = data.get('path')
     
     if not file_path:
@@ -1655,7 +1840,7 @@ def delete_cover_art():
             return jsonify({
                 'success': True, 
                 'message': f'Deleted cover art from {os.path.basename(file_path)}',
-                'picture': metadata.get('picture')
+                'picture': (metadata or {}).get('picture')
             })
         else:
             return jsonify({'error': 'Failed to delete cover art'}), 500
@@ -1678,7 +1863,9 @@ def serve_image():
         if not os.path.isfile(full_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # Determine mimetype
+        # Determine mimetype. Only the image types listed in the tree are
+        # served; anything else would expose arbitrary library files through a
+        # content-type-free endpoint.
         ext = os.path.splitext(full_path)[1].lower()
         mimetypes = {
             '.jpg': 'image/jpeg',
@@ -1688,7 +1875,9 @@ def serve_image():
             '.bmp': 'image/bmp',
             '.webp': 'image/webp'
         }
-        mimetype = mimetypes.get(ext, 'application/octet-stream')
+        mimetype = mimetypes.get(ext)
+        if mimetype is None:
+            return jsonify({'error': 'Not an image file'}), 400
         
         return send_file(full_path, mimetype=mimetype)
     
@@ -1703,7 +1892,9 @@ def serve_image():
 @token_required
 def save_cover_art_as_file():
     """Extract cover art from audio file and save as cover.jpg in the same folder."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     file_path = data.get('path')
     
     if not file_path:
@@ -1719,25 +1910,30 @@ def save_cover_art_as_file():
         
         metadata = extract_metadata(full_path)
         
-        if not metadata.get('picture'):
+        if not (metadata or {}).get('picture'):
             return jsonify({'error': 'No cover art found in file'}), 404
         
-        # Extract image data from base64
+        # Extract image data from base64. A corrupt tag value must be a clear
+        # 400 rather than an unhandled binascii error.
         picture_data = metadata['picture']
-        if picture_data.startswith('data:image'):
-            # Format: data:image/jpeg;base64,/9j/4AAQ...
-            header, encoded = picture_data.split(',', 1)
-            image_data = base64.b64decode(encoded)
-            
-            # Determine extension from mime type
-            mime_match = re.search(r'image/(\w+)', header)
-            ext = mime_match.group(1) if mime_match else 'jpg'
-            if ext == 'jpeg':
-                ext = 'jpg'
-        else:
-            # Assume it's already base64 without header
-            image_data = base64.b64decode(picture_data)
-            ext = 'jpg'  # default
+        try:
+            if picture_data.startswith('data:image'):
+                # Format: data:image/jpeg;base64,/9j/4AAQ...
+                header, encoded = picture_data.split(',', 1)
+                image_data = base64.b64decode(encoded)
+
+                # Determine extension from mime type
+                mime_match = re.search(r'image/(\w+)', header)
+                ext = mime_match.group(1) if mime_match else 'jpg'
+                if ext == 'jpeg':
+                    ext = 'jpg'
+            else:
+                # Assume it's already base64 without header
+                image_data = base64.b64decode(picture_data)
+                ext = 'jpg'  # default
+        except ValueError:
+            # binascii.Error subclasses ValueError.
+            return jsonify({'error': 'The cover art data is not valid base64'}), 400
         
         # Save to same folder as the audio file
         folder_path = os.path.dirname(full_path)
@@ -1776,6 +1972,7 @@ def get_logs():
     try:
         # Get query parameters
         lines = request.args.get('lines', default=100, type=int)
+        lines = max(1, min(lines, 1000))
         level = request.args.get('level', default=None, type=str)
         search = request.args.get('search', default=None, type=str)
         
@@ -1859,14 +2056,22 @@ def clear_logs():
 @token_required
 def apply_renaming_scheme():
     """Apply a renaming scheme to a folder or file."""
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
     scheme = data.get('scheme')
     is_folder = data.get('isFolder', True)
     replace_spaces = data.get('replaceSpaces', False)
     
-    if not path or not scheme:
+    if not isinstance(path, str) or not path:
         return jsonify({'error': 'Missing path or scheme'}), 400
+    if not isinstance(scheme, str) or not scheme:
+        return jsonify({'error': 'Missing path or scheme'}), 400
+    if not isinstance(is_folder, bool):
+        return jsonify({'error': 'isFolder must be a boolean'}), 400
+    if not isinstance(replace_spaces, bool):
+        return jsonify({'error': 'replaceSpaces must be a boolean'}), 400
     
     try:
         full_path = safe_path(path)
@@ -1986,6 +2191,8 @@ def apply_renaming_scheme():
             
             # Extract metadata from first file
             metadata = extract_metadata(first_audio)
+            if metadata is None:
+                return jsonify({'error': 'Could not read metadata from the audio file'}), 400
             
             try:
                 # Generate new folder name (this will raise ValueError if fields are missing)
@@ -2042,6 +2249,8 @@ def apply_renaming_scheme():
             
             # Extract metadata from the file itself
             metadata = extract_metadata(full_path)
+            if metadata is None:
+                return jsonify({'error': 'Could not read metadata from the audio file'}), 400
             
             try:
                 # Generate new file name (this will raise ValueError if fields are missing)
@@ -2185,7 +2394,9 @@ def _send_download(path, is_folder):
 @token_required
 def create_download_token():
     """Create a short-lived token authorizing one file/folder download."""
-    data = request.get_json(silent=True) or {}
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
     is_folder = bool(data.get('isFolder', False))
 
@@ -2251,7 +2462,9 @@ def download_item_with_token():
 @token_required
 def download_item():
     """Download a file or folder as a ZIP archive."""
-    data = request.get_json(silent=True) or {}
+    data, error = _json_object()
+    if error:
+        return error
     path = data.get('path')
     is_folder = data.get('isFolder', False)
 
@@ -2279,8 +2492,24 @@ def get_text_file():
         if not full_path.lower().endswith(('.txt', '.lrc')):
             return jsonify({'error': 'Not a text file'}), 400
 
-        with open(full_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        try:
+            size = os.path.getsize(full_path)
+        except OSError:
+            size = None
+        if size is not None and size > TEXT_MAX_BYTES:
+            return jsonify({
+                'error': f'The text file is too large. The maximum size is {_format_size(TEXT_MAX_BYTES)}.'
+            }), 413
+
+        # Undecodable bytes must not make the editor fail with a 500; the
+        # replacement character is visible and the file can still be fixed.
+        with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read(TEXT_MAX_BYTES + 1)
+
+        if len(content) > TEXT_MAX_BYTES:
+            return jsonify({
+                'error': f'The text file is too large. The maximum size is {_format_size(TEXT_MAX_BYTES)}.'
+            }), 413
 
         return jsonify({'content': content})
 
@@ -2294,12 +2523,20 @@ def get_text_file():
 @app.route('/api/text/save', methods=['POST'])
 @token_required
 def save_text_file():
-    data = request.get_json()
+    data, error = _json_object()
+    if error:
+        return error
     file_path = data.get('path')
     content = data.get('content')
 
     if not file_path or content is None:
         return jsonify({'error': 'Missing path or content'}), 400
+    if not isinstance(content, str):
+        return jsonify({'error': 'content must be a string'}), 400
+    if len(content.encode('utf-8')) > TEXT_MAX_BYTES:
+        return jsonify({
+            'error': f'The text content is too large. The maximum size is {_format_size(TEXT_MAX_BYTES)}.'
+        }), 413
 
     try:
         full_path = safe_path(file_path)
@@ -2309,8 +2546,20 @@ def save_text_file():
         if not full_path.lower().endswith(('.txt', '.lrc')):
             return jsonify({'error': 'Not a text file'}), 400
 
-        with open(full_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+        # Write to a hidden temp file in the same directory first: a failed
+        # write must not truncate the existing lyrics or notes.
+        directory = os.path.dirname(full_path) or '.'
+        temp_path = os.path.join(directory, f'.upload-{secrets.token_hex(8)}.part')
+        try:
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            os.replace(temp_path, full_path)
+        finally:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
         log_info(f"Updated text file: {full_path}")
         return jsonify({'success': True})
@@ -2361,7 +2610,9 @@ def _addon_github_url(fetcher_cls):
         return ''
 
     parsed = urlparse(raw)
-    if parsed.scheme not in ('http', 'https'):
+    if parsed.scheme != 'https':
+        return ''
+    if parsed.username or parsed.password:
         return ''
     if (parsed.hostname or '').lower() not in ('github.com', 'www.github.com'):
         return ''
@@ -2407,7 +2658,7 @@ def list_addons():
 @token_required
 def search_songs(fetcher_id):
     query = request.args.get('query')
-    limit = request.args.get('limit', 5, type=int)
+    limit = max(1, min(request.args.get('limit', 5, type=int), 50))
 
     if not query:
         return jsonify({"success": False, "error": "Missing 'query' parameter"}), 400
@@ -2448,7 +2699,7 @@ def fetch_song_metadata(fetcher_id, song_id):
 @token_required
 def search_albums(fetcher_id):
     query = request.args.get('query')
-    limit = request.args.get('limit', 5, type=int)
+    limit = max(1, min(request.args.get('limit', 5, type=int), 50))
 
     if not query:
         return jsonify({"success": False, "error": "Missing 'query' parameter"}), 400

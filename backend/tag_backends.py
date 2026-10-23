@@ -133,19 +133,33 @@ def empty_metadata():
 
 
 def detect_image_mime(image_data):
-    """Detect the common cover-art MIME types from their magic bytes."""
+    """Detect the common cover-art MIME types from their magic bytes.
+
+    Returns ``None`` for data that is not a recognised image, so callers can
+    fall back to the supplied MIME type instead of mislabelling arbitrary
+    bytes as JPEG.
+    """
     if image_data.startswith(b'\xff\xd8'):
         return 'image/jpeg'
     if image_data.startswith(b'\x89PNG\r\n\x1a\n'):
         return 'image/png'
-    return 'image/jpeg'
+    if image_data.startswith((b'GIF87a', b'GIF89a')):
+        return 'image/gif'
+    if image_data.startswith(b'BM'):
+        return 'image/bmp'
+    if image_data.startswith(b'RIFF') and image_data[8:12] == b'WEBP':
+        return 'image/webp'
+    return None
 
 
 def resolve_image_mime(image_data, mime_type=None):
-    """Trust a supplied image MIME type, otherwise detect it from the bytes."""
+    """Prefer the MIME type implied by the bytes over the client's claim."""
+    detected = detect_image_mime(image_data)
+    if detected:
+        return detected
     if mime_type and mime_type.startswith('image/'):
         return mime_type
-    return detect_image_mime(image_data)
+    return 'application/octet-stream'
 
 
 def get_tag_text(frame):
@@ -158,10 +172,15 @@ def get_tag_text(frame):
 
 
 def format_sylt_timestamp(timestamp, sample_rate=None):
-    """Convert a SYLT timestamp to LRC ``[MM:SS.ss]`` format."""
+    """Convert a SYLT timestamp to LRC ``[MM:SS.ss]`` format.
+
+    The value is rounded to centiseconds first, so 59.999 seconds becomes
+    ``[01:00.00]`` instead of the invalid ``[00:60.00]``.
+    """
     seconds = timestamp / sample_rate if sample_rate else timestamp / 1000
-    minutes = int(seconds // 60)
-    return f"[{minutes:02d}:{seconds % 60:05.2f}]"
+    centiseconds = int(round(seconds * 100))
+    minutes, remainder = divmod(centiseconds, 6000)
+    return f"[{minutes:02d}:{remainder / 100:05.2f}]"
 
 
 def extract_sylt_text(sylt_frame, sample_rate):
@@ -180,10 +199,16 @@ def extract_sylt_text(sylt_frame, sample_rate):
 
 
 def lrc_to_sylt_events(value):
-    """Convert LRC text using ``[MM:SS.ss]`` timestamps to SYLT events."""
+    """Convert LRC text to SYLT ``(text, milliseconds)`` events.
+
+    Supports the common subset: one or two minute digits, two second digits
+    and an optional fraction of one to three decimal places, for example
+    ``[0:12.34]``, ``[00:12.345]`` or ``[01:02]``. Lines without a leading
+    timestamp are ignored.
+    """
     events = []
     for line in value.split('\n'):
-        match = re.match(r'^\[(\d{2}):(\d{2}\.\d{2})\](.*)', line)
+        match = re.match(r'^\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)\](.*)', line)
         if not match:
             continue
         minutes = int(match.group(1))
