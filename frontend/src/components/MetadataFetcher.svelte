@@ -5,6 +5,7 @@
     getFieldLabel,
     getFieldDescription,
     isAudioFile,
+    readApiError,
   } from "../utils/index.js";
   import CoverPreview from "./CoverPreview.svelte";
 
@@ -471,8 +472,7 @@
       body: JSON.stringify({ path: filePath, field, value }),
     });
     if (!res.ok) {
-      const error = await res.text();
-      throw new Error(`Failed to update ${field}: ${error}`);
+      throw new Error(await readApiError(res, `Failed to update ${field}`));
     }
   }
 

@@ -18,6 +18,7 @@
         formatFileSize,
         isAudioFile,
         getAudioFormatLabel,
+        readApiError,
     } from "../utils/index.js";
 
     let {
@@ -413,8 +414,8 @@
             });
 
             if (!response.ok) {
-                const error = await response.text();
-                throw new Error(error || "Download failed");
+                const error = await readApiError(response, "Download failed");
+                throw new Error(error);
             }
 
             const data = await response.json();

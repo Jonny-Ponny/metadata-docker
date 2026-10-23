@@ -1,4 +1,5 @@
 import os
+import errno
 import shutil
 import re
 import hmac
@@ -140,6 +141,87 @@ def add_security_headers(response):
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes', 'on') # Debug
 MUSIC_FOLDER = os.getenv('MUSIC_FOLDER', '/music')
 MUSIC_ROOT = os.path.abspath(MUSIC_FOLDER)
+
+
+class AccessDenied(PermissionError):
+    """A user-supplied path attempted to leave the music library."""
+
+
+def _public_error_message(exc, fallback):
+    """Map an exception to a short, non-sensitive message and status code.
+
+    Exception details belong in the server log. The client only needs to know
+    which category failed so it can explain the problem: permission, missing
+    file, network, disk capacity, or an unexpected error.
+    """
+    if isinstance(exc, AccessDenied):
+        return str(exc), 403
+    if isinstance(exc, PermissionError):
+        return 'Permission denied while accessing the library.', 403
+    if isinstance(exc, FileNotFoundError):
+        return 'The requested file or folder no longer exists.', 404
+    if isinstance(exc, requests.exceptions.Timeout):
+        return 'The external service did not respond in time.', 504
+    if isinstance(exc, requests.exceptions.RequestException):
+        return 'The external service request failed.', 502
+    if isinstance(exc, OSError):
+        if exc.errno in (errno.EACCES, errno.EPERM):
+            return 'Permission denied while accessing the library.', 403
+        if exc.errno == errno.ENOENT:
+            return 'The requested file or folder no longer exists.', 404
+        if exc.errno == errno.EISDIR:
+            return 'The requested path is a folder, not a file.', 400
+        if exc.errno == errno.ENOTDIR:
+            return 'The requested path is not a folder.', 400
+        if exc.errno == errno.EEXIST:
+            return 'The destination already exists.', 409
+        if exc.errno == errno.ENOSPC:
+            return 'The server is out of disk space.', 500
+        if exc.errno == errno.EROFS:
+            return 'The filesystem is read-only.', 500
+        if exc.errno in (errno.EMFILE, errno.ENFILE):
+            return 'The server is temporarily unable to open more files.', 503
+    return fallback, 500
+
+
+def _server_error(exc, fallback='An unexpected server error occurred.', *, success=None):
+    """Log the real exception and return a generic JSON error response.
+
+    ``success`` is set for endpoints whose response schema includes it (the
+    addon routes). Other routes keep the plain ``{'error': ...}`` shape.
+    """
+    log_error(f'{request.method} {request.path}: {exc.__class__.__name__}: {exc}')
+    message, status = _public_error_message(exc, fallback)
+    payload = {'error': message}
+    if success is not None:
+        payload['success'] = success
+    return jsonify(payload), status
+
+
+def _permission_error(exc):
+    """Return 403 for path denials without exposing operating-system text."""
+    if isinstance(exc, AccessDenied):
+        return jsonify({'error': str(exc)}), 403
+    log_error(f'{request.method} {request.path}: PermissionError: {exc}')
+    return jsonify({'error': 'Permission denied while accessing the library.'}), 403
+
+
+@app.errorhandler(500)
+def handle_internal_server_error(error):
+    """Return JSON for unhandled errors instead of Flask's HTML page."""
+    original = getattr(error, 'original_exception', None)
+    if original is not None:
+        log_error(
+            f'{request.method} {request.path}: Unhandled '
+            f'{original.__class__.__name__}: {original}'
+        )
+    else:
+        log_error(f'{request.method} {request.path}: Unhandled server error')
+    message, status = _public_error_message(
+        original,
+        'An unexpected server error occurred.',
+    )
+    return jsonify({'error': message}), status
 
 log_info(f'Debug set to {DEBUG}')
 log_info(f'PUID set to {PUID}')
@@ -291,7 +373,7 @@ def token_required(f):
                 raise Exception('Invalid user')
         except jwt.ExpiredSignatureError:
             return jsonify({'error': 'Token has expired'}), 401
-        except Exception as e:
+        except Exception:
             return jsonify({'error': 'Token is invalid'}), 401
         
         return f(*args, **kwargs)
@@ -561,13 +643,13 @@ def safe_path(file_path):
         return file_path
 
     if file_path is None or '\0' in str(file_path):
-        raise PermissionError('Access denied: invalid path')
+        raise AccessDenied('Invalid path.')
 
     full_path = os.path.abspath(
         os.path.join(MUSIC_ROOT, str(file_path).lstrip('/'))
     )
     if not _is_within(MUSIC_ROOT, full_path):
-        raise PermissionError('Access denied: path outside base directory')
+        raise AccessDenied('Path is outside the music library.')
     return full_path
 
 # -------------------------API ENDPOINTS------------------------- #
@@ -593,7 +675,7 @@ def list_files():
         tree = build_tree(MUSIC_FOLDER, '')
         return jsonify(tree)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # GET /api/metadata?path=<file_path>&includePicture=<bool>
 # Fetch all metadata for a specific file
@@ -622,9 +704,9 @@ def get_metadata():
         return jsonify(metadata)
 
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/metadata/file
 # Update a single metadata field for one file
@@ -654,9 +736,9 @@ def update_single_file():
             return jsonify({'error': 'Failed to update metadata'}), 500
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/metadata/folder
 # Update a single metadata field for all files in a folder
@@ -688,9 +770,9 @@ def update_folder_files():
         })
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # GET /api/audio?path=<file_path>
 # Fetch audiofile
@@ -708,9 +790,9 @@ def serve_audio():
         return send_file(full_path, mimetype=mime_for(full_path), conditional=True)
     
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/upload
 # Upload file or folder via drag and drop
@@ -733,7 +815,7 @@ def upload_file():
     try:
         target_dir = safe_path(target_path)
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
 
     if os.path.exists(target_dir) and not os.path.isdir(target_dir):
         return jsonify({'error': 'Upload target is not a folder'}), 400
@@ -775,7 +857,7 @@ def upload_file():
             'original_filename': original_filename
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/mkdir
 # Create a new directory
@@ -806,9 +888,9 @@ def create_directory():
         return jsonify({'success': True, 'path': rel_path})
 
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
     
 # POST /api/rename
 # Rename a file or directory
@@ -850,9 +932,9 @@ def rename_item():
         new_rel = os.path.relpath(full_new, MUSIC_FOLDER).replace('\\', '/')
         return jsonify({'success': True, 'newPath': new_rel})
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/delete
 # Delete a file or folder
@@ -883,9 +965,9 @@ def delete_item():
 
         return jsonify({'success': True})
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/move
 # Move a file or folder to a new destination folder
@@ -939,9 +1021,9 @@ def move_item():
         return jsonify({'success': True, 'newPath': new_rel})
 
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
     
 # POST /api/copy
 # Create a copy of file/directory
@@ -989,9 +1071,9 @@ def copy_item():
 
         return jsonify({'success': True})
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/metadata/picture/file
 # Update cover art for a single file
@@ -1035,9 +1117,9 @@ def update_file_picture_endpoint():
             return jsonify({'error': 'Failed to update cover art'}), 500
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/metadata/picture/url
 # Update cover art for a single file using a remote URL
@@ -1078,11 +1160,11 @@ def update_file_picture_from_url_endpoint():
     except UnsafeURLError as e:
         return jsonify({'error': str(e)}), 400
     except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'Failed to download image: {str(e)}'}), 502
+        return _server_error(e, 'Could not download the image from the provided URL.')
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 
 # GET /api/metadata/picture/preview?url=<remote image URL>
@@ -1110,7 +1192,7 @@ def preview_remote_picture():
     except UnsafeURLError as e:
         return jsonify({'error': str(e)}), 400
     except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'Failed to download image: {str(e)}'}), 502
+        return _server_error(e, 'Could not download the image from the provided URL.')
 
     response = Response(image_data, mimetype=mime_type)
     response.headers['Cache-Control'] = 'private, max-age=300'
@@ -1154,9 +1236,9 @@ def update_folder_pictures_endpoint():
         })
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
     
 # POST /api/metadata/folder/current
 # Update a single metadata field for all files in a folder (current folder only, no subfolders)
@@ -1188,9 +1270,9 @@ def update_folder_files_current_only():
         })
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/metadata/picture/folder/current
 # Update cover art for all files in a folder (current folder only, no subfolders)
@@ -1228,9 +1310,9 @@ def update_folder_pictures_current_only_endpoint():
         })
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 
 # POST /api/metadata/field/delete
@@ -1276,9 +1358,9 @@ def delete_metadata_field():
                 return jsonify({'error': 'Failed to delete field'}), 500
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/metadata/picture/delete
 # Delete cover art from a file
@@ -1318,9 +1400,9 @@ def delete_cover_art():
             return jsonify({'error': 'Failed to delete cover art'}), 500
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # GET /api/image
 # Fetch image
@@ -1350,9 +1432,9 @@ def serve_image():
         return send_file(full_path, mimetype=mimetype)
     
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # POST /api/metadata/picture/save-as-file
 # Extract cover art from audio file and save as cover.jpg in the same folder
@@ -1420,9 +1502,9 @@ def save_cover_art_as_file():
         })
         
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # GET /api/logs
 # Get log entries with filtering options
@@ -1491,8 +1573,7 @@ def get_logs():
         })
         
     except Exception as e:
-        log_error(f"Error fetching logs: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e, 'Could not read the logs.')
 
 
 # POST /api/logs/clear
@@ -1508,8 +1589,7 @@ def clear_logs():
             log_info("Logs cleared by user")
         return jsonify({"message": "Logs cleared successfully"})
     except Exception as e:
-        log_error(f"Error clearing logs: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e, 'Could not clear the logs.')
 
 
 # POST /api/apply-renaming-scheme
@@ -1740,11 +1820,9 @@ def apply_renaming_scheme():
             })
             
     except PermissionError as e:
-        log_error(f"Smart rename error: {str(e)}")
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        log_error(f"Smart rename error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e, 'Smart rename failed.')
 
 
 # Download tokens are short-lived so they can be used in a native browser
@@ -1821,10 +1899,9 @@ def _send_download(path, is_folder):
             return jsonify({'error': 'Invalid item type'}), 400
             
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        log_error(f"Download error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e, 'The download could not be completed.')
 
 
 # POST /api/download-token
@@ -1845,10 +1922,9 @@ def create_download_token():
         if not os.path.exists(full_path):
             return jsonify({'error': 'Path not found'}), 404
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        log_error(f'Download token error: {str(e)}')
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e, 'Could not create a download token.')
 
     filename = os.path.basename(os.path.normpath(path)) or 'download'
     if is_folder:
@@ -1934,9 +2010,9 @@ def get_text_file():
         return jsonify({'content': content})
 
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 # Write to text file
 # POST /api/text/save
@@ -1965,9 +2041,9 @@ def save_text_file():
         return jsonify({'success': True})
 
     except PermissionError as e:
-        return jsonify({'error': str(e)}), 403
+        return _permission_error(e)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _server_error(e)
 
 
 
@@ -2073,7 +2149,7 @@ def search_songs(fetcher_id):
     except NotImplementedError:
         return jsonify({"success": False, "error": "Song search not supported by this fetcher"}), 400
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _server_error(e, 'The addon failed to complete the request.', success=False)
 
 @app.route('/api/addons/<fetcher_id>/fetch_song/<song_id>', methods=['GET'])
 @token_required
@@ -2089,7 +2165,7 @@ def fetch_song_metadata(fetcher_id, song_id):
     except NotImplementedError:
         return jsonify({"success": False, "error": "Fetch song metadata not supported"}), 400
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _server_error(e, 'The addon failed to complete the request.', success=False)
 
 
 # Albums
@@ -2114,7 +2190,7 @@ def search_albums(fetcher_id):
     except NotImplementedError:
         return jsonify({"success": False, "error": "Album search not supported by this fetcher"}), 400
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _server_error(e, 'The addon failed to complete the request.', success=False)
 
 @app.route('/api/addons/<fetcher_id>/fetch_album/<album_id>', methods=['GET'])
 @token_required
@@ -2134,7 +2210,7 @@ def fetch_album_metadata(fetcher_id, album_id):
     except NotImplementedError:
         return jsonify({"success": False, "error": "Fetch album metadata not supported"}), 400
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return _server_error(e, 'The addon failed to complete the request.', success=False)
 
 
 # Serve Svelte frontend

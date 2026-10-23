@@ -29,6 +29,8 @@
     settings,
     applyThemeFromSettings,
     isAudioFile,
+    readApiError,
+    readJsonResponse,
   } from "./utils/index.js";
 
   import "./app.css";
@@ -518,13 +520,11 @@
       const contentType = response.headers.get("content-type");
       let result;
       if (contentType && contentType.includes("application/json")) {
-        result = await response.json();
+        result = await readJsonResponse(response, "Upload failed");
       } else {
-        const text = await response.text();
-        console.error("Non-JSON response:", text);
-        throw new Error(
-          `Server returned ${response.status}: ${text.slice(0, 100)}`,
-        );
+        const message = await readApiError(response, "Upload failed");
+        console.error("Non-JSON upload response:", response.status, message);
+        throw new Error(message);
       }
 
       if (!response.ok) {
@@ -560,8 +560,9 @@
       body: JSON.stringify({ path }),
     });
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to create directory ${path}: ${error}`);
+      throw new Error(
+        await readApiError(response, "Could not create the folder"),
+      );
     }
     return response.json();
   }
@@ -589,14 +590,12 @@
       const api_url = "/api/files"; // build
       const res = await fetch(api_url);
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Server error ${res.status}: ${text.slice(0, 100)}`);
+        throw new Error(await readApiError(res, "Could not load the file tree"));
       }
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
-        const text = await res.text();
         throw new Error(
-          `Expected JSON but got ${contentType}: ${text.slice(0, 100)}`,
+          `Expected a JSON response but received ${contentType || "an unknown content type"}`,
         );
       }
       treeData = await res.json();
@@ -637,23 +636,16 @@
       const response = await fetch(url);
 
       if (!response.ok) {
-        const errorText = await response.text();
         throw new Error(
-          `Server returned ${response.status}: ${errorText.slice(0, 100)}`,
+          await readApiError(response, "Could not load the audio file"),
         );
       }
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.startsWith("audio/")) {
-        const text = await response.text();
-        console.error(
-          "Unexpected content type:",
-          contentType,
-          "Response preview:",
-          text.slice(0, 200),
-        );
+        console.error("Unexpected audio content type:", contentType);
         throw new Error(
-          `Expected audio file but got ${contentType || "unknown"}`,
+          `Expected an audio file but received ${contentType || "an unknown content type"}`,
         );
       }
 
@@ -787,8 +779,7 @@
         body: JSON.stringify({ oldPath, newName }),
       });
       if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error);
+        throw new Error(await readApiError(res));
       }
       const data = await res.json();
 
@@ -820,8 +811,7 @@
         body: JSON.stringify({ path }),
       });
       if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error);
+        throw new Error(await readApiError(res));
       }
 
       // Clear selection if the deleted item was selected
@@ -853,8 +843,7 @@
         }),
       });
       if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error);
+        throw new Error(await readApiError(res));
       }
       const data = await res.json();
       toast.success("Moved successfully");
@@ -877,8 +866,7 @@
       });
 
       if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error);
+        throw new Error(await readApiError(res));
       }
 
       const data = await res.json();
@@ -909,8 +897,7 @@
         body: JSON.stringify({ path }),
       });
       if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error);
+        throw new Error(await readApiError(res));
       }
 
       // Clear selection if the item was selected
