@@ -1321,6 +1321,9 @@ def copy_item():
         if not os.path.exists(full_path):
             return jsonify({'error': 'Path not found'}), 404
 
+        if _is_library_root(full_path):
+            return jsonify({'error': 'Cannot copy the library root'}), 400
+
         # File
         if os.path.isfile(full_path):
             filename, file_extension = os.path.splitext(full_path)
@@ -1332,6 +1335,8 @@ def copy_item():
                 while os.path.exists(new_name):
                     new_name = f'{base} - Copy({counter}){extension}'
                     counter += 1
+            if not _is_within(MUSIC_ROOT, new_name):
+                return jsonify({'error': 'Invalid destination'}), 400
             shutil.copy2(full_path, new_name)
             
         # Directory
@@ -1343,6 +1348,8 @@ def copy_item():
                 while os.path.exists(new_name):
                     new_name = f'{base} ({counter})'
                     counter += 1
+            if not _is_within(MUSIC_ROOT, new_name):
+                return jsonify({'error': 'Invalid destination'}), 400
             # Preserve symlinks as links. Following them would copy the target
             # from outside the library into the new folder.
             shutil.copytree(full_path, new_name, symlinks=True)
