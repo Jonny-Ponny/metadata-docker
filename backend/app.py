@@ -1,4 +1,8 @@
 import os
+
+# These imports are re-exports: the test suite and the module-level ``app``
+# entrypoint reach helpers such as ``safe_path`` and ``plugin_manager`` through
+# this module. Route code imports its own dependencies directly.
 from auth import (
     LOGIN_LOCKOUT_SECONDS,
     LOGIN_MAX_ATTEMPTS,
