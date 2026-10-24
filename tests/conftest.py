@@ -81,15 +81,13 @@ def reset_app_state(app_module, monkeypatch):
     request in the single-worker deployment. Without a reset, one test's five
     failed logins or cached version would change the next test's result.
     """
-    with app_module._login_failures_lock:
-        app_module._login_failures.clear()
+    app_module.reset_rate_limiter()
 
     snapshot = dict(app_module._version_cache)
     yield
     app_module._version_cache.clear()
     app_module._version_cache.update(snapshot)
-    with app_module._login_failures_lock:
-        app_module._login_failures.clear()
+    app_module.reset_rate_limiter()
 
 
 @pytest.fixture

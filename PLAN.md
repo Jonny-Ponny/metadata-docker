@@ -2,7 +2,7 @@
 
 Status: **Phase 1 complete. Phase 2 complete** on `main`
 (599 tests green locally and in CI). Phase 3 is in progress on
-`refactor/phase-3-renaming`; steps 1-4 are done.
+`refactor/phase-3-renaming`; steps 1-5 are done.
 
 This file replaces the "Security patches plan" and "Suggested improvements
 (backlog)" sections This file describes what to change, in what order.
