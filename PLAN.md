@@ -2,7 +2,13 @@
 
 Status: **Phase 1 complete. Phase 2 complete** on `main`
 (599 tests green locally and in CI). Phase 3 is in progress on
-`refactor/phase-3-modules`; steps 1-3 are done.
+`refactor/phase-3-renaming`; steps 1-11 are done. `app.py` is a composition
+root with a `create_app()` factory; all API routes live in `backend/routes/`,
+the file-tree helpers live in `library.py`, `metadata_writer.py` funnels every
+single-file tag mutation through one dispatcher, the folder-route pairs share
+one helper each, one registry in `formats.py` owns the image and text type
+lists, and there are no wildcard imports left. Enabling `pytest-xdist` is left
+as a CI follow-up.
 
 This file replaces the "Security patches plan" and "Suggested improvements
 (backlog)" sections This file describes what to change, in what order.

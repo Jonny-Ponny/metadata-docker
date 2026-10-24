@@ -94,11 +94,11 @@ def test_text_read_rejects_oversized_files(
 
 
 def test_log_line_count_is_clamped(
-    client, auth_headers, app_module, tmp_path, monkeypatch
+    client, auth_headers, logs_module, tmp_path, monkeypatch
 ):
     logs = tmp_path / "logs"
     logs.mkdir()
-    monkeypatch.setattr(app_module, "LOG_DIR", logs)
+    monkeypatch.setattr(logs_module, "LOG_DIR", logs)
     log_file = logs / "app.log"
     log_file.write_text(
         "".join(
@@ -116,19 +116,19 @@ def test_log_line_count_is_clamped(
         assert response.get_json()["displayed"] == expected
 
 
-def _log_dir(tmp_path, monkeypatch, app_module, content=None):
+def _log_dir(tmp_path, monkeypatch, logs_module, content=None):
     logs = tmp_path / "logs"
     logs.mkdir()
-    monkeypatch.setattr(app_module, "LOG_DIR", logs)
+    monkeypatch.setattr(logs_module, "LOG_DIR", logs)
     if content is not None:
         (logs / "app.log").write_text(content, encoding="utf-8")
     return logs
 
 
 def test_logs_missing_file_is_an_empty_result(
-    client, auth_headers, app_module, tmp_path, monkeypatch
+    client, auth_headers, logs_module, tmp_path, monkeypatch
 ):
-    _log_dir(tmp_path, monkeypatch, app_module)
+    _log_dir(tmp_path, monkeypatch, logs_module)
 
     response = client.get("/api/logs", headers=auth_headers)
 
@@ -141,12 +141,12 @@ def test_logs_missing_file_is_an_empty_result(
 
 
 def test_logs_filter_by_level_and_search(
-    client, auth_headers, app_module, tmp_path, monkeypatch
+    client, auth_headers, logs_module, tmp_path, monkeypatch
 ):
     _log_dir(
         tmp_path,
         monkeypatch,
-        app_module,
+        logs_module,
         "[2024-01-01 10:00:00] [INFO] Started\n"
         "[2024-01-01 10:00:01] [ERROR] Upload failed\n"
         "[2024-01-01 10:00:02] [INFO] Upload retried\n",
@@ -173,12 +173,12 @@ def test_logs_filter_by_level_and_search(
 
 
 def test_logs_clear_empties_the_file(
-    client, auth_headers, app_module, tmp_path, monkeypatch
+    client, auth_headers, logs_module, tmp_path, monkeypatch
 ):
     logs = _log_dir(
         tmp_path,
         monkeypatch,
-        app_module,
+        logs_module,
         "[2024-01-01 10:00:00] [INFO] Started\n",
     )
 
@@ -193,9 +193,9 @@ def test_logs_clear_empties_the_file(
 
 
 def test_logs_clear_without_a_log_file_succeeds(
-    client, auth_headers, app_module, tmp_path, monkeypatch
+    client, auth_headers, logs_module, tmp_path, monkeypatch
 ):
-    logs = _log_dir(tmp_path, monkeypatch, app_module)
+    logs = _log_dir(tmp_path, monkeypatch, logs_module)
 
     response = client.post("/api/logs/clear", headers=auth_headers)
 

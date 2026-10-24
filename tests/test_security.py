@@ -216,7 +216,7 @@ def test_ssrf_revalidates_redirect_targets(monkeypatch):
 
 
 def test_smart_rename_rejects_dot_names(
-    client, auth_headers, music_root, test_dir, app_module, monkeypatch
+    client, auth_headers, music_root, test_dir, files_module, monkeypatch
 ):
     album = test_dir / "album"
     album.mkdir()
@@ -224,7 +224,7 @@ def test_smart_rename_rejects_dot_names(
     song.write_bytes(b"audio")
 
     monkeypatch.setattr(
-        app_module, "extract_metadata", lambda *args, **kwargs: {"title": ".."}
+        files_module, "extract_metadata", lambda *args, **kwargs: {"title": ".."}
     )
 
     response = client.post(
@@ -257,13 +257,13 @@ def test_smart_rename_rejects_dot_names(
 
 
 def test_smart_rename_cannot_rename_the_library_root(
-    client, auth_headers, music_root, test_dir, app_module, monkeypatch
+    client, auth_headers, music_root, test_dir, files_module, monkeypatch
 ):
     (test_dir / "song.mp3").write_bytes(b"audio")
     generated = f"Escaped-{uuid.uuid4().hex}"
 
     monkeypatch.setattr(
-        app_module,
+        files_module,
         "extract_metadata",
         lambda *args, **kwargs: {"title": generated},
     )
@@ -285,7 +285,7 @@ def test_smart_rename_cannot_rename_the_library_root(
 
 
 def test_smart_rename_still_applies_safe_names(
-    client, auth_headers, music_root, test_dir, app_module, monkeypatch
+    client, auth_headers, music_root, test_dir, files_module, monkeypatch
 ):
     album = test_dir / "album"
     album.mkdir()
@@ -293,7 +293,7 @@ def test_smart_rename_still_applies_safe_names(
     generated = f"Renamed-{uuid.uuid4().hex}"
 
     monkeypatch.setattr(
-        app_module,
+        files_module,
         "extract_metadata",
         lambda *args, **kwargs: {"title": generated},
     )

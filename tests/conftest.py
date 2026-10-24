@@ -52,6 +52,38 @@ def app_module():
 
 
 @pytest.fixture(scope="session")
+def logs_module(app_module):
+    """The blueprint module that owns the log routes."""
+    from routes import logs
+
+    return logs
+
+
+@pytest.fixture(scope="session")
+def files_module(app_module):
+    """The blueprint module that owns listing and file operations."""
+    from routes import files
+
+    return files
+
+
+@pytest.fixture(scope="session")
+def tags_module(app_module):
+    """The blueprint module that owns metadata, cover and media routes."""
+    from routes import tags
+
+    return tags
+
+
+@pytest.fixture(scope="session")
+def system_module(app_module):
+    """The blueprint module that owns the version cache and the health check."""
+    from routes import system
+
+    return system
+
+
+@pytest.fixture(scope="session")
 def music_root(app_module):
     return Path(app_module.MUSIC_ROOT)
 
@@ -81,15 +113,13 @@ def reset_app_state(app_module, monkeypatch):
     request in the single-worker deployment. Without a reset, one test's five
     failed logins or cached version would change the next test's result.
     """
-    with app_module._login_failures_lock:
-        app_module._login_failures.clear()
+    app_module.reset_rate_limiter()
 
     snapshot = dict(app_module._version_cache)
     yield
     app_module._version_cache.clear()
     app_module._version_cache.update(snapshot)
-    with app_module._login_failures_lock:
-        app_module._login_failures.clear()
+    app_module.reset_rate_limiter()
 
 
 @pytest.fixture

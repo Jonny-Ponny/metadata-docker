@@ -82,18 +82,18 @@ def test_import_does_not_call_github_and_the_first_check_is_cached(app_module, t
         ("v1.10.0", "v1.9.0", False),
     ],
 )
-def test_compare_versions_table(app_module, current, pulled, expected):
-    assert app_module._compare_versions(current, pulled) is expected
+def test_compare_versions_table(system_module, current, pulled, expected):
+    assert system_module._compare_versions(current, pulled) is expected
 
 
 def test_disabled_version_check_makes_no_network_call(
-    client, app_module, monkeypatch
+    client, system_module, monkeypatch
 ):
     def fail(*args, **kwargs):
         raise AssertionError("network must not be used")
 
-    monkeypatch.setattr(app_module, "DISABLE_VERSION_CHECK", True)
-    monkeypatch.setattr(app_module.requests, "get", fail)
+    monkeypatch.setattr(system_module, "DISABLE_VERSION_CHECK", True)
+    monkeypatch.setattr(system_module.requests, "get", fail)
 
     response = client.get("/api/version")
 
@@ -103,7 +103,7 @@ def test_disabled_version_check_makes_no_network_call(
     assert body["update_available"] is False
 
 
-def test_expired_cache_is_refreshed_once(app_module, monkeypatch):
+def test_expired_cache_is_refreshed_once(system_module, monkeypatch):
     calls = []
 
     class Response:
@@ -117,15 +117,15 @@ def test_expired_cache_is_refreshed_once(app_module, monkeypatch):
         calls.append(url)
         return Response()
 
-    monkeypatch.setattr(app_module, "DISABLE_VERSION_CHECK", False)
-    monkeypatch.setattr(app_module, "CACHE_TTL_SECONDS", 3600)
-    monkeypatch.setattr(app_module.requests, "get", fake_get)
-    app_module._version_cache.update(
+    monkeypatch.setattr(system_module, "DISABLE_VERSION_CHECK", False)
+    monkeypatch.setattr(system_module, "CACHE_TTL_SECONDS", 3600)
+    monkeypatch.setattr(system_module.requests, "get", fake_get)
+    system_module._version_cache.update(
         {"latest": None, "update_available": False, "timestamp": 0}
     )
 
-    first = app_module.get_version_info()
-    second = app_module.get_version_info()
+    first = system_module.get_version_info()
+    second = system_module.get_version_info()
 
     assert first["latest"] == "v9.9.9"
     assert first["update_available"] is True

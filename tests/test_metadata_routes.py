@@ -204,7 +204,7 @@ def test_upload_cover_stores_the_picture(
 
 
 def test_upload_cover_from_url_uses_the_fetched_image(
-    client, auth_headers, audio_file, music_root, app_module, monkeypatch
+    client, auth_headers, audio_file, music_root, tags_module, monkeypatch
 ):
     song = audio_file(".flac", name="song.flac")
     fetched = []
@@ -213,7 +213,7 @@ def test_upload_cover_from_url_uses_the_fetched_image(
         fetched.append(url)
         return PNG, "image/png"
 
-    monkeypatch.setattr(app_module, "fetch_image", fake_fetch)
+    monkeypatch.setattr(tags_module, "fetch_image", fake_fetch)
 
     response = client.post(
         "/api/metadata/picture/url",
@@ -231,14 +231,14 @@ def test_upload_cover_from_url_uses_the_fetched_image(
 
 
 def test_upload_cover_from_an_unsafe_url_is_rejected(
-    client, auth_headers, audio_file, music_root, app_module, monkeypatch
+    client, auth_headers, audio_file, music_root, tags_module, monkeypatch
 ):
     song = audio_file(".mp3", name="song.mp3")
 
     def unsafe(url, user_agent, **kwargs):
-        raise app_module.UnsafeURLError("URL is not public")
+        raise tags_module.UnsafeURLError("URL is not public")
 
-    monkeypatch.setattr(app_module, "fetch_image", unsafe)
+    monkeypatch.setattr(tags_module, "fetch_image", unsafe)
 
     response = client.post(
         "/api/metadata/picture/url",
@@ -250,9 +250,9 @@ def test_upload_cover_from_an_unsafe_url_is_rejected(
     assert response.get_json()["error"] == "URL is not public"
 
 
-def test_preview_proxies_a_remote_picture(client, auth_headers, app_module, monkeypatch):
+def test_preview_proxies_a_remote_picture(client, auth_headers, tags_module, monkeypatch):
     monkeypatch.setattr(
-        app_module,
+        tags_module,
         "fetch_image",
         lambda url, user_agent, **kwargs: (PNG, "image/png"),
     )
@@ -270,12 +270,12 @@ def test_preview_proxies_a_remote_picture(client, auth_headers, app_module, monk
 
 
 def test_preview_rejects_an_unsafe_url(
-    client, auth_headers, app_module, monkeypatch
+    client, auth_headers, tags_module, monkeypatch
 ):
     def unsafe(url, user_agent, **kwargs):
-        raise app_module.UnsafeURLError("URL is not public")
+        raise tags_module.UnsafeURLError("URL is not public")
 
-    monkeypatch.setattr(app_module, "fetch_image", unsafe)
+    monkeypatch.setattr(tags_module, "fetch_image", unsafe)
 
     response = client.get(
         "/api/metadata/picture/preview",

@@ -176,3 +176,15 @@ def test_public_error_message_maps_network_errors(app_module):
     )
     assert (message, status) == ("The external service request failed.", 502)
 
+
+
+def test_create_app_builds_an_equivalent_application(app_module):
+    """The factory must register the same routes as the module-level app."""
+    other = app_module.create_app({"TESTING": True})
+
+    assert other is not app_module.app
+    assert other.config["TESTING"] is True
+    assert {rule.rule for rule in other.url_map.iter_rules()} == {
+        rule.rule for rule in app_module.app.url_map.iter_rules()
+    }
+    assert other.test_client().get("/api/ping").status_code == 200
