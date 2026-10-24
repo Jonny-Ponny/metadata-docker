@@ -36,10 +36,10 @@ def test_delete_field_from_a_missing_path_returns_404(
 
 
 def test_smart_rename_rejects_unreadable_metadata_for_a_file(
-    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+    client, auth_headers, test_dir, music_root, files_module, monkeypatch
 ):
     song = _make_audio(test_dir)
-    monkeypatch.setattr(app_module, "extract_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(files_module, "extract_metadata", lambda *a, **k: None)
 
     response = client.post(
         "/api/apply-renaming-scheme",
@@ -56,12 +56,12 @@ def test_smart_rename_rejects_unreadable_metadata_for_a_file(
 
 
 def test_smart_rename_rejects_unreadable_metadata_for_a_folder(
-    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+    client, auth_headers, test_dir, music_root, files_module, monkeypatch
 ):
     album = test_dir / "album"
     album.mkdir()
     _make_audio(album)
-    monkeypatch.setattr(app_module, "extract_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(files_module, "extract_metadata", lambda *a, **k: None)
 
     response = client.post(
         "/api/apply-renaming-scheme",

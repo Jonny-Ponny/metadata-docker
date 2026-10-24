@@ -60,6 +60,14 @@ def logs_module(app_module):
 
 
 @pytest.fixture(scope="session")
+def files_module(app_module):
+    """The blueprint module that owns listing and file operations."""
+    from routes import files
+
+    return files
+
+
+@pytest.fixture(scope="session")
 def tags_module(app_module):
     """The blueprint module that owns metadata, cover and media routes."""
     from routes import tags

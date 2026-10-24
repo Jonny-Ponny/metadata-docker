@@ -2,10 +2,10 @@
 
 Status: **Phase 1 complete. Phase 2 complete** on `main`
 (599 tests green locally and in CI). Phase 3 is in progress on
-`refactor/phase-3-renaming`; steps 1-5 are done and step 6 (route
-blueprints) is in progress: `system`, `logs`, `text`, `addons`,
-`downloads` and `tags` have moved, and the file-tree helpers now live in
-`library.py`.
+`refactor/phase-3-renaming`; steps 1-6 are done. `app.py` now only holds
+login/validate, the upload-limit hook, the compatibility wrappers and the SPA
+fallback; all API routes live in `backend/routes/`, and the file-tree helpers
+live in `library.py`.
 
 This file replaces the "Security patches plan" and "Suggested improvements
 (backlog)" sections This file describes what to change, in what order.
