@@ -141,7 +141,7 @@ COVER_UPLOAD_PATHS = frozenset({
     '/api/metadata/picture/folder/current',
 })
 
-APP_VERSION = 'v1.0.5'
+APP_VERSION = 'v1.1.0'
 # Commit the image was built from, set at build time (see Dockerfile). Lets
 # users compare a running container against the build-provenance attestation.
 APP_GIT_SHA = os.getenv('APP_GIT_SHA', 'unknown')
