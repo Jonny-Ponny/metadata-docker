@@ -37,6 +37,89 @@ def _path(value):
     return safe_path(value, MUSIC_ROOT)
 
 
+def _update_folder_field(recursive):
+    """Set one tag on every audio file in a folder, optionally recursive."""
+    data, error = _json_object()
+    if error:
+        return error
+    folder_path = data.get('path')
+    field = data.get('field')
+    value = data.get('value')
+
+    if not folder_path or not field:
+        return jsonify({'error': 'Missing path or field'}), 400
+
+    try:
+        full_path = _path(folder_path)
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+
+        if recursive:
+            results = update_folder_metadata(full_path, field, value)
+            suffix = ''
+        else:
+            results = update_folder_metadata_only_current(full_path, field, value)
+            suffix = ' in current folder'
+
+        return jsonify({
+            'success': True,
+            'updated': results['updated'],
+            'failed': results['failed'],
+            'total': results['total'],
+            'message': f"Updated {results['updated']} of {results['total']} files{suffix}"
+        })
+
+    except PermissionError as e:
+        return _permission_error(e)
+    except Exception as e:
+        return _server_error(e)
+
+
+def _update_folder_cover(recursive):
+    """Set the cover on every audio file in a folder, optionally recursive."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+
+    image_file = request.files['file']
+    folder_path = request.form.get('path')
+
+    if folder_path is None:  # Allow empty string for root
+        return jsonify({'error': 'Missing path parameter'}), 400
+
+    try:
+        full_path = _path(folder_path)
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+
+        image_data = image_file.read()
+        mime_type = image_file.mimetype
+
+        if recursive:
+            results = update_folder_pictures(full_path, image_data, mime_type)
+            suffix = ''
+        else:
+            results = update_folder_pictures_only_current(
+                full_path, image_data, mime_type
+            )
+            suffix = ' in current folder'
+
+        return jsonify({
+            'success': True,
+            'updated': results['updated'],
+            'failed': results['failed'],
+            'total': results['total'],
+            'message': (
+                f"Updated cover art for {results['updated']} of "
+                f"{results['total']} files{suffix}"
+            )
+        })
+
+    except PermissionError as e:
+        return _permission_error(e)
+    except Exception as e:
+        return _server_error(e)
+
+
 # GET /api/metadata?path=<file_path>&includePicture=<bool>
 # Fetch all metadata for a specific file
 @bp.route('/api/metadata', methods=['GET'])
@@ -107,36 +190,7 @@ def update_single_file():
 @bp.route('/api/metadata/folder', methods=['POST'])
 @token_required
 def update_folder_files():
-    data, error = _json_object()
-    if error:
-        return error
-    folder_path = data.get('path')
-    field = data.get('field')
-    value = data.get('value')
-    
-    if not folder_path or not field:
-        return jsonify({'error': 'Missing path or field'}), 400
-    
-    try:
-        full_path = _path(folder_path)
-        if not os.path.isdir(full_path):
-            return jsonify({'error': 'Folder not found'}), 404
-        
-        # Only process supported audio files in the folder
-        results = update_folder_metadata(full_path, field, value)
-        
-        return jsonify({
-            'success': True, 
-            'updated': results['updated'],
-            'failed': results['failed'],
-            'total': results['total'],
-            'message': f"Updated {results['updated']} of {results['total']} files"
-        })
-            
-    except PermissionError as e:
-        return _permission_error(e)
-    except Exception as e:
-        return _server_error(e)
+    return _update_folder_field(recursive=True)
 
 # GET /api/audio?path=<file_path>
 # Fetch audiofile
@@ -298,75 +352,14 @@ def preview_remote_picture():
 @token_required
 def update_folder_pictures_endpoint():
     """Update cover art for all files in a folder."""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No image file provided'}), 400
-    
-    image_file = request.files['file']
-    folder_path = request.form.get('path')
-    
-    if folder_path is None:  # Allow empty string for root
-        return jsonify({'error': 'Missing path parameter'}), 400
-    
-    try:
-        full_path = _path(folder_path)
-        if not os.path.isdir(full_path):
-            return jsonify({'error': 'Folder not found'}), 404
-        
-        # Read image data
-        image_data = image_file.read()
-        mime_type = image_file.mimetype
-        
-        # Update all files in folder
-        results = update_folder_pictures(full_path, image_data, mime_type)
-        
-        return jsonify({
-            'success': True, 
-            'updated': results['updated'],
-            'failed': results['failed'],
-            'total': results['total'],
-            'message': f"Updated cover art for {results['updated']} of {results['total']} files"
-        })
-            
-    except PermissionError as e:
-        return _permission_error(e)
-    except Exception as e:
-        return _server_error(e)
+    return _update_folder_cover(recursive=True)
     
 # POST /api/metadata/folder/current
 # Update a single metadata field for all files in a folder (current folder only, no subfolders)
 @bp.route('/api/metadata/folder/current', methods=['POST'])
 @token_required
 def update_folder_files_current_only():
-    data, error = _json_object()
-    if error:
-        return error
-    folder_path = data.get('path')
-    field = data.get('field')
-    value = data.get('value')
-    
-    if not folder_path or not field:
-        return jsonify({'error': 'Missing path or field'}), 400
-    
-    try:
-        full_path = _path(folder_path)
-        if not os.path.isdir(full_path):
-            return jsonify({'error': 'Folder not found'}), 404
-        
-        # Only process files in the current folder (no recursion)
-        results = update_folder_metadata_only_current(full_path, field, value)
-        
-        return jsonify({
-            'success': True, 
-            'updated': results['updated'],
-            'failed': results['failed'],
-            'total': results['total'],
-            'message': f"Updated {results['updated']} of {results['total']} files in current folder"
-        })
-            
-    except PermissionError as e:
-        return _permission_error(e)
-    except Exception as e:
-        return _server_error(e)
+    return _update_folder_field(recursive=False)
 
 # POST /api/metadata/picture/folder/current
 # Update cover art for all files in a folder (current folder only, no subfolders)
@@ -374,39 +367,7 @@ def update_folder_files_current_only():
 @token_required
 def update_folder_pictures_current_only_endpoint():
     """Update cover art for all files in a folder (current folder only, no subfolders)."""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No image file provided'}), 400
-    
-    image_file = request.files['file']
-    folder_path = request.form.get('path')
-    
-    if folder_path is None:  # Allow empty string for root
-        return jsonify({'error': 'Missing path parameter'}), 400
-    
-    try:
-        full_path = _path(folder_path)
-        if not os.path.isdir(full_path):
-            return jsonify({'error': 'Folder not found'}), 404
-        
-        # Read image data
-        image_data = image_file.read()
-        mime_type = image_file.mimetype
-        
-        # Update all files in current folder only (no recursion)
-        results = update_folder_pictures_only_current(full_path, image_data, mime_type)
-        
-        return jsonify({
-            'success': True, 
-            'updated': results['updated'],
-            'failed': results['failed'],
-            'total': results['total'],
-            'message': f"Updated cover art for {results['updated']} of {results['total']} files in current folder"
-        })
-            
-    except PermissionError as e:
-        return _permission_error(e)
-    except Exception as e:
-        return _server_error(e)
+    return _update_folder_cover(recursive=False)
 
 
 # POST /api/metadata/field/delete
