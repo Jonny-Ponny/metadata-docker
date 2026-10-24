@@ -52,6 +52,14 @@ def app_module():
 
 
 @pytest.fixture(scope="session")
+def system_module(app_module):
+    """The blueprint module that owns the version cache and the health check."""
+    from routes import system
+
+    return system
+
+
+@pytest.fixture(scope="session")
 def music_root(app_module):
     return Path(app_module.MUSIC_ROOT)
 
