@@ -45,6 +45,27 @@ _BY_EXTENSION = {
 
 SUPPORTED_EXTENSIONS = tuple(_BY_EXTENSION)
 
+# The image and text types the tree lists and the API serves. Keeping the MIME
+# map next to the audio registry means `/api/image`, downloads and `build_tree`
+# cannot disagree about which files count as images.
+IMAGE_MIME_TYPES = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.bmp': 'image/bmp',
+    '.webp': 'image/webp',
+}
+
+IMAGE_EXTENSIONS = tuple(IMAGE_MIME_TYPES)
+
+TEXT_EXTENSIONS = ('.txt', '.lrc')
+
+
+def image_mime_for(path):
+    """Return the image MIME type for *path*, or None for a non-image."""
+    return IMAGE_MIME_TYPES.get(get_extension(path))
+
 
 def get_extension(path):
     """Return a lower-case extension including the leading dot."""

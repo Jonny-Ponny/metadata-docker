@@ -23,8 +23,18 @@ def _backend_for_audio(file_path, audio):
     return backend
 
 
-def update_file_metadata(file_path, field, value):
-    """Update a single metadata field in a file."""
+# One dispatcher for every single-file tag mutation, so format support, logging
+# and error handling cannot drift between the public wrappers below.
+_ACTION_ERROR_LABELS = {
+    'update_field': 'updating metadata',
+    'update_picture': 'updating picture',
+    'delete_field': 'deleting field',
+    'delete_cover_art': 'deleting cover art',
+}
+
+
+def _modify(file_path, action, *args):
+    """Apply *action* to one supported audio file; return True on success."""
     if not is_supported_audio(file_path):
         return False
 
@@ -37,86 +47,52 @@ def update_file_metadata(file_path, field, value):
         if backend is None:
             return False
 
-        backend.write_field(audio, field, value)
+        if action == 'update_field':
+            field, value = args
+            backend.write_field(audio, field, value)
+            message = f"Updated {field}"
+        elif action == 'update_picture':
+            image_data, mime_type = args
+            backend.set_picture(audio, image_data, mime_type)
+            message = "Updated cover art"
+        elif action == 'delete_field':
+            (field,) = args
+            backend.delete_field(audio, field)
+            message = f"Deleted {field}"
+        elif action == 'delete_cover_art':
+            backend.delete_picture(audio)
+            message = "Deleted cover art"
+        else:
+            raise ValueError(f"Unknown metadata action: {action}")
+
         backend.save(audio)
-        log_info(f"File: {file_path}. Updated {field}")
+        log_info(f"File: {file_path}. {message}")
         return True
 
     except Exception as e:
-        log_error(f"File: {file_path}. Error updating metadata: {e}")
+        label = _ACTION_ERROR_LABELS.get(action, action)
+        log_error(f"File: {file_path}. Error {label}: {e}")
         return False
+
+
+def update_file_metadata(file_path, field, value):
+    """Update a single metadata field in a file."""
+    return _modify(file_path, 'update_field', field, value)
 
 
 def update_file_picture(file_path, image_data, mime_type=None):
     """Update cover art in a file."""
-    if not is_supported_audio(file_path):
-        return False
-
-    try:
-        audio = _load_audio(file_path)
-        if audio is None:
-            return False
-
-        backend = _backend_for_audio(file_path, audio)
-        if backend is None:
-            return False
-
-        backend.set_picture(audio, image_data, mime_type)
-        backend.save(audio)
-        log_info(f"File: {file_path}. Updated cover art")
-        return True
-
-    except Exception as e:
-        log_error(f"File: {file_path}. Error updating picture: {e}")
-        return False
+    return _modify(file_path, 'update_picture', image_data, mime_type)
 
 
 def delete_metadata_field(file_path, field):
     """Delete a specific metadata field from a file."""
-    if not is_supported_audio(file_path):
-        return False
-
-    try:
-        audio = _load_audio(file_path)
-        if audio is None:
-            return False
-
-        backend = _backend_for_audio(file_path, audio)
-        if backend is None:
-            return False
-
-        backend.delete_field(audio, field)
-        backend.save(audio)
-        log_info(f"File: {file_path}. Deleted {field}")
-        return True
-
-    except Exception as e:
-        log_error(f"File: {file_path}. Error deleting field: {e}")
-        return False
+    return _modify(file_path, 'delete_field', field)
 
 
 def delete_cover_art(file_path):
     """Delete cover art from a file."""
-    if not is_supported_audio(file_path):
-        return False
-
-    try:
-        audio = _load_audio(file_path)
-        if audio is None:
-            return False
-
-        backend = _backend_for_audio(file_path, audio)
-        if backend is None:
-            return False
-
-        backend.delete_picture(audio)
-        backend.save(audio)
-        log_info(f"File: {file_path}. Deleted cover art")
-        return True
-
-    except Exception as e:
-        log_error(f"File: {file_path}. Error deleting cover art: {e}")
-        return False
+    return _modify(file_path, 'delete_cover_art')
 
 
 def _iter_audio_files(folder_path, recursive=True):

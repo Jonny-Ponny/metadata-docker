@@ -113,3 +113,37 @@ def test_missing_or_malformed_authorization_header_is_rejected(
 
     assert response.status_code == 401
     assert response.is_json
+
+
+def test_constant_time_eq_matches_only_identical_strings():
+    import auth
+
+    assert auth._constant_time_eq("abc", "abc") is True
+    assert auth._constant_time_eq("abc", "abd") is False
+    assert auth._constant_time_eq("abc", "abcd") is False
+
+
+def test_password_matches_plain_and_hashed_configuration(monkeypatch):
+    from werkzeug.security import generate_password_hash
+
+    import auth
+
+    monkeypatch.setattr(auth, "AUTH_PASSWORD_HASH", "")
+    assert auth._password_matches("test-password") is True
+    assert auth._password_matches("wrong-password") is False
+
+    monkeypatch.setattr(
+        auth, "AUTH_PASSWORD_HASH", generate_password_hash("hashed-password")
+    )
+    assert auth._password_matches("hashed-password") is True
+    assert auth._password_matches("test-password") is False
+
+
+def test_reset_rate_limiter_forgets_failures(client, app_module):
+    for _ in range(app_module.LOGIN_MAX_ATTEMPTS):
+        _login(client, "wrong-password")
+    assert _login(client, "wrong-password").status_code == 429
+
+    app_module.reset_rate_limiter()
+
+    assert _login(client, "wrong-password").status_code == 401

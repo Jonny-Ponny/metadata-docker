@@ -36,7 +36,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Check Python syntax
-        run: python -m py_compile backend/*.py
+        run: python -m py_compile backend/*.py backend/routes/*.py
 
       - name: Run backend tests
         run: python -m pytest -q

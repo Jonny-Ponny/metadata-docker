@@ -4,10 +4,14 @@ import json
 
 from formats import (
     FORMATS,
+    IMAGE_EXTENSIONS,
+    IMAGE_MIME_TYPES,
     SUPPORTED_EXTENSIONS,
+    TEXT_EXTENSIONS,
     formats_info,
     get_extension,
     get_format,
+    image_mime_for,
     is_supported_audio,
     mime_for,
 )
@@ -80,3 +84,12 @@ def test_formats_info_is_serialisable_json():
     assert {entry["id"] for entry in info} == {
         audio_format.id for audio_format in FORMATS
     }
+
+
+def test_image_and_text_types_share_one_registry():
+    assert IMAGE_EXTENSIONS == tuple(IMAGE_MIME_TYPES)
+    assert image_mime_for("cover.PNG") == "image/png"
+    assert image_mime_for("photo.JPEG") == "image/jpeg"
+    assert image_mime_for("song.mp3") is None
+    assert image_mime_for("notes.txt") is None
+    assert TEXT_EXTENSIONS == (".txt", ".lrc")
