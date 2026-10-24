@@ -2,11 +2,11 @@
 
 Status: **Phase 1 complete. Phase 2 complete** on `main`
 (599 tests green locally and in CI). Phase 3 is in progress on
-`refactor/phase-3-renaming`; steps 1-8 are done. `app.py` is now a
+`refactor/phase-3-renaming`; steps 1-9 are done. `app.py` is now a
 composition root; all API routes live in `backend/routes/`, the file-tree
 helpers live in `library.py`, `metadata_writer.py` funnels every single-file
-tag mutation through one dispatcher, and the two folder-route pairs share one
-helper each.
+tag mutation through one dispatcher, the folder-route pairs share one helper
+each, and one registry in `formats.py` owns the image and text type lists.
 
 This file replaces the "Security patches plan" and "Suggested improvements
 (backlog)" sections This file describes what to change, in what order.

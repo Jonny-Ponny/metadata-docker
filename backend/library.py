@@ -8,11 +8,8 @@ importing the Flask app.
 import os
 import re
 
-from formats import is_supported_audio
+from formats import IMAGE_EXTENSIONS, TEXT_EXTENSIONS, is_supported_audio
 from paths import is_within
-
-IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')
-TEXT_EXTENSIONS = ('.txt', '.lrc')
 
 
 def natural_key(text):

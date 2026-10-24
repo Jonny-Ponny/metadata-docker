@@ -14,7 +14,7 @@ from flask import Blueprint, Response, jsonify, request, send_file
 from auth import TOKEN_SCOPE_DOWNLOAD, token_required
 from config import AUTH_USERNAME, JWT_SECRET_KEY, MUSIC_ROOT
 from errors import _json_object, _permission_error, _server_error
-from formats import mime_for
+from formats import IMAGE_MIME_TYPES, mime_for
 from logger_config import log_info
 from paths import safe_path
 from zip_stream import iter_zip
@@ -22,16 +22,6 @@ from zip_stream import iter_zip
 bp = Blueprint('downloads', __name__)
 
 DOWNLOAD_TOKEN_EXPIRE_SECONDS = 120
-
-_IMAGE_MIMETYPES = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.bmp': 'image/bmp',
-    '.webp': 'image/webp',
-}
-
 
 def _content_disposition(filename):
     """Return a download header that survives non-Latin-1 file names."""
@@ -59,7 +49,7 @@ def _send_download(path, is_folder):
             ext = os.path.splitext(full_path)[1].lower()
             mimetype = mime_for(
                 full_path,
-                default=_IMAGE_MIMETYPES.get(ext, 'application/octet-stream'),
+                default=IMAGE_MIME_TYPES.get(ext, 'application/octet-stream'),
             )
 
             log_info(f'Downloading file: {full_path}')

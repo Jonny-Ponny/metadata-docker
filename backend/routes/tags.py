@@ -14,7 +14,7 @@ from errors import (
     _permission_error,
     _server_error,
 )
-from formats import is_supported_audio, mime_for
+from formats import image_mime_for, is_supported_audio, mime_for
 from logger_config import log_info
 from metadata_extractor import extract_metadata, read_only_metadata
 from metadata_writer import (
@@ -482,16 +482,7 @@ def serve_image():
         # Determine mimetype. Only the image types listed in the tree are
         # served; anything else would expose arbitrary library files through a
         # content-type-free endpoint.
-        ext = os.path.splitext(full_path)[1].lower()
-        mimetypes = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.bmp': 'image/bmp',
-            '.webp': 'image/webp'
-        }
-        mimetype = mimetypes.get(ext)
+        mimetype = image_mime_for(full_path)
         if mimetype is None:
             return jsonify({'error': 'Not an image file'}), 400
         

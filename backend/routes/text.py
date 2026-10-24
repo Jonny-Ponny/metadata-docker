@@ -8,12 +8,11 @@ from flask import Blueprint, jsonify, request
 from auth import token_required
 from config import MUSIC_ROOT, TEXT_MAX_BYTES, format_size
 from errors import _json_object, _permission_error, _server_error
+from formats import TEXT_EXTENSIONS
 from logger_config import log_info
 from paths import safe_path
 
 bp = Blueprint('text', __name__)
-
-TEXT_EXTENSIONS = ('.txt', '.lrc')
 
 
 @bp.route('/api/text', methods=['GET'])
