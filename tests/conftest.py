@@ -60,6 +60,14 @@ def logs_module(app_module):
 
 
 @pytest.fixture(scope="session")
+def tags_module(app_module):
+    """The blueprint module that owns metadata, cover and media routes."""
+    from routes import tags
+
+    return tags
+
+
+@pytest.fixture(scope="session")
 def system_module(app_module):
     """The blueprint module that owns the version cache and the health check."""
     from routes import system

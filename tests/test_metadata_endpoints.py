@@ -94,11 +94,11 @@ def test_smart_rename_rejects_a_non_string_scheme(
 
 
 def test_cover_upload_can_reread_missing_metadata(
-    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
 ):
     song = _make_audio(test_dir)
-    monkeypatch.setattr(app_module, "update_file_picture", lambda *a, **k: True)
-    monkeypatch.setattr(app_module, "extract_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(tags_module, "update_file_picture", lambda *a, **k: True)
+    monkeypatch.setattr(tags_module, "extract_metadata", lambda *a, **k: None)
 
     response = client.post(
         "/api/metadata/picture/file",
@@ -115,14 +115,14 @@ def test_cover_upload_can_reread_missing_metadata(
 
 
 def test_cover_from_url_can_reread_missing_metadata(
-    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
 ):
     song = _make_audio(test_dir)
     monkeypatch.setattr(
-        app_module, "fetch_image", lambda *a, **k: (b"image-bytes", "image/jpeg")
+        tags_module, "fetch_image", lambda *a, **k: (b"image-bytes", "image/jpeg")
     )
-    monkeypatch.setattr(app_module, "update_file_picture", lambda *a, **k: True)
-    monkeypatch.setattr(app_module, "extract_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(tags_module, "update_file_picture", lambda *a, **k: True)
+    monkeypatch.setattr(tags_module, "extract_metadata", lambda *a, **k: None)
 
     response = client.post(
         "/api/metadata/picture/url",
@@ -135,11 +135,11 @@ def test_cover_from_url_can_reread_missing_metadata(
 
 
 def test_delete_cover_can_reread_missing_metadata(
-    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
 ):
     song = _make_audio(test_dir)
     monkeypatch.setattr(metadata_writer, "delete_cover_art", lambda *a, **k: True)
-    monkeypatch.setattr(app_module, "extract_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(tags_module, "extract_metadata", lambda *a, **k: None)
 
     response = client.post(
         "/api/metadata/picture/delete",
@@ -152,13 +152,13 @@ def test_delete_cover_can_reread_missing_metadata(
 
 
 def test_cover_from_url_checks_the_format_before_fetching(
-    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
 ):
     notes = test_dir / "notes.txt"
     notes.write_bytes(b"text")
     calls = []
     monkeypatch.setattr(
-        app_module, "fetch_image", lambda *a, **k: calls.append(a) or (b"", "image/jpeg")
+        tags_module, "fetch_image", lambda *a, **k: calls.append(a) or (b"", "image/jpeg")
     )
 
     response = client.post(
@@ -176,14 +176,14 @@ def test_cover_from_url_checks_the_format_before_fetching(
 
 
 def test_root_folder_cover_uses_the_resolved_library_root(
-    client, auth_headers, app_module, monkeypatch, tmp_path
+    client, auth_headers, tags_module, monkeypatch, tmp_path
 ):
     """A relative library root must not break the root folder routes (B-16)."""
     (tmp_path / "relative-music").mkdir()
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(app_module, "MUSIC_ROOT", "relative-music")
+    monkeypatch.setattr(tags_module, "MUSIC_ROOT", "relative-music")
     monkeypatch.setattr(
-        app_module,
+        tags_module,
         "update_folder_pictures",
         lambda *a, **k: {"updated": 0, "failed": 0, "total": 0},
     )
@@ -202,11 +202,11 @@ def test_root_folder_cover_uses_the_resolved_library_root(
 
 
 def test_save_cover_as_file_rejects_corrupt_base64(
-    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
 ):
     song = _make_audio(test_dir)
     monkeypatch.setattr(
-        app_module,
+        tags_module,
         "extract_metadata",
         lambda *a, **k: {"picture": "data:image/jpeg;base64,a"},
     )
@@ -222,10 +222,10 @@ def test_save_cover_as_file_rejects_corrupt_base64(
 
 
 def test_save_cover_as_file_handles_missing_metadata(
-    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
 ):
     song = _make_audio(test_dir)
-    monkeypatch.setattr(app_module, "extract_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(tags_module, "extract_metadata", lambda *a, **k: None)
 
     response = client.post(
         "/api/metadata/picture/save-as-file",
