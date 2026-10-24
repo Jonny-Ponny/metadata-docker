@@ -7,8 +7,10 @@ group of routes and the helpers only those routes need.
 
 from .logs import bp as logs_bp
 from .system import bp as system_bp
+from .text import bp as text_bp
 
 
 def register_blueprints(app):
     app.register_blueprint(system_bp)
     app.register_blueprint(logs_bp)
+    app.register_blueprint(text_bp)
