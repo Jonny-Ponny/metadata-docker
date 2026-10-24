@@ -1,9 +1,9 @@
 """Environment-driven settings for the backend.
 
 Everything here is read once, at import time. The values are module constants
-rather than an object because the route bodies still import them directly;
-step 10 of the refactor wraps them in settings that ``create_app()`` can build
-per process or per test.
+rather than an object because the route bodies import them directly.
+``create_app()`` accepts an optional config mapping for tests, but it does not
+re-read the environment: changing these values requires a process restart.
 
 Only names that depend on the environment (or on the version we ship) belong in
 this module. Feature constants such as the upload conflict policies stay with

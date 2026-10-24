@@ -1,34 +1,38 @@
 # metadata-docker
 
-A self-hosted web application for editing audio file metadata (MP3/FLAC/OGG/Opus/M4A/WAV/AIFF) and managing audio library with a built-in audio player, synchronized lyrics editor, and file browser. Personal project that started as a way to manage Navidrome library.
+A self-hosted web app for browsing an audio library and
+editing tags (MP3/FLAC/OGG/Opus/M4A/WAV/AIFF) in the browser. It combines a file
+browser, metadata editor, cover-art manager, audio player and
+synchronized-lyrics editor. Personal project to manage a
+Navidrome library, shared for anyone self-hosting a music server or
+maintaining a large local collection.
 
-![Filebrowser and metadata editor](screenshots/image1.png)
-
-App could be useful to anyone selfhosting their own music streaming service like Navidrome or anyone with a large audio library to manage.
+![File browser and metadata editor](screenshots/image1.png)
 
 ## Features
-- Easy setup with docker-compose.yml
-- Metadata Editor - Edit common and custom tags for MP3, FLAC, OGG/Opus, M4A, WAV and AIFF files
-- Cover Art Management - Upload, view, delete, and extract cover art
-- File Management: Upload files/folders via browser or move items within the filetree, delete/rename/copy with context menu operations
-- Batch Operations - Apply metadata changes to entire folders
-- Include/exclude subfolders operations
-- Smart Rename - Rename files/folders based on created scheme and metadata fields
-- Built-in audio player
-- Synced Lyrics Editor - Create and edit LRC format synchronized lyrics
-- Search & Sort - Filter and sort your music library
-- Image Viewer - View cover art and other images
-- Authentication - Simple login protection
-- Log Viewer - Monitor application logs
-- Addon support - Fetch metadata from any source using addons
-- Container healthcheck and non-root execution by default
 
-## Limitations:
-- History is saved with logs, but there is no way to undo changes
+- **Metadata editor** - common and custom tags for MP3, FLAC, OGG/Opus, M4A,
+  WAV and AIFF, single files or whole folders (optionally recursive).
+- **Cover art** - upload, fetch from a URL, view, delete, and extract to
+  `cover.jpg`.
+- **File management** - upload files/folders via drag and drop, move items
+  inside the tree, rename, copy and delete from the context menu.
+- **Smart rename** - build a naming scheme from metadata fields and apply it to
+  files or folders.
+- **Player and lyrics** - built-in audio player plus an LRC editor for synced
+  lyrics (import/export `.lrc`, timestamp sync, offset shifting).
+- **Search and sort** - filter the library, preview images and read application
+  logs in the UI.
+- **Addons** - fetch metadata from external services through Python plugins.
+- **Safe defaults** - login protection, container healthcheck, non-root
+  execution, localhost-only binding and atomic uploads.
 
-## Quickstart
+Known limitation: there is no undo. Changes are applied immediately; the log
+viewer keeps a history of what the app did.
 
-Using docker-compose.yml:
+## Quick start
+
+Using `docker-compose.yml`:
 
 ```yaml
 services:
@@ -42,431 +46,165 @@ services:
       - AUTH_USERNAME=USERNAME                      # Replace this
       - AUTH_PASSWORD=PASSWORD                      # Replace this
       - TOKEN_EXPIRE_HOURS=12                       # Optional
-      - PUID=1000                                   # User(optional)
-      - PGID=1000                                   # Group(optional)
-      - TZ=UTC                                      # Timezone(optional)
+      - PUID=1000                                   # User (optional)
+      - PGID=1000                                   # Group (optional)
+      - TZ=UTC                                      # Timezone (optional)
     volumes:
       - ~/path/to/your/music:/music                 # Library
       - ./logs:/logs                                # Logs
       - ./addons:/app/addons:ro                     # Addons (read-only; trusted code)
-    # Healthcheck is inherited from the image. Uncomment to disable it.
-    #healthcheck:
-    #  disable: true
-```
-Change environment variables according to your preferences
-
-Start the container with:
-
-```docker compose up -d```
-
-Or if using Compose V1:
-
-```docker-compose up -d```
-
-Access the web interface at http://localhost:8888 on the server (or your configured port). The compose file binds to localhost, so for access from other machines see below.
-
-Use your auth credentials from docker-compose.yml, or the temporary credentials printed in the logs if you left them unset.
-
-## Exposing the app safely
-
-The compose file binds the app to `127.0.0.1`, so it is not reachable from other machines by default. For remote access, put a TLS-terminating reverse proxy in front of it instead of exposing the Flask port directly. For example, with Caddy on the same host:
-
-```caddyfile
-metadata.example.com {
-    reverse_proxy 127.0.0.1:8888
-}
 ```
 
-Never expose plain HTTP to the internet: the login password and bearer tokens would travel in clear text. If you deliberately bind to `0.0.0.0` for a trusted LAN, understand that anyone on that network can reach the login page.
-
-Set `AUTH_USERNAME` and `AUTH_PASSWORD` (or `AUTH_PASSWORD_HASH`) explicitly. If either is unset or empty, the app generates a random temporary credential at startup and writes it to the logs (`docker compose logs app` or `./logs/app.log`). Those credentials change on every restart; the app has no user database or setup screen. After five failed logins from one address, login is locked for 15 minutes.
-
-The SPA stores its JWT in `localStorage`, so it is exposed to any XSS. The app sends a restrictive `Content-Security-Policy` and related headers as defense-in-depth, but that does not make `localStorage` equivalent to an `HttpOnly` cookie. Addons run arbitrary Python inside the container with the app user's access to `/music` and `/logs`; only mount addons you trust. The addons folder is mounted read-only, and addon dependency installs run as the unprivileged `PUID`/`PGID` user (or are skipped when running as root).
-
-## Verifying the image
-
-GHCR images are built by GitHub Actions from this repo and get a signed build-provenance attestation, so you can check an image really came from here and not from a manual push.
-
-You need the [GitHub CLI](https://cli.github.com/):
-
-```bash
-docker login ghcr.io   # gh reads the image digest from the registry
-
-gh attestation verify oci://ghcr.io/jonny-ponny/metadata-docker:latest \
-  --repo Jonny-Ponny/metadata-docker \
-  --signer-workflow Jonny-Ponny/metadata-docker/.github/workflows/container-release.yml
-```
-
-For a release tag, add `--source-ref refs/tags/v1.0.4` and use the matching image tag (`1.0.4`). On older `gh` versions, drop `--signer-workflow` and keep `--repo`.
-
-Successful verification means the image was built by this repo's workflow. Anything else (no attestation, another workflow or repo) means it was not.
-
-The commit is also stored on the image and shown in the app.
-
-Tags like `latest` move with every push to `main`; digests don't. To pin the exact image you run, use its digest:
-
-```bash
-docker buildx imagetools inspect ghcr.io/jonny-ponny/metadata-docker:latest
-# Digest: sha256:...
-```
-
-```yaml
-image: ghcr.io/jonny-ponny/metadata-docker@sha256:...
-```
-
-This proves origin, not safety. If you don't trust the maintainer, build it yourself:
-
-```bash
-git clone https://github.com/Jonny-Ponny/metadata-docker.git
-cd metadata-docker
-docker build -t metadata-docker .
-```
-
-See [SECURITY.md](SECURITY.md).
-
-## Environment Variables
-Variable|Description|Default
-|---|---|---|
-DEBUG|Enable debug mode|False
-AUTH_USERNAME|Login username. Generated and logged if empty|random for this run
-AUTH_PASSWORD|Login password. Generated and logged if empty|random for this run
-AUTH_PASSWORD_HASH|Werkzeug password hash, used instead of `AUTH_PASSWORD`|unset
-TOKEN_EXPIRE_HOURS|JWT token expiry|12
-MAX_UPLOAD_MB|Maximum size of a single upload request. Limits a single file. Cover images have a separate 20 MiB cap|4096
-PUID|User ID for file permissions|1000
-PGID|Group ID for file permissions|1000
-
-Uploads are capped per request, not per library: dragging a 50 GB folder still works as long as each file is under `MAX_UPLOAD_MB`. If a reverse proxy sits in front of the app, make sure its request-body limit is at least as large as this value.
-
-The upload tray shows per-byte progress (GB sent rather than only a file count), can cancel the batch and can retry failed files. A dropped folder is read item by item first (the tray reports how many files and bytes were found so far); that read is cancellable, and cancelling during it sends nothing. After the bytes are saved, the tray shows "Refreshing library…" while `/api/files` rebuilds the tree. Before starting, it checks free space in the library and in the container's temp directory, which holds the spooled request bodies. Windows/macOS junk files (`.DS_Store`, `._*`, `Thumbs.db`, `__MACOSX`, …) are skipped. By default a file that already exists with the same name and size is skipped, so re-dropping a folder only uploads what changed; a file with the same name but a different size is saved as `name (1).ext`. Switch to "Keep both" under Settings → Uploads to always rename the incoming file.
-
-Make sure user/group ID has proper file permissions. The container runs as an unprivileged user by default; set `PUID`/`PGID` to match the owner of your music folder, or set both to `0` to run as root (not recommended).
-
-To avoid storing a plaintext password in `.env`, generate a Werkzeug hash and set `AUTH_PASSWORD_HASH` instead of `AUTH_PASSWORD`:
-
-```bash
-python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your-password'))"
-```
-
-If both `AUTH_PASSWORD` and `AUTH_PASSWORD_HASH` are set, the hash wins and a warning is logged.
-
-## Healthcheck
-
-The image defines a `HEALTHCHECK` that polls the unauthenticated `/api/ping` endpoint, so `docker ps` reports the container as healthy once the app and its addon dependencies are ready.
-
-An unhealthy status alone does not restart the container. Addon dependencies are installed before the app starts, so a slow first boot can briefly show `(unhealthy)` and then recover.
-
-To disable it for a deployment, uncomment the `healthcheck` block in `docker-compose.yml` or add:
-
-```yaml
-services:
-  app:
-    healthcheck:
-      disable: true
-```
-
-You can also override the image defaults (`interval`, `timeout`, `start_period`, `retries`) in the same block, for example a longer `start_period` for addons with heavy dependencies.
-
-## Volume Mounts
-Mount|Purpose
-|---|---|
-~/path/to/your/music:/music|Your music library
-./logs:/logs|Application logs
-./addons:/app/addons:ro|Addon folder (read-only; trusted Python code)
-
-## Addons
-
-Addons are small Python plugins that fetch metadata from outside sources. They show up as "fetchers" in the metadata editor: pick one, search for a song or album, then apply the results to one file or a whole folder.
-
-The app ships with no addons. You install the ones you want by dropping them into the `addons` folder, which `docker-compose.yml` mounts at `/app/addons`. Everything in that folder is scanned once at container start.
-
-> **Addons are arbitrary Python code.** They run inside the container with the app user's access to `/music` and `/logs`, so only mount addons you trust. The folder is mounted read-only, and addon dependency installs run as the unprivileged `PUID`/`PGID` user, never as root (root mode skips runtime dependency installation).
-
-### Installing an Existing Addon
-
-Working examples: [MusicBrainz](https://github.com/Jonny-Ponny/md-musicbrainz-addon), [VocaDB](https://github.com/Jonny-Ponny/md-vocadb-addon), [LrcLib](https://github.com/Jonny-Ponny/md-lrclib-addon) (lyrics, songs only), and [Genius](https://github.com/Jonny-Ponny/md-genius-addon).
-
-Clone addon repo into its own subfolder inside `addons`:
-
-```bash
-mkdir -p addons
-git clone https://github.com/Jonny-Ponny/md-musicbrainz-addon.git addons/musicbrainz
-git clone https://github.com/Jonny-Ponny/md-lrclib-addon.git addons/lrclib
-```
-
-Then restart the container so it discovers the new files:
-
-```bash
-docker compose restart
-```
-
-The addon now appears in the metadata editor's fetcher dropdown (and in **Settings → Addons**, which also lists the methods and environment variables it supports).
-
-#### Folder layout
-
-A subfolder per addon is the easiest option. You can also drop a single `.py` file directly into `addons/`, with no subfolder:
-
-```text
-addons/
-├── musicbrainz/                 # subfolder layout
-│   ├── MusicBrainz.py
-│   └── MusicBrainz_requirements.txt
-├── lrclib/
-│   ├── LrcLib.py
-│   └── requirements.txt         # name does not matter in a subfolder
-└── simple_addon.py              # flat layout
-```
-
-Only files ending in `requirements.txt` are installed, so the dependency file must be named accordingly. In a subfolder any `*requirements.txt` works (e.g. `requirements.txt` or `LrcLib_requirements.txt`). Directly in `addons/` it must end with `_requirements.txt`, e.g. `simple_addon_requirements.txt` - a plain `requirements.txt` in the flat root is ignored.
-
-#### Environment variables
-
-Some addons need an API key or a setting. Read the addon's README to see which variables it expects, then add them to the `environment` section of your `docker-compose.yml` and recreate the container:
-
-```yaml
-services:
-  app:
-    environment:
-      - AUTH_USERNAME=USERNAME
-      - AUTH_PASSWORD=PASSWORD
-      - MD_MUSICBRAINZ_FETCH_COVER=true   # example addon setting
-      - MY_API_KEY=your-key-here          # example API key
-```
-
-The names shown under **Settings → Addons** are informational - the addon decides whether a missing value is a hard error or just falls back to a default. In practice, set what the addon's README asks for.
-
-A restart is not enough after changing `environment` values; recreate the container so Docker applies them:
+Start it:
 
 ```bash
 docker compose up -d
 ```
 
-A few things to keep in mind:
+Open <http://localhost:8888> and log in with the credentials from the compose
+file. If you left them empty, the app prints temporary credentials to the
+container logs (`docker compose logs app`) at startup; they change on every
+restart.
 
-- The container installs `*requirements.txt` dependencies on every start as the unprivileged `PUID`/`PGID` user (into `/app/.local`), before the app launches. The first start after adding an addon can take a bit longer.
-- If you run the container as root (`PUID=0`), runtime addon dependency installation is disabled. Install the dependencies in a custom image derived from this one, or run with a non-root `PUID`/`PGID`.
-- Dependencies are installed inside the container, so changing an addon's requirement file requires a container restart.
-- The addons folder is read-only inside the container. Addons that write cache files must use `/tmp` or another writable location.
-- The host addons folder must be readable by `PUID`/`PGID`; normal `755`/`644` permissions are sufficient. The container does not chown it because it is mounted read-only.
-- Plugins are loaded once at startup; editing a `.py` file or adding a new one has no effect until you restart.
-- A broken addon is skipped with an error in the logs (`docker compose logs`). One bad addon will not stop the app.
+Set `PUID`/`PGID` to the owner of your music folder, or both to `0` to run as
+root (not recommended). The compose port is bound to `127.0.0.1`; to reach the
+app from other machines, put a TLS-terminating reverse proxy in front of it -
+never expose plain HTTP to the internet. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full environment reference,
+healthcheck, volumes and troubleshooting.
 
-### Writing Your Own Fetcher
+## Usage
 
-An addon is a single Python file that subclasses `MetadataFetcher` from `addon_base.py`. Subclass it, set four attributes, and implement only the methods you need.
+### File browser
 
-```python
-# addons/my_service/MyService.py
-import os
-import requests
-from addon_base import MetadataFetcher
+- Click folders to expand/collapse, click files to load them in the player and
+  show their metadata.
+- Right-click for the context menu: rename, smart rename, copy, delete, create
+  folder.
+- Drag & drop files/folders from your computer to upload; drag items inside the
+  tree to move them.
 
+### Metadata editing
 
-class MyService(MetadataFetcher):
-    name = "My Service"                 # shown in the UI
-    id = "my_service"                   # unique, lowercase, no spaces
-    description = "Fetches metadata from My API"
-    version = "1.0.0"                   # optional, shown in Settings
-    github = "https://github.com/you/md-my-service-addon"  # optional, shown as a link
-    required_env_vars = ["MY_API_KEY"]  # informational only
+- Select an audio file, then edit fields in the right panel.
+- Press Enter or use the icons to save: file icon applies to the current file,
+  folder icon (hold) applies to every file in the folder, trash icon (hold)
+  deletes the field.
+- "Apply All Changes" saves several fields at once.
+- Toggle "Include subfolders" for recursive folder operations.
 
-    BASE_URL = "https://api.example.com"
+### Cover art
 
-    def __init__(self):
-        self.api_key = os.getenv("MY_API_KEY", "")
-        self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "metadata-docker-addon/1.0"})
+- Hover over the cover to reveal the actions.
+- Upload: file icon for one file, hold the folder icon for a batch.
+- Delete: hold the trash icon.
+- Save as file: extract the embedded cover to `cover.jpg` in the same folder.
 
-    def search_songs(self, query, limit=5):
-        resp = self.session.get(
-            f"{self.BASE_URL}/search",
-            params={"q": query, "limit": limit, "key": self.api_key},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        return [
-            {
-                "id": str(item["id"]),          # required: passed back to fetch_song_metadata
-                "title": item.get("title", ""),
-                "artist": item.get("artist", ""),
-                "extraInfo": item.get("duration", ""),  # optional, display-only
-            }
-            for item in resp.json().get("results", [])
-        ]
+### Smart rename
 
-    def fetch_song_metadata(self, song_id):
-        resp = self.session.get(
-            f"{self.BASE_URL}/track/{song_id}",
-            params={"key": self.api_key},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return {
-            "title": data.get("title", ""),
-            "artist": data.get("artist", ""),
-            "album": data.get("album", ""),
-            "albumArtist": data.get("album_artist", ""),
-            "date": data.get("release_date", ""),
-            "trackNumber": data.get("track_number", ""),
-            "genre": data.get("genre", ""),
-            "picture": data.get("cover_url"),   # URL or data:image/... value
-        }
-```
+Create a scheme from the metadata fields (or use the default) and apply it from
+the context menu to a file or a folder.
 
-Save the file as `addons/my_service/MyService.py`, restart the container, and the fetcher is available.
+### Lyrics editor
 
-#### Required attributes
+Two kinds of lyrics are supported: unsynced plain text and synced LRC.
 
-| Attribute | Purpose |
-|---|---|
-| `name` | Display name in the frontend |
-| `id` | Unique identifier. Used in API URLs and stored in the browser, so keep it stable |
-| `description` | Short line shown in Settings |
-| `version` | Optional version string shown in Settings |
-| `github` | Optional GitHub URL shown as a clickable link in Settings. Only `github.com` links are displayed |
-| `required_env_vars` | List of env var names to display in Settings. Not enforced by the app |
+In the synced editor you can click a timestamp to jump in the audio, edit
+timestamps manually, insert the current playback time, shift all timestamps,
+import/export `.lrc` (including `[ti:]`/`[ar:]`/`[al:]` headers when known), copy
+with or without timestamps, and clear all timestamps.
 
-#### The four methods
+### Keyboard shortcuts
 
-You do not need all of them. Leave out the ones your service cannot support - the UI only shows fetchers that implement the matching search method.
+| Key | Action |
+| --- | --- |
+| `F2` | Rename selected item |
+| `Delete` | Delete selected item |
+| `Enter` | Apply current field changes |
+| `Esc` | Close modals / cancel rename |
 
-| Method | Called when | Returns |
-|---|---|---|
-| `search_songs(query, limit)` | Song search | List of result dicts, each with an `id` |
-| `fetch_song_metadata(song_id)` | A song result is selected | One metadata dict |
-| `search_albums(query, limit)` | Album search | List of result dicts, each with an `id` |
-| `fetch_album_metadata(album_id)` | An album result is selected | List of metadata dicts, one per track |
+## Configuration
 
-The `id` from a search result is passed to the matching `fetch_*` method. Search results also feed the result list in the UI, so include `title`/`artist` for songs and `album`/`artist`/`coverart` for albums where available. `coverart` is only a thumbnail for the search results; use `picture` in fetched metadata to actually embed artwork.
+| Variable | Description | Default |
+| --- | --- | --- |
+| `AUTH_USERNAME` | Login username. Generated and logged if empty. | random per run |
+| `AUTH_PASSWORD` | Login password. Generated and logged if empty. | random per run |
+| `AUTH_PASSWORD_HASH` | Werkzeug password hash, used instead of `AUTH_PASSWORD`. | unset |
+| `TOKEN_EXPIRE_HOURS` | Session-token lifetime in hours. | `12` |
+| `MAX_UPLOAD_MB` | Maximum size of one upload request (one file). | `4096` |
+| `PUID` / `PGID` | UID/GID the container runs as. | `1000` |
+| `MUSIC_FOLDER` / `LOG_DIR` | Library and log paths inside the container. | `/music`, `/logs` |
+| `DISABLE_VERSION_CHECK` | Skip the GitHub release check. | `False` |
 
-#### Metadata fields
+Uploads are capped per request, not per library: a 50 GB folder works as long
+as each file is under `MAX_UPLOAD_MB`. A file with the same name and size is
+skipped on re-upload; a different size is saved as `name (1).ext`. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for password hashes, proxy body
+limits, the update check and every remaining variable.
 
-Return plain key/value dictionaries using the app's field names (`title`, `artist`, `album`, `albumArtist`, `date`, `genre`, `trackNumber`, `diskNumber`, `comment`, `composer`, `publisher`, `releaseType`, `lyrics`, `unsyncedLyrics`, `picture`, ...). Unknown keys are kept and written as custom tags, so service-specific IDs (e.g. `musicbrainz_trackid`) can be returned too.
+## Addons
 
-#### Extra information in the UI
+Addons are Python plugins that fetch metadata from external services. The app
+ships with none; drop the ones you want into the `addons` folder and restart.
+In the file tree, right-click an audio file and choose **Fetch Song Metadata**,
+or right-click a folder and choose **Fetch Album Metadata**. Working examples
+include
+[MusicBrainz](https://github.com/Jonny-Ponny/md-musicbrainz-addon),
+[VocaDB](https://github.com/Jonny-Ponny/md-vocadb-addon),
+[LrcLib](https://github.com/Jonny-Ponny/md-lrclib-addon) and
+[Genius](https://github.com/Jonny-Ponny/md-genius-addon).
 
-Search results and fetched metadata may include an optional display-only `extraInfo` key. It is shown under the result title and above the field picker, but it is never offered as a tag or written to a file. Use it for short plain text that helps identify a result or explain where it came from, such as song duration, the source, or how metadata was aggregated. Omit the key or return an empty string when there is nothing to show.
+Addons are arbitrary Python code running with the app user's access to `/music`
+and `/logs`; only mount addons you trust. Installation, folder layout, addon
+environment variables and the fetcher API are documented in
+[docs/ADDONS.md](docs/ADDONS.md).
 
+## Security and releases
 
-Older addons may return `year`, `track`, or `disk`. Those are still accepted and treated as `date`, `trackNumber`, and `diskNumber`, but they are not written as literal YEAR/TRACK/DISK tags. New addons should use the current names.
+The shipped compose files bind to `127.0.0.1`. For remote access, terminate TLS
+in a reverse proxy and set real credentials. The threat model, addon trust,
+path/SSRF protections and hardening options are in [SECURITY.md](SECURITY.md).
 
-#### Practical tips
-
-- Use `os.getenv()` for API keys and settings, and give sensible defaults where possible.
-- Set a `User-Agent` and a `timeout` on HTTP requests; rate-limit if the service requires it.
-- Raising an exception is fine - the API returns it as an error and the UI shows the message. Returning an empty list from a search is often friendlier for "no results".
-- Avoid doing network calls at import time. Keep them in `__init__` or in the methods, so a temporarily unavailable service does not break loading.
-- Dependencies go in a `*requirements.txt` file next to the addon, one package per line. The container installs them on the next start as the unprivileged `PUID`/`PGID` user; installation is skipped when running as root (`PUID=0`).
-- `addon_base` is importable because the backend runs from the directory containing it. Outside Docker, the addons folder is resolved relative to the process working directory (`backend/addons` if you run the backend from `backend/`).
-
-For reference check working examples.
-
-
-## Troubleshooting
-
-### Permission Issues
-If you encounter permission errors accessing your music files:
-- Verify PUID/PGID match your host user/group (the container defaults to `1000:1000`)
-- Check folder permissions: `ls -la /path/to/your/music`
-- Ensure your user has read/write access
-
-### Can't Access Web Interface
-- Verify the container is running and healthy: `docker ps` (see the `STATUS` column)
-- Check logs: `docker logs metadata-docker`
-- Ensure selected port (default 8888) isn't blocked by firewall
-
-
-## Usage Guide
-
-### File Browser
-- Click folders to expand/collapse
-- Click files to load in player/view metadata
-- Right-click for context menu (Rename, Smart Rename, Copy, Delete, Create folder)
-- Drag & drop files/folders from your computer to upload
-- Drag & drop items within the browser to move them
-
-### Smart Rename
-- Create a scheme using main metadata fields or use default
-- Use Smart Rename from context menu in filebrowser to rename files/folders/all folder audio
-
-### Metadata Editing
-- Select an audio file from the browser
-- Edit any field in the right panel
-- Press Enter or click icons to save:
-- File icon - Apply to current file only
-- Folder icon (hold) - Apply to all files in folder
-- Trash icon (hold) - Delete the field
-- Use "Apply All Changes" to save multiple fields at once
-- Toggle "Include subfolders" for recursive operations
-
-### Cover Art
-- Hover over cover art to reveal actions
-- Upload - Click file icon for single file, hold folder icon for batch
-- Delete - Hold trash icon to remove cover art
-- Save as file - Extract cover art to cover.jpg in the same folder
-
-### Lyrics Editor
-Two types of lyrics are supported:
-- Unsynced lyrics - Plain text lyrics
-- Synced lyrics - LRC format with timestamps
-
-In the synced lyrics editor:
-- Click timestamp to jump to that position in the audio
-- Click edit icon to modify timestamps manually
-- Synchronize line button - Insert current playback time as timestamp
-- Shift - Move all timestamps earlier or later by an offset in seconds
-- Import .lrc - Load lyrics and timestamps from an .lrc file
-- Export .lrc - Download synchronized lyrics as an .lrc file (with `[ti:]`/`[ar:]`/`[al:]` headers when known)
-- Copy LRC - Copy with timestamps
-- Copy Text - Copy without timestamps
-- Clear Timestamps - Remove all timestamps
-
-### Keyboard Shortcuts
-Key|Action
-|---|---|
-`F2`|Rename selected item
-`Delete`|Delete selected item
-`Enter`|Apply current field changes
-`Esc`|Close modals / cancel rename
-
+Release model (commit -> CI checks -> build -> attestation -> release): every push
+to `main` and every `v*` tag runs the pytest suite first. Only a passing commit
+is built into a multi-arch image, signed with a build-provenance attestation and
+published to GHCR; a failing suite publishes nothing. `latest` follows `main`,
+while `vX.Y.Z` tags produce versioned image tags. Run `gh attestation verify`
+(see [SECURITY.md](SECURITY.md#image-trust-and-verification)) to confirm an
+image was built by this repository's workflow from the expected commit.
 
 ## Technology
 
-Backend: Python, Flask, Gunicorn, Mutagen
+- **Backend:** Python, Flask, Gunicorn, Mutagen
+- **Frontend:** Svelte 5
+- **Authentication:** JWT
+- **Packaging:** Docker, multi-arch images (amd64, arm64, armv7)
 
-Frontend: Svelte 5
-
-Authentication: JWT
-
+Architecture and development notes live in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Acknowledgments
 
-[mutagen](https://github.com/quodlibet/mutagen) - Audio tag extracting/writing
+[mutagen](https://github.com/quodlibet/mutagen) - audio tag reading/writing
 
-[Flask](https://github.com/pallets/flask) - Backend framework
+[Flask](https://github.com/pallets/flask) - backend framework
 
-[Svelte](https://github.com/sveltejs/svelte) - Frontend framework
+[Svelte](https://github.com/sveltejs/svelte) - frontend framework
 
 [Gunicorn](https://github.com/benoitc/gunicorn) - WSGI server
 
-[metadata-remote](https://github.com/wow-signal-dev/metadata-remote) - Some features were inspired by this project
-
+[metadata-remote](https://github.com/wow-signal-dev/metadata-remote) - inspiration
+for some features
 
 ## License
+
 Copyright (c) 2026 [JonnyPonny](https://github.com/Jonny-Ponny)
 
 This project is licensed under the **AGPLv3** - see [LICENSE](LICENSE).
 
-It uses:
-- **Flask** (BSD-3) for backend
-- **Gunicorn** (MIT) for WSGI server
-- **Mutagen** (GPLv2) for audio metadata
-- **PyJWT** (MIT) for authentication
-- **Svelte** (MIT) for the frontend
-
-See [NOTICE](NOTICE) and [THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES) for full attribution.
-
+It uses **Flask** (BSD-3), **Gunicorn** (MIT), **Mutagen** (GPLv2), **PyJWT**
+(MIT) and **Svelte** (MIT). See [NOTICE](NOTICE) and
+[THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES) for full attribution.
 
 ## Screenshots
 
@@ -485,7 +223,12 @@ Settings:
 Context menu options:
 ![Context menu options](screenshots/image6.png)
 
+## AI disclaimer
 
-## AI Disclaimer
+AI tools were used for:
 
-This project utilized AI tools primarily for regex, frontend CSS styling and JavaScript troubleshooting. All code was manually checked and tested before finalizing.
+- regex and other pattern matching
+- frontend CSS styling and JavaScript troubleshooting
+- the backend test suite and the module/blueprint refactor
+
+All changes were reviewed, tested and checked in CI before being merged.

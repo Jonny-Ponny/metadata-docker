@@ -4,7 +4,7 @@ services:
     container_name: metadata-docker
     ports:
       # Bound to localhost. Put a TLS-terminating reverse proxy in front for
-      # access from other machines; see "Exposing the app safely" in README.md.
+      # access from other machines; see "Exposure" in docs/DEPLOYMENT.md.
       - "127.0.0.1:8888:5000"                         # Change 8888 to preferred port
     restart: unless-stopped
     environment:
