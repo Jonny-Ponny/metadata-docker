@@ -17,6 +17,13 @@ from functools import wraps
 from metadata_extractor import *
 from metadata_writer import *
 from formats import is_supported_audio, mime_for
+from renaming import (
+    extract_year,
+    find_first_audio,
+    generate_name_from_scheme,
+    same_path,
+    unique_destination,
+)
 from errors import (
     _json_object,
     _permission_error,
@@ -1760,127 +1767,21 @@ def apply_renaming_scheme():
     try:
         full_path = safe_path(path)
         
-        # Allowed variables mapping to metadata fields
-        variable_map = {
-            'TITLE': 'title',
-            'ALBUM': 'album',
-            'ARTIST': 'artist',
-            'ALBUMARTIST': 'albumArtist',
-            'YYYY': 'date',  # Will extract just the year from date
-            'TRACK': 'trackNumber',
-            'DISK': 'diskNumber',
-            'RELEASETYPE': 'releaseType',
-        }
-
-        def extract_year_regex(date_val):
-            if not date_val:
-                return None
-            
-            # Matches a 4-digit year (1800-2099) bounded by non-digit characters
-            match = re.search(r'(?<!\d)(?:18|19|20)\d{2}(?!\d)', str(date_val))
-            return match.group(0) if match else None
-        
-        def generate_name_from_scheme(scheme_str, metadata):
-            """Generate new name from scheme and metadata."""
-            result = scheme_str
-            
-            # First, check if all variables in the scheme have values
-            variables_in_scheme = re.findall(r'\[([^\[\]]+)\]', scheme_str)
-            
-            # Process date value once
-            extracted_year = extract_year_regex(metadata.get('date'))
-            
-            missing_fields = []
-            for var in variables_in_scheme:
-                if var not in variable_map:
-                    continue  # Skip unknown variables (they'll remain as-is)
-                
-                field = variable_map[var]
-                
-                if field == 'date':
-                    has_value = extracted_year is not None
-                else:
-                    has_value = bool(metadata.get(field))
-                
-                if not has_value:
-                    missing_fields.append(var)
-            
-            if missing_fields:
-                raise ValueError(f"Missing metadata fields for variables: {', '.join(missing_fields)}. Please fill these fields first.")
-            
-            # Replace each variable with its value
-            for var, field in variable_map.items():
-                value = ''
-                if field == 'date':
-                    value = extracted_year or ''
-                elif field == 'trackNumber' and metadata.get('trackNumber'):
-                    track = str(metadata['trackNumber']).split('/')[0]
-                    value = track.zfill(2)
-                elif field == 'diskNumber' and metadata.get('diskNumber'):
-                    disk = str(metadata['diskNumber']).split('/')[0]
-                    value = disk.zfill(2)
-                elif field == 'releaseType' and metadata.get('releaseType'):
-                    value = str(metadata['releaseType'])
-                elif metadata.get(field):
-                    value = str(metadata[field])
-                
-                # Replace the variable (case sensitive)
-                result = result.replace(f'[{var}]', value)
-            
-            # Clean up multiple spaces and trim
-            result = re.sub(r'\s+', ' ', result).strip()
-            
-            # Replace spaces with underscores if option is enabled
-            if replace_spaces:
-                result = result.replace(' ', '_')
-            
-            # Remove any characters that aren't allowed in filenames
-            result = re.sub(r'[<>:"/\\|?*]', '', result)
-            
-            return result
-
-        def _same_path(path1, path2):
-            if os.path.abspath(path1) == os.path.abspath(path2):
-                return True
-            try:
-                return os.path.exists(path1) and os.path.exists(path2) and os.path.samefile(path1, path2)
-            except OSError:
-                return False
-        
         if is_folder:
             # Handle folder rename
             if not os.path.isdir(full_path):
                 return jsonify({'error': 'Folder not found'}), 404
             
-            # Find first audio file in folder to extract metadata. Symlinks are
-            # skipped so a bulk rename never reads a target outside the folder.
-            first_audio = None
-            for root, dirs, files in os.walk(full_path):
-                dirs[:] = [
-                    name for name in dirs
-                    if not os.path.islink(os.path.join(root, name))
-                ]
-                for file in sorted(files):
-                    candidate = os.path.join(root, file)
-                    if os.path.islink(candidate):
-                        continue
-                    if is_supported_audio(file):
-                        first_audio = candidate
-                        break
-                if first_audio:
-                    break
-            
+            first_audio = find_first_audio(full_path)
             if not first_audio:
                 return jsonify({'error': 'No audio files found in folder to extract metadata'}), 400
             
-            # Extract metadata from first file
             metadata = extract_metadata(first_audio)
             if metadata is None:
                 return jsonify({'error': 'Could not read metadata from the audio file'}), 400
             
             try:
-                # Generate new folder name (this will raise ValueError if fields are missing)
-                new_name = generate_name_from_scheme(scheme, metadata)
+                new_name = generate_name_from_scheme(scheme, metadata, replace_spaces)
             except ValueError as e:
                 return jsonify({'error': str(e)}), 400
             
@@ -1896,20 +1797,14 @@ def apply_renaming_scheme():
                 return jsonify({'error': str(e)}), 400
 
             # If it already matches the scheme, do not rename
-            if _same_path(new_path, full_path):
+            if same_path(new_path, full_path):
                 return jsonify({
                     'success': True,
                     'newPath': os.path.relpath(full_path, MUSIC_ROOT).replace('\\', '/'),
                     'newName': os.path.basename(full_path)
                 })
             
-            # Handle duplicates
-            if os.path.exists(new_path):
-                base = new_path
-                counter = 1
-                while os.path.exists(new_path):
-                    new_path = f'{base} ({counter})'
-                    counter += 1
+            new_path = unique_destination(new_path, is_folder)
             
             if not _is_within(MUSIC_ROOT, new_path):
                 return jsonify({'error': 'Invalid generated name'}), 400
@@ -1937,8 +1832,7 @@ def apply_renaming_scheme():
                 return jsonify({'error': 'Could not read metadata from the audio file'}), 400
             
             try:
-                # Generate new file name (this will raise ValueError if fields are missing)
-                new_name_without_ext = generate_name_from_scheme(scheme, metadata)
+                new_name_without_ext = generate_name_from_scheme(scheme, metadata, replace_spaces)
             except ValueError as e:
                 return jsonify({'error': str(e)}), 400
             
@@ -1951,30 +1845,22 @@ def apply_renaming_scheme():
             ext = os.path.splitext(full_path)[1]
             new_name = new_name_without_ext + ext
             
-            # Rename file. The generated name is validated as a bare filename
-            # and the destination must stay inside the library.
             parent = os.path.dirname(full_path)
             try:
                 new_path = _generated_rename_path(parent, new_name)
             except ValueError as e:
                 return jsonify({'error': str(e)}), 400
-
+            
             # If it already matches the scheme, do not rename
-            if _same_path(new_path, full_path):
+            if same_path(new_path, full_path):
                 return jsonify({
                     'success': True,
                     'newPath': os.path.relpath(full_path, MUSIC_ROOT).replace('\\', '/'),
                     'newName': os.path.basename(full_path)
                 })
-
-            # Handle duplicates
-            if os.path.exists(new_path):
-                base, ext = os.path.splitext(new_path)
-                counter = 1
-                while os.path.exists(new_path):
-                    new_path = f'{base} ({counter}){ext}'
-                    counter += 1
-
+            
+            new_path = unique_destination(new_path, is_folder)
+            
             if not _is_within(MUSIC_ROOT, new_path):
                 return jsonify({'error': 'Invalid generated name'}), 400
             os.rename(full_path, new_path)
