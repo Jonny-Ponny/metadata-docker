@@ -261,6 +261,14 @@
                 other = { ...other, ...data.otherFields };
             }
 
+            // Keep the editor stable: the API returns unknown tags in tag
+            // order, so sort the "Other" fields alphabetically by name.
+            other = Object.fromEntries(
+                Object.entries(other).sort(([a], [b]) =>
+                    a.localeCompare(b, undefined, { sensitivity: "base" }),
+                ),
+            );
+
             // Update the main metadata object
             metadata = {
                 title: data.title || "",

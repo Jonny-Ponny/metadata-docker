@@ -38,17 +38,7 @@ image build. What remains is optional hardening and new features.
 
 ### Known issues and small fixes
 
-- **T-01 (P2) Fetch `/api/version` once on load.** The SPA calls it from both
-  the version check and the upload-limit lookup, so the browser network tab
-  shows two identical requests. Share one fetch and its result.
-  *Done when:* the version endpoint is requested once per load and both
-  consumers receive the same data.
-  *Touch:* `frontend/src/App.svelte`, `frontend/src/utils/upload.utils.js`.
-- **T-02 (P3) Sort custom fields alphabetically after `comment`/`description`.**
-  Unknown tags currently appear in tag order instead of a stable alphabetical
-  order after the standard fields.
-  *Done when:* custom fields are sorted by name in the editor.
-  *Touch:* `frontend/src/components/MetadataEditor.svelte`.
+No open items.
 
 ### Optional security hardening
 
