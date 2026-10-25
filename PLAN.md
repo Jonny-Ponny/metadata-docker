@@ -5,12 +5,13 @@ image build. What remains is optional hardening and new features.
 
 ## Tracking work
 
-- `B-xx (P0/P1/P2)` - confirmed defects that have been fixed. The severity,
-  fix and regression test live in [docs/BUGFIXES.md](docs/BUGFIXES.md).
-- `T-xx (P2/P3)` - open tasks, small fixes, polish and technical debt listed
-  below. `P2` is user-visible or recurring; `P3` is low-impact.
-- A newly found defect starts as `T-xx` here. Once it is fixed and has a
-  regression test, record it as `B-xx` in BUGFIXES.md.
+- `B-xx (P0/P1/P2)` - confirmed bugs. While open, the item is listed below;
+  once fixed, it moves to [docs/BUGFIXES.md](docs/BUGFIXES.md) with the fix and
+  regression test.
+- `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
+  listed below. `P2` is user-visible or recurring; `P3` is low-impact.
+- IDs are permanent and never reused. Last used: `T-02`, `B-31`. Next:
+  `T-03`, `B-32`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 

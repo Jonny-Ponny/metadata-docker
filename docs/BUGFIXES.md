@@ -268,6 +268,18 @@ status code, **P2** correctness or polish.
   no signal when the consumer left, and a full `iter_zip()` over a one-slot
   queue.
 
+## Startup and credentials
+
+- [x] **B-31 (P1) An invalid `AUTH_PASSWORD_HASH` crash-loops the app.**
+  `config.py` raised `RuntimeError` at import when the hash did not parse, so
+  the container restarted on every start and the UI never came up.
+  **Fix:** log the validation error, discard the malformed hash, and generate a
+  temporary password for this run instead of raising. The existing random
+  credential block prints it. A valid hash still wins over `AUTH_PASSWORD`.
+  **Test:** subprocess import with a malformed hash succeeds, clears
+  `AUTH_PASSWORD_HASH`, generates a password different from the configured
+  plaintext, and logs both the warning and the temporary credentials.
+
 ## Regression tests
 
 Each bug above is pinned by at least one test, so a fix cannot be reverted
@@ -305,3 +317,4 @@ silently.
 | B-28 | `test_upload.py::test_invalid_filename_does_not_create_the_target_folder` |
 | B-29 | `test_config.py::test_installed_flask_supports_per_request_upload_limits` |
 | B-30 | `test_zip_stream.py::test_sentinel_waits_for_queue_space` |
+| B-31 | `test_config.py::test_invalid_password_hash_generates_a_temporary_password` |

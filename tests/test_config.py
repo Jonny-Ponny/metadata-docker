@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from werkzeug.security import generate_password_hash
 
 
 DEFAULTS = {
@@ -48,7 +49,10 @@ def _import_with_env(app_module, root, overrides):
         "print('RESULT=' + json.dumps({"
         "'TOKEN_EXPIRE_HOURS': app.TOKEN_EXPIRE_HOURS, "
         "'CACHE_TTL_SECONDS': app.CACHE_TTL_SECONDS, "
-        "'MAX_UPLOAD_MB': app.MAX_UPLOAD_BYTES // (1024 * 1024)"
+        "'MAX_UPLOAD_MB': app.MAX_UPLOAD_BYTES // (1024 * 1024), "
+        "'AUTH_USERNAME': app.AUTH_USERNAME, "
+        "'AUTH_PASSWORD': app.AUTH_PASSWORD, "
+        "'AUTH_PASSWORD_HASH': app.AUTH_PASSWORD_HASH"
         "}))"
     )
     result = subprocess.run(
@@ -99,3 +103,43 @@ def test_installed_flask_supports_per_request_upload_limits():
     match = re.match(r"(\d+)\.(\d+)", version("flask"))
     assert match, version("flask")
     assert tuple(int(part) for part in match.groups()) >= (3, 1)
+
+
+def test_invalid_password_hash_generates_a_temporary_password(
+    app_module, tmp_path
+):
+    """A bad hash must not crash-loop the container (B-31)."""
+    result = _import_with_env(
+        app_module,
+        tmp_path,
+        {
+            "AUTH_PASSWORD_HASH": "not-a-valid-hash",
+            "AUTH_PASSWORD": "configured-password",
+        },
+    )
+
+    assert result["AUTH_PASSWORD_HASH"] == ""
+    assert result["AUTH_PASSWORD"]
+    assert result["AUTH_PASSWORD"] != "configured-password"
+
+    log = (tmp_path / "logs" / "app.log").read_text(encoding="utf-8")
+    assert "not a valid Werkzeug password hash" in log
+    assert "Temporary credentials for this run" in log
+    assert f"password: {result['AUTH_PASSWORD']} (generated)" in log
+
+
+def test_valid_password_hash_is_used_instead_of_the_plaintext(
+    app_module, tmp_path
+):
+    password_hash = generate_password_hash("hashed-password")
+    result = _import_with_env(
+        app_module,
+        tmp_path,
+        {
+            "AUTH_PASSWORD_HASH": password_hash,
+            "AUTH_PASSWORD": "ignored-password",
+        },
+    )
+
+    assert result["AUTH_PASSWORD_HASH"] == password_hash
+    assert result["AUTH_PASSWORD"] == ""
