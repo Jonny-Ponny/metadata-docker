@@ -1,5 +1,6 @@
 """Authenticated success and failure cases for the metadata routes."""
 
+import base64
 import io
 from pathlib import Path
 
@@ -486,6 +487,68 @@ def test_save_cover_as_file_writes_cover_jpg(
     cover = test_dir / "cover.jpg"
     assert cover.read_bytes() == JPEG
     assert response.get_json()["path"].endswith("cover.jpg")
+
+
+def test_save_cover_as_file_uses_the_png_extension(
+    client, auth_headers, audio_file, test_dir, music_root
+):
+    song = audio_file(".flac", name="song.flac")
+    assert _upload_cover(
+        client, auth_headers, _relative(song, music_root), image=PNG, name="cover.png"
+    ).status_code == 200
+
+    response = client.post(
+        "/api/metadata/picture/save-as-file",
+        headers=auth_headers,
+        json={"path": _relative(song, music_root)},
+    )
+
+    assert response.status_code == 200
+    cover = test_dir / "cover.png"
+    assert cover.read_bytes() == PNG
+    assert response.get_json()["path"].endswith("cover.png")
+
+
+def test_save_cover_as_file_accepts_raw_base64(
+    client, auth_headers, audio_file, test_dir, music_root, tags_module, monkeypatch
+):
+    song = audio_file(".mp3", name="song.mp3")
+    monkeypatch.setattr(
+        tags_module,
+        "extract_metadata",
+        lambda *args, **kwargs: {
+            "picture": base64.b64encode(JPEG).decode("ascii")
+        },
+    )
+
+    response = client.post(
+        "/api/metadata/picture/save-as-file",
+        headers=auth_headers,
+        json={"path": _relative(song, music_root)},
+    )
+
+    assert response.status_code == 200
+    assert (test_dir / "cover.jpg").read_bytes() == JPEG
+
+
+def test_save_cover_as_file_does_not_overwrite_an_existing_cover(
+    client, auth_headers, audio_file, test_dir, music_root
+):
+    song = audio_file(".mp3", name="song.mp3")
+    assert _upload_cover(
+        client, auth_headers, _relative(song, music_root)
+    ).status_code == 200
+    (test_dir / "cover.jpg").write_bytes(b"existing")
+
+    response = client.post(
+        "/api/metadata/picture/save-as-file",
+        headers=auth_headers,
+        json={"path": _relative(song, music_root)},
+    )
+
+    assert response.status_code == 200
+    assert (test_dir / "cover.jpg").read_bytes() == b"existing"
+    assert (test_dir / "cover (1).jpg").read_bytes() == JPEG
 
 
 def test_text_save_writes_the_new_content(

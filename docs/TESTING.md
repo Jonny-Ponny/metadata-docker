@@ -85,7 +85,7 @@ Priority items still to cover, grouped by risk.
   backslash/original-filename normalisation.
 - [x] `GET /api/metadata?includePicture=false` through the endpoint; behaviour
   for corrupt supported audio.
-- [ ] `save-as-file` PNG/raw-base64 paths and the existing `cover.*` suffix
+- [x] `save-as-file` PNG/raw-base64 paths and the existing `cover.*` suffix
   loop.
 - [ ] Download token negative cases and `Content-Disposition` sanitising for
   quotes, backslashes and CRLF.
