@@ -323,3 +323,34 @@ def test_content_disposition_sanitises_quotes_backslashes_and_newlines():
     assert "filename*=UTF-8''" in header
     assert "\r" not in header
     assert "\n" not in header
+
+
+def test_download_token_requires_a_path(client, auth_headers):
+    response = client.post("/api/download-token", headers=auth_headers, json={})
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Missing path"
+
+
+def test_download_token_rejects_a_missing_target(
+    client, auth_headers, music_root
+):
+    response = client.post(
+        "/api/download-token",
+        headers=auth_headers,
+        json={"path": "does-not-exist.mp3"},
+    )
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Path not found"
+
+
+def test_download_token_rejects_a_path_outside_the_library(client, auth_headers):
+    response = client.post(
+        "/api/download-token",
+        headers=auth_headers,
+        json={"path": "../outside.mp3"},
+    )
+
+    assert response.status_code == 403
+    assert "outside" in response.get_json()["error"].lower()

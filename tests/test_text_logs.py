@@ -280,3 +280,79 @@ def test_logs_clear_without_a_log_file_succeeds(
 
     assert response.status_code == 200
     assert not (logs / "app.log").exists()
+
+
+def test_text_read_permission_error_is_403(
+    client, auth_headers, test_dir, music_root, monkeypatch
+):
+    lyrics = test_dir / "song.lrc"
+    lyrics.write_text("original", encoding="utf-8")
+
+    real_open = open
+
+    def denied(path, mode="r", *args, **kwargs):
+        if mode == "r" and str(path).endswith("song.lrc"):
+            raise PermissionError(path)
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", denied)
+
+    response = client.get(
+        "/api/text",
+        headers=auth_headers,
+        query_string={"path": _relative(lyrics, music_root)},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()["error"] == (
+        "Permission denied while accessing the library."
+    )
+
+
+def test_text_save_permission_error_is_403_and_keeps_the_original(
+    client, auth_headers, test_dir, music_root, app_module, monkeypatch
+):
+    lyrics = test_dir / "song.lrc"
+    lyrics.write_text("original", encoding="utf-8")
+
+    def denied(source, destination):
+        raise PermissionError(destination)
+
+    monkeypatch.setattr(app_module.os, "replace", denied)
+
+    response = client.post(
+        "/api/text/save",
+        headers=auth_headers,
+        json={"path": _relative(lyrics, music_root), "content": "new"},
+    )
+
+    assert response.status_code == 403
+    assert lyrics.read_text(encoding="utf-8") == "original"
+
+
+def test_text_save_rejects_a_missing_file(client, auth_headers, music_root):
+    response = client.post(
+        "/api/text/save",
+        headers=auth_headers,
+        json={"path": "missing.lrc", "content": "new"},
+    )
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "File not found"
+
+
+def test_text_save_rejects_a_non_text_file(
+    client, auth_headers, test_dir, music_root
+):
+    notes = test_dir / "notes.mp3"
+    notes.write_bytes(b"original")
+
+    response = client.post(
+        "/api/text/save",
+        headers=auth_headers,
+        json={"path": _relative(notes, music_root), "content": "new"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Not a text file"
+    assert notes.read_bytes() == b"original"

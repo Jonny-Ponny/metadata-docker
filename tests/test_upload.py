@@ -607,3 +607,70 @@ def test_save_upload_removes_the_temp_file_when_saving_fails(tmp_path):
         )
 
     assert list(tmp_path.iterdir()) == []
+
+
+def test_storage_reports_a_disk_usage_failure(
+    client, auth_headers, files_module, monkeypatch
+):
+    def broken(path):
+        raise OSError(errno.EIO, "I/O error")
+
+    monkeypatch.setattr(files_module.shutil, "disk_usage", broken)
+
+    response = client.get("/api/storage", headers=auth_headers)
+
+    assert response.status_code == 500
+
+
+def test_mkdir_requires_a_path(client, auth_headers):
+    response = client.post(
+        "/api/mkdir",
+        headers=auth_headers,
+        json={"path": "", "conflict": "merge"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "No path provided"
+
+
+def test_mkdir_permission_error_is_403(
+    client, auth_headers, test_dir, music_root, files_module, monkeypatch
+):
+    def denied(path, exist_ok=False):
+        raise PermissionError(path)
+
+    monkeypatch.setattr(files_module.os, "makedirs", denied)
+
+    response = client.post(
+        "/api/mkdir",
+        headers=auth_headers,
+        json={
+            "path": _relative(test_dir / "New", music_root),
+            "conflict": "merge",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()["error"] == (
+        "Permission denied while accessing the library."
+    )
+
+
+def test_mkdir_merge_rejects_a_path_below_a_file(
+    client, auth_headers, test_dir, music_root
+):
+    blocker = test_dir / "blocker"
+    blocker.write_bytes(b"file")
+
+    response = client.post(
+        "/api/mkdir",
+        headers=auth_headers,
+        json={
+            "path": _relative(blocker / "nested", music_root),
+            "conflict": "merge",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "A file with that name already exists"
+    assert blocker.is_file()

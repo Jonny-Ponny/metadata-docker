@@ -1,11 +1,15 @@
 """Metadata and cover endpoints must return clear errors (B-12, B-13, B-14, B-15, B-17, B-18)."""
 
+import base64
+import builtins
 import io
 from pathlib import Path
 
 import pytest
+import requests
 
 import metadata_writer
+from safe_fetch import ImageTooLargeError
 
 
 def _relative(path, music_root):
@@ -127,7 +131,10 @@ def test_cover_from_url_can_reread_missing_metadata(
     response = client.post(
         "/api/metadata/picture/url",
         headers=auth_headers,
-        json={"url": "https://example.com/cover.jpg", "path": _relative(song, music_root)},
+        json={
+            "url": "https://example.com/cover.jpg",
+            "path": _relative(song, music_root),
+        },
     )
 
     assert response.status_code == 200
@@ -278,3 +285,293 @@ def test_audio_endpoint_only_serves_audio(client, auth_headers, test_dir, music_
         query_string={"path": _relative(audio, music_root)},
     )
     assert response.status_code == 200
+
+
+def _folder_metadata(client, headers, path, field="genre", value="Rock"):
+    return client.post(
+        "/api/metadata/folder",
+        headers=headers,
+        json={"path": path, "field": field, "value": value},
+    )
+
+
+def test_folder_field_permission_error_is_403(
+    client, auth_headers, audio_file, test_dir, music_root, tags_module, monkeypatch
+):
+    audio_file(".mp3", name="song.mp3")
+
+    def denied(*args, **kwargs):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(tags_module, "update_folder_metadata", denied)
+
+    response = _folder_metadata(
+        client, auth_headers, _relative(test_dir, music_root)
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()["error"] == (
+        "Permission denied while accessing the library."
+    )
+
+
+def test_folder_cover_permission_error_is_403(
+    client, auth_headers, audio_file, test_dir, music_root, tags_module, monkeypatch
+):
+    audio_file(".mp3", name="song.mp3")
+
+    def denied(*args, **kwargs):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(tags_module, "update_folder_pictures", denied)
+
+    response = client.post(
+        "/api/metadata/picture/folder",
+        headers=auth_headers,
+        data={
+            "file": (io.BytesIO(b"\xff\xd8\xff\xe0cover"), "cover.jpg"),
+            "path": _relative(test_dir, music_root),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()["error"] == (
+        "Permission denied while accessing the library."
+    )
+
+
+def test_folder_cover_requires_an_image(client, auth_headers, test_dir, music_root):
+    response = client.post(
+        "/api/metadata/picture/folder",
+        headers=auth_headers,
+        data={"path": _relative(test_dir, music_root)},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "No image file provided"
+
+
+def test_folder_cover_requires_a_path(client, auth_headers):
+    response = client.post(
+        "/api/metadata/picture/folder",
+        headers=auth_headers,
+        data={"file": (io.BytesIO(b"\xff\xd8\xff\xe0cover"), "cover.jpg")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Missing path parameter"
+
+
+def test_update_single_file_reports_a_write_failure(
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
+):
+    song = _make_audio(test_dir)
+    monkeypatch.setattr(tags_module, "update_file_metadata", lambda *a, **k: False)
+
+    response = client.post(
+        "/api/metadata/file",
+        headers=auth_headers,
+        json={
+            "path": _relative(song, music_root),
+            "field": "title",
+            "value": "New",
+        },
+    )
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "Failed to update metadata"
+
+
+def test_update_single_file_permission_error_is_403(
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
+):
+    song = _make_audio(test_dir)
+
+    def denied(*args, **kwargs):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(tags_module, "update_file_metadata", denied)
+
+    response = client.post(
+        "/api/metadata/file",
+        headers=auth_headers,
+        json={
+            "path": _relative(song, music_root),
+            "field": "title",
+            "value": "New",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()["error"] == (
+        "Permission denied while accessing the library."
+    )
+
+
+def test_cover_upload_reports_a_write_failure(
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
+):
+    song = _make_audio(test_dir)
+    monkeypatch.setattr(tags_module, "update_file_picture", lambda *a, **k: False)
+
+    response = client.post(
+        "/api/metadata/picture/file",
+        headers=auth_headers,
+        data={
+            "file": (io.BytesIO(b"\xff\xd8\xff\xe0cover"), "cover.jpg"),
+            "path": _relative(song, music_root),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "Failed to update cover art"
+
+
+@pytest.mark.parametrize(
+    "error,status,message",
+    [
+        (ImageTooLargeError("The image is too large."), 413, "The image is too large."),
+        (
+            requests.exceptions.Timeout("slow"),
+            504,
+            "The external service did not respond in time.",
+        ),
+        (
+            requests.exceptions.ConnectionError("down"),
+            502,
+            "The external service request failed.",
+        ),
+    ],
+)
+def test_cover_from_url_maps_fetch_failures(
+    client,
+    auth_headers,
+    test_dir,
+    music_root,
+    tags_module,
+    monkeypatch,
+    error,
+    status,
+    message,
+):
+    song = _make_audio(test_dir)
+
+    def broken(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(tags_module, "fetch_image", broken)
+
+    response = client.post(
+        "/api/metadata/picture/url",
+        headers=auth_headers,
+        json={
+            "url": "https://example.com/cover.jpg",
+            "path": _relative(song, music_root),
+        },
+    )
+
+    assert response.status_code == status
+    assert response.get_json()["error"] == message
+
+
+@pytest.mark.parametrize(
+    "error,status,message",
+    [
+        (ImageTooLargeError("The image is too large."), 413, "The image is too large."),
+        (
+            requests.exceptions.Timeout("slow"),
+            504,
+            "The external service did not respond in time.",
+        ),
+        (
+            requests.exceptions.ConnectionError("down"),
+            502,
+            "The external service request failed.",
+        ),
+    ],
+)
+def test_cover_preview_maps_fetch_failures(
+    client, auth_headers, tags_module, monkeypatch, error, status, message
+):
+    def broken(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(tags_module, "fetch_image", broken)
+
+    response = client.get(
+        "/api/metadata/picture/preview",
+        headers=auth_headers,
+        query_string={"url": "https://example.com/cover.jpg"},
+    )
+
+    assert response.status_code == status
+    assert response.get_json()["error"] == message
+
+
+def test_delete_field_reports_a_write_failure(
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
+):
+    song = _make_audio(test_dir)
+    monkeypatch.setattr(metadata_writer, "delete_metadata_field", lambda *a, **k: False)
+
+    response = client.post(
+        "/api/metadata/field/delete",
+        headers=auth_headers,
+        json={"path": _relative(song, music_root), "field": "title"},
+    )
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "Failed to delete field"
+
+
+def test_delete_cover_reports_a_write_failure(
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
+):
+    song = _make_audio(test_dir)
+    monkeypatch.setattr(metadata_writer, "delete_cover_art", lambda *a, **k: False)
+
+    response = client.post(
+        "/api/metadata/picture/delete",
+        headers=auth_headers,
+        json={"path": _relative(song, music_root)},
+    )
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "Failed to delete cover art"
+
+
+def test_save_cover_as_file_reports_a_permission_error(
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
+):
+    song = _make_audio(test_dir)
+    encoded = base64.b64encode(b"cover").decode("ascii")
+    monkeypatch.setattr(
+        tags_module,
+        "extract_metadata",
+        lambda *a, **k: {"picture": f"data:image/jpeg;base64,{encoded}"},
+    )
+
+    real_open = builtins.open
+
+    def denied(path, mode="r", *args, **kwargs):
+        if mode == "wb" and str(path).endswith("cover.jpg"):
+            raise PermissionError(path)
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", denied)
+
+    response = client.post(
+        "/api/metadata/picture/save-as-file",
+        headers=auth_headers,
+        json={"path": _relative(song, music_root)},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()["error"] == (
+        "Permission denied while accessing the library."
+    )
+    assert not (test_dir / "cover.jpg").exists()

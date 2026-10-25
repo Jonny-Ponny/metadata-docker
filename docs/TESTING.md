@@ -25,7 +25,7 @@ python -m pytest -q --cov=backend --cov-report=term-missing
 ```
 
 The first measurement on this branch was **83%** (2583 statements, 437 missed).
-After the coverage pass it is **89%** (2588 statements, 276 missed, 800 tests).
+After the coverage pass it is **92%** (2588 statements, 203 missed, 846 tests).
 `config.py` is under-reported because its tests import the app in a subprocess.
 
 Lowest areas after the coverage pass:
@@ -33,13 +33,13 @@ Lowest areas after the coverage pass:
 | Area | Cover | Main gap |
 |---|---:|---|
 | `config.py` | 55% | parsed in a subprocess, so coverage cannot see it |
-| `routes/tags.py` | 77% | remaining error and preview/permission branches |
-| `routes/text.py` | 84% | write and permission error branches |
+| `routes/tags.py` | 83% | per-endpoint validation and generic error exits |
 | `logger_config.py` | 85% | fallback/error branches |
-| `routes/files.py` | 86% | `OSError` branches and remaining rename/copy edges |
 | `paths.py` | 90% | symlink and `commonpath` edge cases |
-| `routes/downloads.py` | 91% | folder permission/error branches |
-| everything else | 91-100% | |
+| `routes/text.py` | 91% | stat and temp-file cleanup races |
+| `routes/logs.py` | 91% | empty and undecodable log lines |
+| `renaming.py` | 91% | remaining filename edge cases |
+| everything else | 92-100% | |
 
 ## Conventions
 
@@ -97,6 +97,10 @@ Priority items still to cover, grouped by risk.
   `reload_plugins()`.
 - [x] Version API failure branches (non-200, empty tag, exception, invalid
   version strings).
+- [x] Route failure paths: permission and generic errors for
+  delete/move/copy/rename/mkdir, folder metadata and cover operations, text
+  read/save, cover fetch timeouts and size caps, download-token validation,
+  and ZIP unreadable-file/cancellation handling.
 
 ### P2 - tag backends and helpers
 
