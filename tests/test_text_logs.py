@@ -93,6 +93,65 @@ def test_text_read_rejects_oversized_files(
     assert response.is_json
 
 
+def test_text_read_returns_the_file_content(
+    client, auth_headers, test_dir, music_root
+):
+    lyrics = test_dir / "song.lrc"
+    lyrics.write_text("[00:01.00] First line\n", encoding="utf-8")
+
+    response = client.get(
+        "/api/text",
+        headers=auth_headers,
+        query_string={"path": _relative(lyrics, music_root)},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"content": "[00:01.00] First line\n"}
+
+
+def test_text_read_requires_a_path(client, auth_headers):
+    response = client.get("/api/text", headers=auth_headers)
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Missing path parameter"
+
+
+def test_text_read_missing_file_is_404(client, auth_headers, music_root):
+    response = client.get(
+        "/api/text",
+        headers=auth_headers,
+        query_string={"path": "missing.lrc"},
+    )
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "File not found"
+
+
+def test_text_read_rejects_a_non_text_file(
+    client, auth_headers, test_dir, music_root
+):
+    song = test_dir / "song.mp3"
+    song.write_bytes(b"audio")
+
+    response = client.get(
+        "/api/text",
+        headers=auth_headers,
+        query_string={"path": _relative(song, music_root)},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Not a text file"
+
+
+def test_text_save_requires_path_and_content(client, auth_headers):
+    for body in ({}, {"path": "song.lrc"}, {"content": "text"}):
+        response = client.post(
+            "/api/text/save", headers=auth_headers, json=body
+        )
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "Missing path or content"
+
+
 def test_log_line_count_is_clamped(
     client, auth_headers, logs_module, tmp_path, monkeypatch
 ):

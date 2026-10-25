@@ -79,7 +79,7 @@ Priority items still to cover, grouped by risk.
 
 - [x] Successful smart rename of a file, no-op when the name already matches,
   collision suffix, boolean validation for `isFolder`/`replaceSpaces`.
-- [ ] `GET /api/text` success, missing path, missing file, non-text file.
+- [x] `GET /api/text` success, missing path, missing file, non-text file.
 - [x] `/api/metadata/field/delete` on a folder (recursive and current-only).
 - [x] Upload validation: no `file` part, empty filename, target is a file,
   backslash/original-filename normalisation.
