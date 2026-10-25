@@ -231,6 +231,26 @@ def test_logs_filter_by_level_and_search(
     assert [entry["message"] for entry in body["logs"]] == ["Upload retried"]
 
 
+def test_logs_keep_unparseable_lines_as_raw(
+    client, auth_headers, logs_module, tmp_path, monkeypatch
+):
+    _log_dir(
+        tmp_path,
+        monkeypatch,
+        logs_module,
+        "[2024-01-01 10:00:00] [INFO] Started\n"
+        "a line without the log prefix\n",
+    )
+
+    response = client.get("/api/logs", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.get_json()["logs"] == [
+        {"timestamp": "2024-01-01 10:00:00", "level": "INFO", "message": "Started"},
+        {"raw": "a line without the log prefix"},
+    ]
+
+
 def test_logs_clear_empties_the_file(
     client, auth_headers, logs_module, tmp_path, monkeypatch
 ):

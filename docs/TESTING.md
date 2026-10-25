@@ -23,19 +23,21 @@ python -m pytest -q --cov=backend --cov-report=term-missing
 ```
 
 The first measurement on this branch was **83%** (2583 statements, 437 missed).
+After the coverage pass it is **89%** (2588 statements, 282 missed, 770 tests).
 `config.py` is under-reported because its tests import the app in a subprocess.
 
-Lowest areas at the time of writing:
+Lowest areas after the coverage pass:
 
 | Area | Cover | Main gap |
 |---|---:|---|
-| `safe_fetch.py` | 63% | SSRF guard, redirects, size and content-type limits |
-| `routes/tags.py` | 74% | error branches, folder field delete, save-as-file variants |
-| `routes/files.py` | 75% | folder delete/move/rename, upload fallbacks, file smart rename |
-| `routes/system.py` | 75% | version-check failure branches |
-| `routes/text.py` | 78% | `GET /api/text` success path |
-| `metadata_writer.py` | 81% | symlink skipping and failure accounting |
-| `errors.py` | 84% | 400/415/500 handlers, generic 413 branch |
+| `config.py` | 55% | parsed in a subprocess, so coverage cannot see it |
+| `routes/tags.py` | 77% | remaining error and preview/permission branches |
+| `routes/text.py` | 84% | write and permission error branches |
+| `logger_config.py` | 85% | fallback/error branches |
+| `routes/files.py` | 86% | `OSError` branches and remaining rename/copy edges |
+| `paths.py` | 90% | symlink and `commonpath` edge cases |
+| `routes/downloads.py` | 91% | folder permission/error branches |
+| everything else | 91-100% | |
 
 ## Conventions
 
@@ -96,12 +98,12 @@ Priority items still to cover, grouped by risk.
 
 ### P2 - tag backends and helpers
 
-- [ ] MP4 number-pair parsing/formatting and malformed freeform keys.
-- [ ] Custom-field name normalisation and case-insensitive deletion.
+- [x] MP4 number-pair parsing/formatting and malformed freeform keys.
+- [x] Custom-field name normalisation and case-insensitive deletion.
 - [ ] Clearing the last field removes the tag; multi-value and Unicode values.
 - [ ] FLAC front-cover preference; Vorbis invalid base64; empty image data.
 - [x] `_apply_to_folder` failure accounting and empty-folder results.
-- [ ] Raw log line parsing; `serve()` revalidation for a non-asset static file.
+- [x] Raw log line parsing; a non-asset static file is revalidated.
 
 ## Test defects fixed on this branch
 

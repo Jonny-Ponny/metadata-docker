@@ -402,6 +402,36 @@ def test_delete_field_route_clears_a_tag(
     assert extract_metadata(song)["composer"] == ""
 
 
+def test_custom_field_deletion_is_case_insensitive(
+    client, auth_headers, audio_file, music_root
+):
+    song = audio_file(".mp3", name="song.mp3")
+    response = client.post(
+        "/api/metadata/file",
+        headers=auth_headers,
+        json={
+            "path": _relative(song, music_root),
+            "field": "Release Type",
+            "value": "Single",
+        },
+    )
+    assert response.status_code == 200
+    assert {"name": "Release Type", "value": "Single"} in extract_metadata(
+        song
+    )["customFields"]
+
+    response = client.post(
+        "/api/metadata/field/delete",
+        headers=auth_headers,
+        json={"path": _relative(song, music_root), "field": "release_type"},
+    )
+
+    assert response.status_code == 200
+    assert "Release Type" not in {
+        entry["name"] for entry in extract_metadata(song)["customFields"]
+    }
+
+
 def test_delete_field_from_a_folder_is_recursive(
     client, auth_headers, audio_file, test_dir, music_root
 ):
