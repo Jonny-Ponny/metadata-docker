@@ -62,7 +62,7 @@ Priority items still to cover, grouped by risk.
 - [x] `find_first_audio()` skips symlinked audio and symlinked directories.
 - [ ] Upload claim fallback when `os.link()` is unsupported, and cleanup when
   `os.replace()` fails. `_stream_size()` and `_same_size()` failure paths.
-- [ ] Forged session tokens (wrong scope, wrong username), session tokens on
+- [x] Forged session tokens (wrong scope, wrong username), session tokens on
   `/api/download`, oversized login credentials, rate-limiter expiry/window
   rollover and table pruning.
 - [x] `safe_fetch.py`: malformed URLs, DNS failures, IPv4-mapped/6to4/Teredo,

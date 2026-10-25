@@ -5,6 +5,8 @@ import datetime
 import jwt
 import pytest
 
+import auth
+
 
 def _login(client, password):
     return client.post(
@@ -147,3 +149,130 @@ def test_reset_rate_limiter_forgets_failures(client, app_module):
     app_module.reset_rate_limiter()
 
     assert _login(client, "wrong-password").status_code == 401
+
+
+def _session_token(app_module, **overrides):
+    claims = {
+        "username": app_module.AUTH_USERNAME,
+        "scope": app_module.TOKEN_SCOPE_SESSION,
+        "exp": datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(hours=1),
+    }
+    claims.update(overrides)
+    return jwt.encode(
+        claims, app_module.app.config["SECRET_KEY"], algorithm="HS256"
+    )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"username": "someone-else"},
+        {"scope": "download"},
+        {"scope": None},
+        {"username": None},
+    ],
+)
+def test_session_tokens_with_the_wrong_claims_are_rejected(
+    client, app_module, overrides
+):
+    token = _session_token(app_module, **overrides)
+
+    response = client.get(
+        "/api/validate",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "Token is invalid"
+
+
+def test_a_session_token_cannot_be_used_as_a_download_token(
+    client, auth_headers
+):
+    token = auth_headers["Authorization"].split(" ", 1)[1]
+
+    response = client.get("/api/download", query_string={"token": token})
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "Token is invalid"
+
+
+def test_oversized_login_credentials_are_rejected(client):
+    for username, password in (("a" * 257, "x"), ("test-admin", "x" * 4097)):
+        response = client.post(
+            "/api/login",
+            json={"username": username, "password": password},
+        )
+        assert response.status_code == 401
+        assert response.get_json()["error"] == "Invalid credentials"
+
+
+def test_login_requires_a_json_object(client):
+    response = client.post("/api/login", json=["test-admin", "test-password"])
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Username and password required"
+
+
+def test_a_corrupt_password_hash_never_matches(monkeypatch):
+    monkeypatch.setattr(auth, "AUTH_PASSWORD_HASH", "not-a-valid-hash")
+
+    assert auth._password_matches("anything") is False
+
+
+def test_lockout_expires_after_the_window(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(auth.time, "time", lambda: clock[0])
+    ip = "203.0.113.10"
+
+    for _ in range(auth.LOGIN_MAX_ATTEMPTS):
+        retry_after = auth._record_login_failure(ip)
+
+    assert retry_after == auth.LOGIN_LOCKOUT_SECONDS
+    assert auth._login_retry_after(ip) > 0
+
+    clock[0] += auth.LOGIN_LOCKOUT_SECONDS + 1
+
+    assert auth._login_retry_after(ip) == 0
+    assert ip not in auth._login_failures
+
+
+def test_failures_start_a_new_window_after_the_lockout(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(auth.time, "time", lambda: clock[0])
+    ip = "203.0.113.11"
+
+    for _ in range(auth.LOGIN_MAX_ATTEMPTS - 1):
+        assert auth._record_login_failure(ip) == 0
+
+    clock[0] += auth.LOGIN_LOCKOUT_SECONDS + 1
+
+    # The old count is discarded, so this is the first failure of a new window.
+    assert auth._record_login_failure(ip) == 0
+    assert auth._login_failures[ip]["count"] == 1
+
+
+def test_the_limiter_is_per_client_address(monkeypatch):
+    monkeypatch.setattr(auth.time, "time", lambda: 1000.0)
+
+    for _ in range(auth.LOGIN_MAX_ATTEMPTS):
+        auth._record_login_failure("203.0.113.12")
+
+    assert auth._login_retry_after("203.0.113.12") > 0
+    assert auth._login_retry_after("203.0.113.13") == 0
+
+
+def test_the_failure_table_is_pruned(monkeypatch):
+    now = 10000.0
+    monkeypatch.setattr(auth.time, "time", lambda: now)
+    auth._login_failures.update(
+        {
+            f"stale-{index}": {"count": 1, "first": 0, "locked_until": 0}
+            for index in range(4097)
+        }
+    )
+
+    auth._record_login_failure("203.0.113.14")
+
+    assert set(auth._login_failures) == {"203.0.113.14"}
