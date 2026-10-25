@@ -70,10 +70,10 @@ Priority items still to cover, grouped by risk.
   responses, declared and streamed size caps.
 - [x] Folder delete, folder move/rename success, missing-path branches, broken
   symlink deletion, and a rename attempt on the library root.
-- [ ] Unhandled exceptions return JSON, the 400/415 handlers return JSON, the
+- [x] Unhandled exceptions return JSON, the 400/415 handlers return JSON, the
   generic 413 branch names the request limit, and security headers survive
   error responses.
-- [ ] `/api` exactly should be a JSON 404, not the SPA (see known issues).
+- [x] `/api` exactly is a JSON 404, not the SPA.
 
 ### P1 - core features
 
@@ -103,14 +103,17 @@ Priority items still to cover, grouped by risk.
 - [x] `_apply_to_folder` failure accounting and empty-folder results.
 - [ ] Raw log line parsing; `serve()` revalidation for a non-asset static file.
 
-## Existing test defects
+## Test defects fixed on this branch
 
-- The upload/cover 413 tests patch `app.MAX_UPLOAD_BYTES` /
+- The upload/cover 413 tests patched `app.MAX_UPLOAD_BYTES` /
   `app.COVER_UPLOAD_BYTES`, while `errors.handle_request_too_large()` reads its
-  own imported constants. They must patch `errors` and assert the exact limit.
+  own imported constants. They now patch `errors` as well and assert the exact
+  limit.
 - `test_api_contract.py` used `OSError(13)` and `OSError(2)`, which Python turns
   into `PermissionError` and `FileNotFoundError`; those rows duplicated the
-  earlier cases instead of exercising the errno branches.
-- `test_find_first_audio_skips_non_audio_and_links` did not create a symlink.
-- `test_security.py` and `test_auth.py` duplicate the download-token scope
-  check; keep the version that also exercises the positive download path.
+  earlier cases instead of exercising the errno branches, so they were removed.
+- `test_find_first_audio_skips_non_audio_and_links` did not create a symlink;
+  it now covers both a symlinked file and a symlinked directory.
+- The download-token scope check existed in both `test_security.py` and
+  `test_auth.py`. The version that also exercises the positive download path is
+  kept.

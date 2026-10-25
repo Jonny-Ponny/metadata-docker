@@ -82,29 +82,6 @@ def test_tampered_signature_is_rejected(client, auth_headers):
     assert response.get_json()["error"] == "Token is invalid"
 
 
-def test_download_token_cannot_authorize_session_routes(
-    client, auth_headers, music_root, test_dir
-):
-    song = test_dir / "song.mp3"
-    song.write_bytes(b"audio")
-
-    response = client.post(
-        "/api/download-token",
-        headers=auth_headers,
-        json={"path": song.relative_to(music_root).as_posix()},
-    )
-    assert response.status_code == 200
-    download_token = response.get_json()["token"]
-
-    response = client.get(
-        "/api/validate",
-        headers={"Authorization": f"Bearer {download_token}"},
-    )
-
-    assert response.status_code == 401
-    assert response.get_json()["error"] == "Token is invalid"
-
-
 @pytest.mark.parametrize("authorization", [None, "Basic abc", "Bearer", "Bearer "])
 def test_missing_or_malformed_authorization_header_is_rejected(
     client, authorization
