@@ -21,4 +21,5 @@ export * from "./color.utils"
 export * from "./favicon.utils"
 export * from "./preview.utils";
 export * from "./api.utils";
+export * from "./version.utils";
 export * from "./upload.utils";

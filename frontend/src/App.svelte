@@ -27,6 +27,7 @@
     initAuth,
     logout,
     getAuthHeaders,
+    fetchVersionInfo,
     settings,
     applyThemeFromSettings,
     isAudioFile,
@@ -911,9 +912,7 @@
 
   async function checkVersion() {
     try {
-      const res = await fetch("/api/version");
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await fetchVersionInfo();
       currentVersion = data.current_version;
       latestVersion = data.latest_version;
       updateAvailable = data.update_available;
