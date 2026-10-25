@@ -129,8 +129,6 @@ def test_unknown_api_paths_are_json_404_without_the_spa(client, path):
     [
         (PermissionError("secret path"), 403, "Permission denied while accessing the library."),
         (FileNotFoundError("secret path"), 404, "The requested file or folder no longer exists."),
-        (OSError(13, "denied"), 403, "Permission denied while accessing the library."),
-        (OSError(2, "missing"), 404, "The requested file or folder no longer exists."),
         (OSError(21, "is a folder"), 400, "The requested path is a folder, not a file."),
         (OSError(20, "not a folder"), 400, "The requested path is not a folder."),
         (OSError(17, "exists"), 409, "The destination already exists."),

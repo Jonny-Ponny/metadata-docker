@@ -117,13 +117,23 @@ def test_generate_name_from_scheme_cleans_and_optionally_underscores():
 def test_find_first_audio_skips_non_audio_and_links(tmp_path):
     from renaming import find_first_audio
 
-    (tmp_path / "notes.txt").write_text("not audio")
-    album = tmp_path / "album"
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "notes.txt").write_text("not audio")
+    album = root / "album"
     album.mkdir()
-    (album / "a.mp3").write_bytes(b"a")
-    (album / "b.flac").write_bytes(b"b")
+    real = album / "a.mp3"
+    real.write_bytes(b"a")
 
-    assert find_first_audio(str(album)).endswith("a.mp3")
+    # A symlinked audio file and a symlinked directory pointing outside the
+    # folder must both be ignored.
+    outer = tmp_path / "outside"
+    outer.mkdir()
+    (outer / "first.mp3").write_bytes(b"outside")
+    (album / "0-link.mp3").symlink_to(real)
+    (root / "0-linked-dir").symlink_to(outer, target_is_directory=True)
+
+    assert find_first_audio(str(root)) == str(real)
 
 
 def test_find_first_audio_returns_none_for_a_folder_without_audio(tmp_path):

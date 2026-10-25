@@ -94,6 +94,8 @@ def test_valid_integer_env_is_used(app_module, tmp_path, name, value):
 def test_installed_flask_supports_per_request_upload_limits():
     """Cover uploads assign request.max_content_length (B-29)."""
     from importlib.metadata import version
+    import re
 
-    major, minor = (int(part) for part in version("flask").split(".")[:2])
-    assert (major, minor) >= (3, 1)
+    match = re.match(r"(\d+)\.(\d+)", version("flask"))
+    assert match, version("flask")
+    assert tuple(int(part) for part in match.groups()) >= (3, 1)

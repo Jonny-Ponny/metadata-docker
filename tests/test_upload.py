@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from config import STORAGE_HEADROOM_BYTES
+
 
 def _relative(path, music_root):
     return Path(path).relative_to(music_root).as_posix()
@@ -257,7 +259,8 @@ def test_storage_endpoint_requires_auth_and_reports_space(client, auth_headers):
     assert body["music"]["free"] >= 0
     assert body["music"]["total"] >= body["music"]["free"]
     assert body["temp"]["free"] >= 0
-    assert body["headroom"] >= 0
+    assert body["temp"]["total"] >= body["temp"]["free"]
+    assert body["headroom"] == STORAGE_HEADROOM_BYTES
 
 
 def test_version_reports_the_upload_limit(client, app_module):

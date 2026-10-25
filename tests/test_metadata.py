@@ -64,7 +64,7 @@ def test_formats_registry_covers_every_backend_family():
     )
 
 
-def test_read_only_metadata_shape(app_module, tmp_path):
+def test_read_only_metadata_shape(tmp_path):
     result = read_only_metadata(tmp_path / "notes.pdf")
 
     assert result["readOnly"] is True
