@@ -56,10 +56,10 @@ Priority items still to cover, grouped by risk.
 
 ### P0 - security and data safety
 
-- [ ] Bulk tag/cover operations skip symlinked files and directories
+- [x] Bulk tag/cover operations skip symlinked files and directories
   (`metadata_writer._iter_audio_files`), including the current-folder-only
   variants.
-- [ ] `find_first_audio()` skips symlinked audio and symlinked directories.
+- [x] `find_first_audio()` skips symlinked audio and symlinked directories.
 - [ ] Upload claim fallback when `os.link()` is unsupported, and cleanup when
   `os.replace()` fails. `_stream_size()` and `_same_size()` failure paths.
 - [ ] Forged session tokens (wrong scope, wrong username), session tokens on
@@ -100,7 +100,7 @@ Priority items still to cover, grouped by risk.
 - [ ] Custom-field name normalisation and case-insensitive deletion.
 - [ ] Clearing the last field removes the tag; multi-value and Unicode values.
 - [ ] FLAC front-cover preference; Vorbis invalid base64; empty image data.
-- [ ] `_apply_to_folder` failure accounting and empty-folder results.
+- [x] `_apply_to_folder` failure accounting and empty-folder results.
 - [ ] Raw log line parsing; `serve()` revalidation for a non-asset static file.
 
 ## Existing test defects
