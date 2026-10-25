@@ -399,3 +399,211 @@ def test_invalid_filename_does_not_create_the_target_folder(
 
     assert response.status_code == 400
     assert not (test_dir / "Nested").exists()
+
+
+def test_upload_without_a_file_part_is_rejected(client, auth_headers):
+    response = client.post(
+        "/api/upload", headers=auth_headers, data={"targetPath": ""}
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "No file part"
+
+
+def test_upload_with_an_empty_filename_is_rejected(client, auth_headers):
+    response = _upload(client, auth_headers, content=b"", filename="")
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "No selected file"
+
+
+def test_upload_target_must_be_a_folder(
+    client, auth_headers, test_dir, music_root
+):
+    target = test_dir / "already-a-file"
+    target.write_bytes(b"not a folder")
+
+    response = _upload(
+        client,
+        auth_headers,
+        target=_relative(target, music_root),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Upload target is not a folder"
+
+
+def test_original_filename_backslashes_cannot_change_the_folder(
+    client, auth_headers, test_dir, music_root
+):
+    response = client.post(
+        "/api/upload",
+        headers=auth_headers,
+        data={
+            "file": (io.BytesIO(b"audio"), "ignored.mp3"),
+            "targetPath": _relative(test_dir, music_root),
+            "originalFilename": "nested\\track.mp3",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["filename"] == "track.mp3"
+    assert body["original_filename"] == "nested\\track.mp3"
+    assert (test_dir / "track.mp3").read_bytes() == b"audio"
+    assert not (test_dir / "nested").exists()
+
+
+def test_original_filename_nul_bytes_are_removed(
+    client, auth_headers, test_dir, music_root
+):
+    response = client.post(
+        "/api/upload",
+        headers=auth_headers,
+        data={
+            "file": (io.BytesIO(b"audio"), "ignored.mp3"),
+            "targetPath": _relative(test_dir, music_root),
+            "originalFilename": "bad\0name.mp3",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["filename"] == "badname.mp3"
+    assert (test_dir / "badname.mp3").is_file()
+
+
+def test_upload_falls_back_when_the_filename_is_missing(
+    client, auth_headers, test_dir, music_root
+):
+    response = client.post(
+        "/api/upload",
+        headers=auth_headers,
+        data={
+            "file": (io.BytesIO(b"audio"), "from-part.mp3"),
+            "targetPath": _relative(test_dir, music_root),
+        },
+    )
+
+    assert response.status_code == 200
+    assert (test_dir / "from-part.mp3").is_file()
+
+
+def test_claim_upload_falls_back_to_exclusive_create(tmp_path, monkeypatch):
+    import routes.files as files
+
+    def no_hardlinks(source, destination):
+        raise OSError(errno.EPERM, "hard links are not supported")
+
+    monkeypatch.setattr(files.os, "link", no_hardlinks)
+    temp = tmp_path / "temp.part"
+    temp.write_bytes(b"payload")
+    destination = tmp_path / "song.mp3"
+
+    assert files._claim_upload(str(temp), str(destination)) is True
+    assert destination.read_bytes() == b"payload"
+    assert not temp.exists()
+
+
+def test_claim_upload_fallback_does_not_replace_an_existing_file(
+    tmp_path, monkeypatch
+):
+    import routes.files as files
+
+    def no_hardlinks(source, destination):
+        raise OSError(errno.EOPNOTSUPP, "hard links are not supported")
+
+    monkeypatch.setattr(files.os, "link", no_hardlinks)
+    temp = tmp_path / "temp.part"
+    temp.write_bytes(b"payload")
+    destination = tmp_path / "song.mp3"
+    destination.write_bytes(b"existing")
+
+    assert files._claim_upload(str(temp), str(destination)) is False
+    assert destination.read_bytes() == b"existing"
+
+
+def test_claim_upload_removes_the_claim_when_rename_fails(
+    tmp_path, monkeypatch
+):
+    import routes.files as files
+
+    def no_hardlinks(source, destination):
+        raise OSError(errno.EPERM, "hard links are not supported")
+
+    def fail_replace(source, destination):
+        raise OSError(errno.ENOSPC, "disk is full")
+
+    monkeypatch.setattr(files.os, "link", no_hardlinks)
+    monkeypatch.setattr(files.os, "replace", fail_replace)
+    temp = tmp_path / "temp.part"
+    temp.write_bytes(b"payload")
+    destination = tmp_path / "song.mp3"
+
+    with pytest.raises(OSError):
+        files._claim_upload(str(temp), str(destination))
+
+    assert not destination.exists()
+    assert temp.exists()
+
+
+def test_claim_upload_propagates_unexpected_link_errors(tmp_path, monkeypatch):
+    import routes.files as files
+
+    def fail_link(source, destination):
+        raise OSError(errno.ENOSPC, "disk is full")
+
+    monkeypatch.setattr(files.os, "link", fail_link)
+    temp = tmp_path / "temp.part"
+    temp.write_bytes(b"payload")
+
+    with pytest.raises(OSError):
+        files._claim_upload(str(temp), str(tmp_path / "song.mp3"))
+
+
+def test_same_size_handles_missing_values_and_errors(tmp_path, monkeypatch):
+    import routes.files as files
+
+    song = tmp_path / "song.mp3"
+    song.write_bytes(b"1234")
+
+    assert files._same_size(str(song), None) is False
+    assert files._same_size(str(tmp_path / "missing"), 4) is False
+    assert files._same_size(str(song), 4) is True
+
+    def fail_getsize(path):
+        raise OSError(errno.EIO, "I/O error")
+
+    monkeypatch.setattr(files.os.path, "getsize", fail_getsize)
+    assert files._same_size(str(song), 4) is False
+
+
+def test_stream_size_returns_none_for_unreadable_streams():
+    import routes.files as files
+
+    class BadStream:
+        def tell(self):
+            raise OSError("not seekable")
+
+    class Storage:
+        stream = BadStream()
+
+    assert files._stream_size(Storage()) is None
+    assert files._stream_size(object()) is None
+
+
+def test_save_upload_removes_the_temp_file_when_saving_fails(tmp_path):
+    import routes.files as files
+
+    class FailingStorage:
+        stream = None
+
+        def save(self, path):
+            Path(path).write_bytes(b"partial")
+            raise OSError(errno.ENOSPC, "disk is full")
+
+    with pytest.raises(OSError):
+        files._save_upload_atomic(
+            FailingStorage(), str(tmp_path), "song.mp3", "keep-both"
+        )
+
+    assert list(tmp_path.iterdir()) == []

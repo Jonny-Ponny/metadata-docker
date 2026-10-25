@@ -60,7 +60,7 @@ Priority items still to cover, grouped by risk.
   (`metadata_writer._iter_audio_files`), including the current-folder-only
   variants.
 - [x] `find_first_audio()` skips symlinked audio and symlinked directories.
-- [ ] Upload claim fallback when `os.link()` is unsupported, and cleanup when
+- [x] Upload claim fallback when `os.link()` is unsupported, and cleanup when
   `os.replace()` fails. `_stream_size()` and `_same_size()` failure paths.
 - [x] Forged session tokens (wrong scope, wrong username), session tokens on
   `/api/download`, oversized login credentials, rate-limiter expiry/window
@@ -81,7 +81,7 @@ Priority items still to cover, grouped by risk.
   collision suffix, boolean validation for `isFolder`/`replaceSpaces`.
 - [ ] `GET /api/text` success, missing path, missing file, non-text file.
 - [ ] `/api/metadata/field/delete` on a folder (recursive and current-only).
-- [ ] Upload validation: no `file` part, empty filename, target is a file,
+- [x] Upload validation: no `file` part, empty filename, target is a file,
   backslash/original-filename normalisation.
 - [ ] `GET /api/metadata?includePicture=false` through the endpoint; behaviour
   for corrupt supported audio.
