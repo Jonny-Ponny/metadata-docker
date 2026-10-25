@@ -8,6 +8,7 @@
 
 import { getAuthHeaders } from "../stores/auth.store.js";
 import { formatApiErrorMessage } from "./api.utils.js";
+import { fetchVersionInfo } from "./version.utils.js";
 
 // Chromium allows ~6 connections per origin over HTTP/1.1 and the container
 // runs gunicorn with 8 threads, so 4 leaves room for tree reloads and metadata
@@ -268,8 +269,7 @@ export async function fetchStorage() {
 
 /** Per-request upload limit (MAX_UPLOAD_MB), exposed by /api/version. */
 export async function fetchUploadLimit() {
-  const response = await fetch("/api/version", { headers: getAuthHeaders() });
-  const data = await readJsonBody(response, "Could not read the upload limit");
+  const data = await fetchVersionInfo();
   return Number(data.max_upload_bytes) || 0;
 }
 
