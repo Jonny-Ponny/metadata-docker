@@ -171,7 +171,8 @@ reads it (`routes/files.py`, `routes/tags.py`, `routes/logs.py`,
 `tests/` covers path containment, auth/token scopes, the JSON contract, upload
 races, rename/move/copy/delete, tag round-trips for every format and field,
 cover art, LRC/SYLT parsing, ZIP streaming, addons, logs and configuration.
-[BUGFIXES.md](BUGFIXES.md) maps every fixed bug to its regression test.
+[BUGFIXES.md](BUGFIXES.md) maps every fixed bug to its regression test;
+[TESTING.md](TESTING.md) documents the coverage workflow and the test backlog.
 
 ## Local development
 

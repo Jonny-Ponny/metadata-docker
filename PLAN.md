@@ -25,6 +25,13 @@ CI gates the image build. What remains is optional hardening and new features.
 
 ## Planned
 
+### Known issues and small fixes
+
+- The SPA requests `/api/version` twice on load (visible as two entries in the
+  browser network tab); fetch it once and share the result.
+- Custom fields listed after `comment`/`description` should be sorted
+  alphabetically in the editor instead of appearing in tag order.
+
 ### Optional security hardening
 
 - Build hygiene: add `.dockerignore`, build the frontend with `npm ci`, pin the
@@ -63,6 +70,8 @@ CI gates the image build. What remains is optional hardening and new features.
 
 ### Housekeeping
 
+- Optional backend test coverage in CI: see [docs/TESTING.md](docs/TESTING.md)
+  for the measurement command and the remaining gaps.
 - `pytest-xdist` in CI (optional; the suite is ~5 s serial, so the gain is
   small).
 
