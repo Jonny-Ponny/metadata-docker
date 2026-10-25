@@ -89,7 +89,7 @@ Priority items still to cover, grouped by risk.
   loop.
 - [x] Download token negative cases and `Content-Disposition` sanitising for
   quotes, backslashes and CRLF.
-- [ ] All addon methods advertised; non-dict results; legacy key precedence;
+- [x] All addon methods advertised; non-dict results; legacy key precedence;
   `reload_plugins()`.
 - [ ] Version API failure branches (non-200, empty tag, exception, invalid
   version strings).
