@@ -114,7 +114,7 @@ def test_security_headers_are_present_on_a_normal_response(client):
 
 @pytest.mark.parametrize(
     "path",
-    ["/api/does-not-exist", "/api/does/not/exist", "/api/files/extra"],
+    ["/api", "/api/does-not-exist", "/api/does/not/exist", "/api/files/extra"],
 )
 def test_unknown_api_paths_are_json_404_without_the_spa(client, path):
     response = client.get(path)
