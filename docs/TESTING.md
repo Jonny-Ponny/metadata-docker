@@ -87,7 +87,7 @@ Priority items still to cover, grouped by risk.
   for corrupt supported audio.
 - [x] `save-as-file` PNG/raw-base64 paths and the existing `cover.*` suffix
   loop.
-- [ ] Download token negative cases and `Content-Disposition` sanitising for
+- [x] Download token negative cases and `Content-Disposition` sanitising for
   quotes, backslashes and CRLF.
 - [ ] All addon methods advertised; non-dict results; legacy key precedence;
   `reload_plugins()`.

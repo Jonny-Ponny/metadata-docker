@@ -258,3 +258,68 @@ def test_missing_download_path_is_a_json_400(client, auth_headers):
 
     assert response.status_code == 400
     assert response.is_json
+
+
+def test_download_requires_a_token(client):
+    response = client.get("/api/download")
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "Token is missing"
+
+
+def test_a_token_without_a_download_scope_is_rejected(client, app_module):
+    token = _signed_download_token(app_module, scope="session")
+
+    response = client.get("/api/download", query_string={"token": token})
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "Token is invalid"
+
+
+def test_a_download_token_without_a_path_is_rejected(client, app_module):
+    token = _signed_download_token(app_module, path="")
+
+    response = client.get("/api/download", query_string={"token": token})
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "Token is invalid"
+
+
+def test_a_token_for_a_deleted_target_is_404(
+    client, auth_headers, test_dir, music_root
+):
+    song = test_dir / "song.mp3"
+    song.write_bytes(b"audio")
+    token = _download_token(client, auth_headers, _relative(song, music_root))
+    song.unlink()
+
+    response = client.get("/api/download", query_string={"token": token})
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Path not found"
+
+
+def test_a_file_token_marked_as_a_folder_cannot_download(
+    client, auth_headers, test_dir, music_root
+):
+    song = test_dir / "song.mp3"
+    song.write_bytes(b"audio")
+    token = _download_token(
+        client, auth_headers, _relative(song, music_root), is_folder=True
+    )
+
+    response = client.get("/api/download", query_string={"token": token})
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Invalid item type"
+
+
+def test_content_disposition_sanitises_quotes_backslashes_and_newlines():
+    from routes import downloads
+
+    header = downloads._content_disposition('a"b\\c\r\nd \u00e9.mp3')
+
+    assert header.startswith('attachment; filename="a_b_c__d _.mp3"; ')
+    assert "filename*=UTF-8''" in header
+    assert "\r" not in header
+    assert "\n" not in header
