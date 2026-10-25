@@ -65,7 +65,7 @@ Priority items still to cover, grouped by risk.
 - [ ] Forged session tokens (wrong scope, wrong username), session tokens on
   `/api/download`, oversized login credentials, rate-limiter expiry/window
   rollover and table pruning.
-- [ ] `safe_fetch.py`: malformed URLs, DNS failures, IPv4-mapped/6to4/Teredo,
+- [x] `safe_fetch.py`: malformed URLs, DNS failures, IPv4-mapped/6to4/Teredo,
   redirects with no `Location`, too many redirects, HTTP errors, non-image
   responses, declared and streamed size caps.
 - [ ] Folder delete, folder move/rename success, missing-path branches, broken
