@@ -91,7 +91,7 @@ Priority items still to cover, grouped by risk.
   quotes, backslashes and CRLF.
 - [x] All addon methods advertised; non-dict results; legacy key precedence;
   `reload_plugins()`.
-- [ ] Version API failure branches (non-200, empty tag, exception, invalid
+- [x] Version API failure branches (non-200, empty tag, exception, invalid
   version strings).
 
 ### P2 - tag backends and helpers
