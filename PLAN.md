@@ -39,13 +39,7 @@ image build. What remains is optional hardening and new features.
 
 ### Known issues and small fixes
 
-- **B-31 (P1) Invalid `AUTH_PASSWORD_HASH` crash-loops the app.** A malformed
-  Werkzeug hash raises `RuntimeError` at import, so the container restarts
-  forever and the UI never starts. The operator has to inspect the logs just
-  to discover the cause.
-  *Done when:* the validation error is logged, the bad hash is ignored, and a
-  temporary password is generated and logged for this run.
-  *Touch:* `backend/config.py`, `docs/DEPLOYMENT.md`, `tests/test_config.py`.
+No open items.
 
 ### Optional security hardening
 

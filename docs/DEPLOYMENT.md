@@ -73,8 +73,9 @@ python -c "from werkzeug.security import generate_password_hash; print(generate_
 ```
 
 If both `AUTH_PASSWORD` and `AUTH_PASSWORD_HASH` are set, the hash wins and a
-warning is logged. An invalid hash fails at startup with the expected format in
-the message instead of silently rejecting every login.
+warning is logged. An invalid hash is logged and a temporary password is
+generated for this run instead of failing startup, so a typo cannot put the
+container into a restart loop. Fix the variable and restart to use the hash.
 
 If neither password variable is set, a random password is generated at startup
 and printed to the logs; it changes on every restart. The app never falls back

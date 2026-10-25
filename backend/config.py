@@ -78,9 +78,10 @@ if AUTH_PASSWORD_HASH and AUTH_PASSWORD:
     AUTH_PASSWORD = ''
 
 if AUTH_PASSWORD_HASH:
-    # Validate the hash at startup so a typo fails loudly instead of every
-    # login returning a 500 or silently never matching. Werkzeug hashes look
-    # like "scrypt:...$salt$hash" (or the older pbkdf2 format).
+    # Validate the hash at startup so a typo does not silently reject every
+    # login. Werkzeug hashes look like "scrypt:...$salt$hash" (or the older
+    # pbkdf2 format). Never crash-loop the container over a bad value: log the
+    # problem and fall through to a temporary password for this run.
     hash_error = None
     if AUTH_PASSWORD_HASH.count('$') < 2:
         hash_error = 'expected "method$salt$hash"'
@@ -90,12 +91,21 @@ if AUTH_PASSWORD_HASH:
         except (ValueError, TypeError) as e:
             hash_error = str(e)
     if hash_error:
-        raise RuntimeError(
-            f'AUTH_PASSWORD_HASH is not a valid Werkzeug password hash ({hash_error}). '
-            'Generate one with: python -c "from werkzeug.security import '
-            'generate_password_hash; print(generate_password_hash(\'your-password\'))"'
+        log_warning(
+            'AUTH_PASSWORD_HASH is not a valid Werkzeug password hash '
+            f'({hash_error}); generating a temporary password for this run.'
         )
-elif not AUTH_PASSWORD:
+        log_warning(
+            'Generate a valid hash with: python -c "from werkzeug.security '
+            'import generate_password_hash; print(generate_password_hash('
+            "'your-password'))\""
+        )
+        AUTH_PASSWORD_HASH = ''
+        # Do not reuse a plaintext password that was shadowed by the bad hash;
+        # the temporary password is the only credential logged for this run.
+        AUTH_PASSWORD = ''
+
+if not AUTH_PASSWORD and not AUTH_PASSWORD_HASH:
     AUTH_PASSWORD = secrets.token_urlsafe(24)
     _generated_password = True
 

@@ -27,7 +27,7 @@ python -m pytest -q --cov=backend --cov-report=term-missing
 | Measurement | Tests | Line coverage | Statements | Missed |
 |---|---:|---:|---:|---:|
 | Baseline before the coverage work | 616 | 83% | 2583 | 437 |
-| Current (2026-10-25) | 846 | 92% | 2588 | 203 |
+| Current (2026-10-25) | 848 | 92% | 2591 | 206 |
 
 `config.py` is under-reported because its tests import the app in a subprocess.
 
