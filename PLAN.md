@@ -70,8 +70,8 @@ CI gates the image build. What remains is optional hardening and new features.
 
 ### Housekeeping
 
-- Optional backend test coverage in CI: see [docs/TESTING.md](docs/TESTING.md)
-  for the measurement command and the remaining gaps.
+- Backend test coverage runs as a non-blocking CI step (no threshold); see
+  [docs/TESTING.md](docs/TESTING.md) for the local command and remaining gaps.
 - `pytest-xdist` in CI (optional; the suite is ~5 s serial, so the gain is
   small).
 
