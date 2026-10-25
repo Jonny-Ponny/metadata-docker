@@ -24,11 +24,14 @@ pip install -r requirements-dev.txt
 python -m pytest -q --cov=backend --cov-report=term-missing
 ```
 
-The first measurement on this branch was **83%** (2583 statements, 437 missed).
-After the coverage pass it is **92%** (2588 statements, 203 missed, 846 tests).
+| Measurement | Tests | Line coverage | Statements | Missed |
+|---|---:|---:|---:|---:|
+| Baseline before the coverage work | 616 | 83% | 2583 | 437 |
+| Current (2026-10-25) | 846 | 92% | 2588 | 203 |
+
 `config.py` is under-reported because its tests import the app in a subprocess.
 
-Lowest areas after the coverage pass:
+Lowest-covered areas:
 
 | Area | Cover | Main gap |
 |---|---:|---|
@@ -40,6 +43,33 @@ Lowest areas after the coverage pass:
 | `routes/logs.py` | 91% | empty and undecodable log lines |
 | `renaming.py` | 91% | remaining filename edge cases |
 | everything else | 92-100% | |
+
+## Coverage backlog
+
+All planned P0/P1/P2 test items are complete. The remaining misses are:
+
+- repeated per-endpoint input validation and generic error exits in
+  `routes/tags.py`;
+- stat and temp-file cleanup races in `routes/text.py`;
+- defensive cleanup in the upload and ZIP streaming paths;
+- `config.py` execution hidden inside subprocess tests.
+
+Add tests for these only when a real failure mode is found or a bug is fixed.
+There are no open test tasks.
+
+## Covered areas
+
+- Path containment, library-root guards and symlink handling.
+- Authentication, token scopes and the login rate limiter.
+- Uploads: atomic claims, conflict policies, size/disk preconditions and
+  cleanup after a failed write.
+- File tree classification, rename, move, copy, delete and smart rename.
+- Metadata: tag and cover round-trips for every format, folder-wide operations,
+  and remote cover failures (SSRF guard, size cap, timeout, connection error).
+- Text and log routes, JSON error handlers and static-file caching.
+- Downloads: tokens, ZIP streaming, symlink exclusion, cancellation and
+  unreadable-file handling.
+- Addons, config parsing and the version cache.
 
 ## Conventions
 
@@ -54,64 +84,7 @@ Lowest areas after the coverage pass:
 - Use `monkeypatch` for clocks and sockets instead of sleeping or contacting
   the network.
 
-## Missing tests
-
-Priority items still to cover, grouped by risk.
-
-### P0 - security and data safety
-
-- [x] Bulk tag/cover operations skip symlinked files and directories
-  (`metadata_writer._iter_audio_files`), including the current-folder-only
-  variants.
-- [x] `find_first_audio()` skips symlinked audio and symlinked directories.
-- [x] Upload claim fallback when `os.link()` is unsupported, and cleanup when
-  `os.replace()` fails. `_stream_size()` and `_same_size()` failure paths.
-- [x] Forged session tokens (wrong scope, wrong username), session tokens on
-  `/api/download`, oversized login credentials, rate-limiter expiry/window
-  rollover and table pruning.
-- [x] `safe_fetch.py`: malformed URLs, DNS failures, IPv4-mapped/6to4/Teredo,
-  redirects with no `Location`, too many redirects, HTTP errors, non-image
-  responses, declared and streamed size caps.
-- [x] Folder delete, folder move/rename success, missing-path branches, broken
-  symlink deletion, and a rename attempt on the library root.
-- [x] Unhandled exceptions return JSON, the 400/415 handlers return JSON, the
-  generic 413 branch names the request limit, and security headers survive
-  error responses.
-- [x] `/api` exactly is a JSON 404, not the SPA.
-
-### P1 - core features
-
-- [x] Successful smart rename of a file, no-op when the name already matches,
-  collision suffix, boolean validation for `isFolder`/`replaceSpaces`.
-- [x] `GET /api/text` success, missing path, missing file, non-text file.
-- [x] `/api/metadata/field/delete` on a folder (recursive and current-only).
-- [x] Upload validation: no `file` part, empty filename, target is a file,
-  backslash/original-filename normalisation.
-- [x] `GET /api/metadata?includePicture=false` through the endpoint; behaviour
-  for corrupt supported audio.
-- [x] `save-as-file` PNG/raw-base64 paths and the existing `cover.*` suffix
-  loop.
-- [x] Download token negative cases and `Content-Disposition` sanitising for
-  quotes, backslashes and CRLF.
-- [x] All addon methods advertised; non-dict results; legacy key precedence;
-  `reload_plugins()`.
-- [x] Version API failure branches (non-200, empty tag, exception, invalid
-  version strings).
-- [x] Route failure paths: permission and generic errors for
-  delete/move/copy/rename/mkdir, folder metadata and cover operations, text
-  read/save, cover fetch timeouts and size caps, download-token validation,
-  and ZIP unreadable-file/cancellation handling.
-
-### P2 - tag backends and helpers
-
-- [x] MP4 number-pair parsing/formatting and malformed freeform keys.
-- [x] Custom-field name normalisation and case-insensitive deletion.
-- [x] Clearing the last field removes the tag; multi-value and Unicode values.
-- [x] FLAC front-cover preference; Vorbis invalid base64; empty image data.
-- [x] `_apply_to_folder` failure accounting and empty-folder results.
-- [x] Raw log line parsing; a non-asset static file is revalidated.
-
-## Test defects fixed on this branch
+## Test-quality fixes
 
 - The upload/cover 413 tests patched `app.MAX_UPLOAD_BYTES` /
   `app.COVER_UPLOAD_BYTES`, while `errors.handle_request_too_large()` reads its
@@ -125,3 +98,15 @@ Priority items still to cover, grouped by risk.
 - The download-token scope check existed in both `test_security.py` and
   `test_auth.py`. The version that also exercises the positive download path is
   kept.
+
+## Maintaining this guide
+
+Update this file when:
+
+- the test count or line coverage moves materially;
+- CI or the local test commands change;
+- a new test convention is adopted;
+- a new area becomes a known coverage gap.
+
+Keep the coverage snapshot and the open backlog current; do not add per-test
+history here. The coverage numbers were last measured on 2026-10-25.

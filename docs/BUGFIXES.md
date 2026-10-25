@@ -1,13 +1,14 @@
 # Fixed bugs
 
-Historical record of the bugs found in the pre-refactor backend and the fixes
-that shipped with Phases 1 and 2. All items below are fixed and covered by a
-regression test; the test names are listed in [Regression tests](#regression-tests).
+Historical record of confirmed defects and the fixes that resolved them. All
+items below are fixed and covered by a regression test; the test names are
+listed in [Regression tests](#regression-tests).
 
-Line references point at the tree *before* the Phase 3 refactor. The code now
-lives in `backend/routes/` and the support modules (`paths.py`, `errors.py`,
-`auth.py`, `library.py`, `renaming.py`); see
-[ARCHITECTURE.md](ARCHITECTURE.md) for the current layout.
+Line references in B-01 to B-30 point at the tree *before* the Phase 3
+refactor. The code now lives in `backend/routes/` and the support modules
+(`paths.py`, `errors.py`, `auth.py`, `library.py`, `renaming.py`); new entries
+should reference the current files. See [ARCHITECTURE.md](ARCHITECTURE.md) for
+the current layout.
 
 Severity legend: **P0** data loss / library escape, **P1** crash or wrong
 status code, **P2** correctness or polish.

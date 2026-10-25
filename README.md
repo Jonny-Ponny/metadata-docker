@@ -181,7 +181,10 @@ image was built by this repository's workflow from the expected commit.
 - **Packaging:** Docker, multi-arch images (amd64, arm64, armv7)
 
 Architecture and development notes live in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The backend test commands,
+coverage snapshot and test conventions are in [docs/TESTING.md](docs/TESTING.md);
+fixed defects and their regression tests are recorded in
+[docs/BUGFIXES.md](docs/BUGFIXES.md).
 
 ## Acknowledgments
 
