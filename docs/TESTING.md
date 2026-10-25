@@ -68,7 +68,7 @@ Priority items still to cover, grouped by risk.
 - [x] `safe_fetch.py`: malformed URLs, DNS failures, IPv4-mapped/6to4/Teredo,
   redirects with no `Location`, too many redirects, HTTP errors, non-image
   responses, declared and streamed size caps.
-- [ ] Folder delete, folder move/rename success, missing-path branches, broken
+- [x] Folder delete, folder move/rename success, missing-path branches, broken
   symlink deletion, and a rename attempt on the library root.
 - [ ] Unhandled exceptions return JSON, the 400/415 handlers return JSON, the
   generic 413 branch names the request limit, and security headers survive
@@ -77,13 +77,13 @@ Priority items still to cover, grouped by risk.
 
 ### P1 - core features
 
-- [ ] Successful smart rename of a file, no-op when the name already matches,
+- [x] Successful smart rename of a file, no-op when the name already matches,
   collision suffix, boolean validation for `isFolder`/`replaceSpaces`.
 - [ ] `GET /api/text` success, missing path, missing file, non-text file.
-- [ ] `/api/metadata/field/delete` on a folder (recursive and current-only).
+- [x] `/api/metadata/field/delete` on a folder (recursive and current-only).
 - [x] Upload validation: no `file` part, empty filename, target is a file,
   backslash/original-filename normalisation.
-- [ ] `GET /api/metadata?includePicture=false` through the endpoint; behaviour
+- [x] `GET /api/metadata?includePicture=false` through the endpoint; behaviour
   for corrupt supported audio.
 - [ ] `save-as-file` PNG/raw-base64 paths and the existing `cover.*` suffix
   loop.
