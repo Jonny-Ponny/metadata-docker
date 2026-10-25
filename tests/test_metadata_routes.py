@@ -69,6 +69,19 @@ def test_get_metadata_missing_file_is_404(client, auth_headers, music_root):
     assert response.status_code == 404
 
 
+def test_get_metadata_reports_a_clear_error_for_corrupt_audio(
+    client, auth_headers, write_library_file, music_root
+):
+    corrupt = write_library_file("corrupt.mp3", b"not real audio")
+
+    response = _metadata(client, auth_headers, corrupt, music_root)
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == (
+        "Could not read metadata (unsupported format?)"
+    )
+
+
 def test_get_metadata_requires_a_path(client, auth_headers):
     response = client.get("/api/metadata", headers=auth_headers)
 
@@ -201,6 +214,24 @@ def test_upload_cover_stores_the_picture(
     assert body["success"] is True
     assert body["picture"].startswith("data:image/jpeg;base64,")
     assert extract_metadata(song)["picture"].startswith("data:image/jpeg;base64,")
+
+
+def test_get_metadata_can_skip_the_picture(
+    client, auth_headers, audio_file, music_root
+):
+    song = audio_file(".mp3", name="song.mp3")
+    assert _upload_cover(
+        client, auth_headers, _relative(song, music_root)
+    ).status_code == 200
+
+    response = _metadata(
+        client, auth_headers, song, music_root, includePicture="false"
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert "picture" not in body
+    assert "picture" in extract_metadata(song)
 
 
 def test_upload_cover_from_url_uses_the_fetched_image(
@@ -368,6 +399,58 @@ def test_delete_field_route_clears_a_tag(
 
     assert response.status_code == 200
     assert extract_metadata(song)["composer"] == ""
+
+
+def test_delete_field_from_a_folder_is_recursive(
+    client, auth_headers, audio_file, test_dir, music_root
+):
+    from metadata_writer import update_file_metadata
+
+    album = test_dir / "album"
+    top = audio_file(".mp3", name="album/top.mp3")
+    nested = audio_file(".mp3", name="album/nested/inner.mp3")
+    for track in (top, nested):
+        assert update_file_metadata(str(track), "composer", "Composer")
+
+    response = client.post(
+        "/api/metadata/field/delete",
+        headers=auth_headers,
+        json={
+            "path": _relative(album, music_root),
+            "field": "composer",
+            "recursive": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert (body["total"], body["updated"], body["failed"]) == (2, 2, 0)
+    assert extract_metadata(top)["composer"] == ""
+    assert extract_metadata(nested)["composer"] == ""
+
+
+def test_delete_field_from_a_folder_current_only_skips_subfolders(
+    client, auth_headers, audio_file, test_dir, music_root
+):
+    from metadata_writer import update_file_metadata
+
+    album = test_dir / "album"
+    top = audio_file(".mp3", name="album/top.mp3")
+    nested = audio_file(".mp3", name="album/nested/inner.mp3")
+    for track in (top, nested):
+        assert update_file_metadata(str(track), "composer", "Composer")
+
+    response = client.post(
+        "/api/metadata/field/delete",
+        headers=auth_headers,
+        json={"path": _relative(album, music_root), "field": "composer"},
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert (body["total"], body["updated"]) == (1, 1)
+    assert extract_metadata(top)["composer"] == ""
+    assert extract_metadata(nested)["composer"] == "Composer"
 
 
 def test_delete_cover_route_clears_the_picture(
