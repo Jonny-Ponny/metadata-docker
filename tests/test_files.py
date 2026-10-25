@@ -230,3 +230,17 @@ def test_delete_never_follows_a_symlink_outside_the_library(
     assert response.status_code == 403
     assert link.is_symlink()
     assert outside.read_bytes() == b"secret"
+
+
+def test_file_tree_reports_a_listing_failure(
+    client, auth_headers, files_module, monkeypatch
+):
+    def broken(*args, **kwargs):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(files_module, "build_tree", broken)
+
+    response = client.get("/api/files", headers=auth_headers)
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "An unexpected server error occurred."

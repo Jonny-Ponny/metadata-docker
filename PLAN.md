@@ -1,7 +1,18 @@
 # Roadmap
 
-Status: Phases 1-3 are complete on `main` - the suite is green (616 tests) and
-CI gates the image build. What remains is optional hardening and new features.
+Status: Phases 1-3 are complete on `main` - the suite is green and CI gates the
+image build. What remains is optional hardening and new features.
+
+## Tracking work
+
+- `B-xx (P0/P1/P2)` - confirmed defects that have been fixed. The severity,
+  fix and regression test live in [docs/BUGFIXES.md](docs/BUGFIXES.md).
+- `T-xx (P2/P3)` - open tasks, small fixes, polish and technical debt listed
+  below. `P2` is user-visible or recurring; `P3` is low-impact.
+- A newly found defect starts as `T-xx` here. Once it is fixed and has a
+  regression test, record it as `B-xx` in BUGFIXES.md.
+- Larger feature bullets are not numbered until work starts; split them into
+  `T-xx` items then.
 
 ## Done
 
@@ -24,6 +35,20 @@ CI gates the image build. What remains is optional hardening and new features.
   [SECURITY.md](SECURITY.md).
 
 ## Planned
+
+### Known issues and small fixes
+
+- **T-01 (P2) Fetch `/api/version` once on load.** The SPA calls it from both
+  the version check and the upload-limit lookup, so the browser network tab
+  shows two identical requests. Share one fetch and its result.
+  *Done when:* the version endpoint is requested once per load and both
+  consumers receive the same data.
+  *Touch:* `frontend/src/App.svelte`, `frontend/src/utils/upload.utils.js`.
+- **T-02 (P3) Sort custom fields alphabetically after `comment`/`description`.**
+  Unknown tags currently appear in tag order instead of a stable alphabetical
+  order after the standard fields.
+  *Done when:* custom fields are sorted by name in the editor.
+  *Touch:* `frontend/src/components/MetadataEditor.svelte`.
 
 ### Optional security hardening
 
@@ -63,6 +88,8 @@ CI gates the image build. What remains is optional hardening and new features.
 
 ### Housekeeping
 
+- Backend test coverage runs as a non-blocking CI step (no threshold); see
+  [docs/TESTING.md](docs/TESTING.md) for the local command and remaining gaps.
 - `pytest-xdist` in CI (optional; the suite is ~5 s serial, so the gain is
   small).
 

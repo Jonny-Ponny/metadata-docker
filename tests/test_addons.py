@@ -344,3 +344,103 @@ def test_duplicate_fetcher_ids_keep_the_last_definition(tmp_path):
 
     assert manager.fetchers["duplicate"].name == "Second"
 
+
+def test_list_addons_reports_all_implemented_methods(
+    client, auth_headers, fake_fetcher
+):
+    fake_fetcher(
+        "everything",
+        search_albums=lambda self, query, limit: [],
+        fetch_album_metadata=lambda self, album_id: {},
+        search_songs=lambda self, query, limit: [],
+        fetch_song_metadata=lambda self, song_id: {},
+    )
+
+    response = client.get("/api/addons", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert _entry(response, "everything")["methods"] == [
+        "search_albums",
+        "fetch_album_metadata",
+        "search_songs",
+        "fetch_song_metadata",
+    ]
+
+
+def test_legacy_keys_only_replace_empty_current_values():
+    from routes.addons import _normalize_addon_metadata
+
+    assert _normalize_addon_metadata(
+        {"date": "new", "year": "old", "title": "Song"}
+    ) == {"date": "new", "year": "old", "title": "Song"}
+    assert _normalize_addon_metadata(
+        {"date": "", "year": "old"}
+    ) == {"date": "old"}
+    assert _normalize_addon_metadata(["not", "a", "dict"]) == [
+        "not",
+        "a",
+        "dict",
+    ]
+
+
+def test_addon_github_url_accepts_www_and_alternate_attributes():
+    from routes.addons import _addon_github_url
+
+    class Www:
+        github = "www.github.com/user/repo"
+
+    class Alternate:
+        repository = "https://github.com/user/other"
+
+    assert _addon_github_url(Www) == "https://www.github.com/user/repo"
+    assert _addon_github_url(Alternate) == "https://github.com/user/other"
+
+
+def test_addon_version_is_normalised():
+    from routes.addons import _addon_version
+
+    class NoneVersion:
+        version = None
+
+    class NumberVersion:
+        version = 42
+
+    assert _addon_version(NoneVersion) == ""
+    assert _addon_version(NumberVersion) == "42"
+
+
+def test_reload_plugins_picks_up_new_addons(tmp_path):
+    from plugin_manager import PluginManager
+
+    addons = tmp_path / "addons"
+    addons.mkdir()
+    (addons / "first.py").write_text(
+        textwrap.dedent(
+            """
+            from addon_base import MetadataFetcher
+
+            class First(MetadataFetcher):
+                id = 'first'
+                name = 'First'
+            """
+        )
+    )
+    manager = PluginManager(addons_dir=str(addons))
+    manager.discover_plugins()
+    assert set(manager.fetchers) == {"first"}
+
+    (addons / "second.py").write_text(
+        textwrap.dedent(
+            """
+            from addon_base import MetadataFetcher
+
+            class Second(MetadataFetcher):
+                id = 'second'
+                name = 'Second'
+            """
+        )
+    )
+    manager.reload_plugins()
+
+    assert set(manager.fetchers) == {"first", "second"}
+

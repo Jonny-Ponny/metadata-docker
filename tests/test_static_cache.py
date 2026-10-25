@@ -30,6 +30,20 @@ def test_hashed_assets_are_immutable(client, app_module, tmp_path, monkeypatch):
     assert "immutable" in response.headers["Cache-Control"]
 
 
+def test_a_non_asset_static_file_is_revalidated(
+    client, app_module, tmp_path, monkeypatch
+):
+    static = _static_dir(tmp_path)
+    (static / "favicon.ico").write_bytes(b"icon")
+    monkeypatch.setattr(app_module, "STATIC_DIR", str(static))
+
+    response = client.get("/favicon.ico")
+
+    assert response.status_code == 200
+    assert response.data == b"icon"
+    assert response.headers["Cache-Control"] == "no-cache"
+
+
 def test_spa_fallback_is_revalidated(client, app_module, tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "STATIC_DIR", str(_static_dir(tmp_path)))
 

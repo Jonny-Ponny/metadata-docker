@@ -136,7 +136,7 @@ def create_app(settings=None):
     def serve(path):
         # Unknown API routes are never the SPA: a JSON parse error in the
         # browser would be more confusing than a clear 404.
-        if path.startswith('api/'):
+        if path == 'api' or path.startswith('api/'):
             return jsonify({'success': False, 'error': 'Not found'}), 404
 
         if path and os.path.isfile(os.path.join(STATIC_DIR, path)):

@@ -171,7 +171,8 @@ reads it (`routes/files.py`, `routes/tags.py`, `routes/logs.py`,
 `tests/` covers path containment, auth/token scopes, the JSON contract, upload
 races, rename/move/copy/delete, tag round-trips for every format and field,
 cover art, LRC/SYLT parsing, ZIP streaming, addons, logs and configuration.
-[BUGFIXES.md](BUGFIXES.md) maps every fixed bug to its regression test.
+[BUGFIXES.md](BUGFIXES.md) maps every fixed bug to its regression test;
+[TESTING.md](TESTING.md) documents the coverage workflow and the test backlog.
 
 ## Local development
 
@@ -208,7 +209,9 @@ the browser out.
 
 `.github/workflows/tests.yml` runs `py_compile` and `pytest -q` on pull
 requests and on `main`, `master`, `fix/**`, `test/**`, `refactor/**` and
-`ci/**`. Its job id (and required check name) is `pytest`.
+`ci/**`. Its job id (and required check name) is `pytest`. A second,
+non-blocking step prints line coverage with `pytest-cov`; it has no threshold
+and never fails the required job.
 
 `.github/workflows/container-release.yml` runs on pushes to `main`/`master` and
 on `v*` tags. It calls `tests.yml` as a `test` job and `build-and-push` declares

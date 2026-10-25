@@ -1,6 +1,11 @@
 """Tag and cover-art round-trips for every supported format."""
 
+import base64
+
 import pytest
+from mutagen import File
+from mutagen.flac import Picture
+from mutagen.id3 import TPE1, Encoding
 
 from formats import FORMATS, SUPPORTED_EXTENSIONS
 from metadata_extractor import extract_metadata, read_only_metadata
@@ -64,7 +69,7 @@ def test_formats_registry_covers_every_backend_family():
     )
 
 
-def test_read_only_metadata_shape(app_module, tmp_path):
+def test_read_only_metadata_shape(tmp_path):
     result = read_only_metadata(tmp_path / "notes.pdf")
 
     assert result["readOnly"] is True
@@ -148,6 +153,58 @@ def test_delete_custom_field(audio_file, extension):
 
 
 @pytest.mark.parametrize("extension", SUPPORTED_EXTENSIONS)
+def test_deleting_the_last_field_removes_the_tag(audio_file, extension):
+    path = audio_file(extension)
+    # Start from a clean file; the fixtures carry encoder tags.
+    audio = File(path, easy=False)
+    audio.delete()
+    audio.save()
+
+    assert update_file_metadata(path, "title", "Only field") is True
+    assert delete_metadata_field(path, "title") is True
+
+    audio = File(path, easy=False)
+    assert not (audio.tags or {})
+    assert extract_metadata(path)["title"] == ""
+
+
+@pytest.mark.parametrize("extension", SUPPORTED_EXTENSIONS)
+def test_unicode_values_round_trip(audio_file, extension):
+    value = "Beyoncé – 日本語 🎵"
+    path = audio_file(extension)
+
+    assert update_file_metadata(path, "title", value) is True
+
+    assert extract_metadata(path)["title"] == value
+
+
+@pytest.mark.parametrize(
+    "extension",
+    [".mp3", ".flac", ".ogg", ".m4a"],
+)
+def test_multi_value_tags_are_joined(audio_file, extension):
+    path = audio_file(extension)
+    audio = File(path, easy=False)
+
+    if extension == ".mp3":
+        if audio.tags is None:
+            audio.add_tags()
+        audio.tags.add(TPE1(encoding=Encoding.UTF8, text=["One", "Two"]))
+    elif extension == ".flac":
+        audio["ARTIST"] = ["One", "Two"]
+    elif extension == ".ogg":
+        audio["artist"] = ["One", "Two"]
+    else:
+        if audio.tags is None:
+            audio.add_tags()
+        audio["\xa9ART"] = ["One", "Two"]
+
+    audio.save()
+
+    assert extract_metadata(path)["artist"] == "One; Two"
+
+
+@pytest.mark.parametrize("extension", SUPPORTED_EXTENSIONS)
 def test_cover_art_round_trip_and_delete(audio_file, extension):
     path = audio_file(extension)
     image = COVER_BYTES["image/jpeg"]
@@ -198,6 +255,86 @@ def test_mp4_cover_round_trips_png(audio_file, extension):
 
     metadata = extract_metadata(path)
     assert metadata["picture"].startswith("data:image/png;base64,")
+
+
+def _picture(kind, data):
+    picture = Picture()
+    picture.type = kind
+    picture.mime = "image/jpeg"
+    picture.data = data
+    return picture
+
+
+def test_flac_prefers_the_front_cover(audio_file):
+    path = audio_file(".flac")
+    audio = File(path)
+    audio.add_picture(_picture(4, b"back cover"))
+    audio.add_picture(_picture(3, b"front cover"))
+    audio.save()
+
+    metadata = extract_metadata(path)
+
+    assert metadata["picture"] == (
+        "data:image/jpeg;base64,"
+        + base64.b64encode(b"front cover").decode("ascii")
+    )
+
+
+def test_flac_falls_back_to_the_first_picture_with_data(audio_file):
+    path = audio_file(".flac")
+    audio = File(path)
+    audio.add_picture(_picture(3, b""))
+    audio.add_picture(_picture(4, b"back cover"))
+    audio.save()
+
+    metadata = extract_metadata(path)
+
+    assert metadata["picture"] == (
+        "data:image/jpeg;base64,"
+        + base64.b64encode(b"back cover").decode("ascii")
+    )
+
+
+def _encoded_picture(data):
+    return base64.b64encode(_picture(3, data).write()).decode("ascii")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "not base64!",
+        base64.b64encode(b"not a picture block").decode("ascii"),
+        _encoded_picture(b""),
+    ],
+)
+def test_vorbis_ignores_unreadable_picture_comments(audio_file, value):
+    path = audio_file(".ogg")
+    audio = File(path)
+    audio["METADATA_BLOCK_PICTURE"] = value
+    audio.save()
+
+    metadata = extract_metadata(path)
+
+    assert "picture" not in metadata
+    assert "hasPicture" not in metadata
+
+
+def test_vorbis_skips_a_bad_picture_and_keeps_the_next_one(audio_file):
+    path = audio_file(".ogg")
+    audio = File(path)
+    audio["METADATA_BLOCK_PICTURE"] = [
+        "not base64!",
+        _encoded_picture(b""),
+        _encoded_picture(b"real cover"),
+    ]
+    audio.save()
+
+    metadata = extract_metadata(path)
+
+    assert metadata["picture"] == (
+        "data:image/jpeg;base64,"
+        + base64.b64encode(b"real cover").decode("ascii")
+    )
 
 
 def test_synced_lyrics_are_only_stored_as_sylt_for_id3(audio_file):

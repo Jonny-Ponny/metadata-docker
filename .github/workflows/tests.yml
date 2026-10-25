@@ -40,3 +40,10 @@ jobs:
 
       - name: Run backend tests
         run: python -m pytest -q
+
+      # Coverage is informational: a failure here does not block the job, and
+      # no threshold is enforced. The suite runs again so a coverage problem
+      # can never turn a passing test run into a failing required check.
+      - name: Coverage report (non-blocking)
+        continue-on-error: true
+        run: python -m pytest -q --cov=backend --cov-report=term-missing

@@ -7,12 +7,20 @@ file with mutagen and hands it to the matching backend.
 from mutagen import File
 
 from formats import get_extension
+from logger_config import log_error
 from tag_backends import backend_for, empty_metadata
 
 
 def extract_metadata(filepath, include_picture=True):
     """Return the canonical metadata payload for *filepath*, or None."""
-    audio = File(filepath, easy=False)
+    try:
+        audio = File(filepath, easy=False)
+    except Exception as e:
+        # A supported extension can still hold a truncated or foreign file.
+        # Return None so routes answer with a clear "could not read" message
+        # instead of leaking a mutagen traceback as a generic 500.
+        log_error(f"File: {filepath}. Could not read audio: {e}")
+        return None
     if audio is None:
         return None
 

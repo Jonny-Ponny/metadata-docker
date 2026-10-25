@@ -1,0 +1,112 @@
+# Backend testing guide
+
+Run the suite from the repository root:
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+`pytest.ini` adds `backend/` to `pythonpath`, so the tests import `app` and the
+route modules directly. `tests/conftest.py` creates one temporary music library
+and log directory per session; every test gets a unique subtree. The Flask app
+is imported once with the plugin manager pointed at a throwaway working
+directory.
+
+## Coverage
+
+Line coverage is reported in CI as a non-blocking step: it prints the
+`term-missing` table but has no threshold and cannot fail the required `pytest`
+job. To see the same report locally:
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q --cov=backend --cov-report=term-missing
+```
+
+| Measurement | Tests | Line coverage | Statements | Missed |
+|---|---:|---:|---:|---:|
+| Baseline before the coverage work | 616 | 83% | 2583 | 437 |
+| Current (2026-10-25) | 846 | 92% | 2588 | 203 |
+
+`config.py` is under-reported because its tests import the app in a subprocess.
+
+Lowest-covered areas:
+
+| Area | Cover | Main gap |
+|---|---:|---|
+| `config.py` | 55% | parsed in a subprocess, so coverage cannot see it |
+| `routes/tags.py` | 83% | per-endpoint validation and generic error exits |
+| `logger_config.py` | 85% | fallback/error branches |
+| `paths.py` | 90% | symlink and `commonpath` edge cases |
+| `routes/text.py` | 91% | stat and temp-file cleanup races |
+| `routes/logs.py` | 91% | empty and undecodable log lines |
+| `renaming.py` | 91% | remaining filename edge cases |
+| everything else | 92-100% | |
+
+## Coverage backlog
+
+All planned P0/P1/P2 test items are complete. The remaining misses are:
+
+- repeated per-endpoint input validation and generic error exits in
+  `routes/tags.py`;
+- stat and temp-file cleanup races in `routes/text.py`;
+- defensive cleanup in the upload and ZIP streaming paths;
+- `config.py` execution hidden inside subprocess tests.
+
+Add tests for these only when a real failure mode is found or a bug is fixed.
+There are no open test tasks.
+
+## Covered areas
+
+- Path containment, library-root guards and symlink handling.
+- Authentication, token scopes and the login rate limiter.
+- Uploads: atomic claims, conflict policies, size/disk preconditions and
+  cleanup after a failed write.
+- File tree classification, rename, move, copy, delete and smart rename.
+- Metadata: tag and cover round-trips for every format, folder-wide operations,
+  and remote cover failures (SSRF guard, size cap, timeout, connection error).
+- Text and log routes, JSON error handlers and static-file caching.
+- Downloads: tokens, ZIP streaming, symlink exclusion, cancellation and
+  unreadable-file handling.
+- Addons, config parsing and the version cache.
+
+## Conventions
+
+- Patch the module that reads a global (`routes.files`, `routes.tags`,
+  `routes.logs`, `routes.system`, `errors`), not the `app` re-export.
+- Assert the JSON body and side effects for error responses, not only the
+  status code.
+- For uploads and text saves, assert that no `.upload-*.part` file is left
+  behind after a failure.
+- Prefer real audio fixtures from `tests/fixtures/audio` for route-level tag
+  tests; use the tag helpers directly for format-specific round-trips.
+- Use `monkeypatch` for clocks and sockets instead of sleeping or contacting
+  the network.
+
+## Test-quality fixes
+
+- The upload/cover 413 tests patched `app.MAX_UPLOAD_BYTES` /
+  `app.COVER_UPLOAD_BYTES`, while `errors.handle_request_too_large()` reads its
+  own imported constants. They now patch `errors` as well and assert the exact
+  limit.
+- `test_api_contract.py` used `OSError(13)` and `OSError(2)`, which Python turns
+  into `PermissionError` and `FileNotFoundError`; those rows duplicated the
+  earlier cases instead of exercising the errno branches, so they were removed.
+- `test_find_first_audio_skips_non_audio_and_links` did not create a symlink;
+  it now covers both a symlinked file and a symlinked directory.
+- The download-token scope check existed in both `test_security.py` and
+  `test_auth.py`. The version that also exercises the positive download path is
+  kept.
+
+## Maintaining this guide
+
+Update this file when:
+
+- the test count or line coverage moves materially;
+- CI or the local test commands change;
+- a new test convention is adopted;
+- a new area becomes a known coverage gap.
+
+Keep the coverage snapshot and the open backlog current; do not add per-test
+history here. The coverage numbers were last measured on 2026-10-25.

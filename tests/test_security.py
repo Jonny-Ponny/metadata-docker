@@ -316,7 +316,9 @@ def test_oversized_upload_returns_json_413(
     client, auth_headers, app_module, monkeypatch
 ):
     limit = 1024 * 1024
+    # The app module enforces the limit, errors.py renders the message.
     monkeypatch.setattr(app_module, "MAX_UPLOAD_BYTES", limit)
+    monkeypatch.setattr(errors, "MAX_UPLOAD_BYTES", limit)
     monkeypatch.setitem(app_module.app.config, "MAX_CONTENT_LENGTH", limit)
 
     response = client.post(
@@ -331,24 +333,31 @@ def test_oversized_upload_returns_json_413(
 
     assert response.status_code == 413
     assert response.is_json
-    assert "too large" in response.get_json()["error"]
+    assert response.get_json()["error"] == (
+        "The uploaded file is too large. The maximum size is 1 MiB."
+    )
 
 
 def test_oversized_cover_upload_returns_json_413(
     client, auth_headers, music_root, write_library_file, app_module, monkeypatch
 ):
     target = write_library_file(f"cover-{uuid.uuid4().hex}.mp3")
-    monkeypatch.setattr(app_module, "COVER_UPLOAD_BYTES", 1024)
+    limit = 1024 * 1024
+    # The app module enforces the limit, errors.py renders the message.
+    monkeypatch.setattr(app_module, "COVER_UPLOAD_BYTES", limit)
+    monkeypatch.setattr(errors, "COVER_UPLOAD_BYTES", limit)
 
     response = client.post(
         "/api/metadata/picture/file",
         headers=auth_headers,
         data={
-            "file": (io.BytesIO(b"x" * 8192), "cover.jpg"),
+            "file": (io.BytesIO(b"x" * (limit + 1024)), "cover.jpg"),
             "path": _relative(target, music_root),
         },
     )
 
     assert response.status_code == 413
     assert response.is_json
-    assert "image is too large" in response.get_json()["error"]
+    assert response.get_json()["error"] == (
+        "The image is too large. The maximum size is 1 MiB."
+    )

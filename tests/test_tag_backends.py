@@ -38,6 +38,66 @@ def test_resolve_image_mime_falls_back_to_client_type():
     )
 
 
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("", None),
+        ("3", (3, 0)),
+        ("3/12", (3, 12)),
+        (" 3 / 12 ", (3, 12)),
+        ("abc/12", (0, 12)),
+        ("-5/70000", (0, 65535)),
+    ],
+)
+def test_parse_number_pair(value, expected):
+    assert tag_backends.parse_number_pair(value) == expected
+
+
+@pytest.mark.parametrize(
+    "values,expected",
+    [
+        ([], ""),
+        ([(0, 0)], ""),
+        ([(3, 0)], "3"),
+        ([(3, 12)], "3/12"),
+        ([("bad",)], ""),
+    ],
+)
+def test_format_number_pair(values, expected):
+    assert tag_backends.format_number_pair(values) == expected
+
+
+@pytest.mark.parametrize(
+    "key,expected",
+    [
+        ("----:com.apple.iTunes:MY_FIELD", "MY_FIELD"),
+        ("TIT2", "TIT2"),
+        ("----:broken", ""),
+    ],
+)
+def test_mp4_freeform_name(key, expected):
+    assert tag_backends.mp4_freeform_name(key) == expected
+
+
+def test_decode_freeform_values_joins_and_survives_invalid_bytes():
+    assert tag_backends.decode_freeform_values([b"one", b"two"]) == "one; two"
+    assert tag_backends.decode_freeform_values([b"\xff"]) == "b'\\xff'"
+
+
+@pytest.mark.parametrize(
+    "first,second",
+    [
+        ("Release Type", "releasetype"),
+        ("release_type", "RELEASE-TYPE"),
+        ("release type", "release_type"),
+    ],
+)
+def test_field_names_are_normalised(first, second):
+    assert tag_backends._normalise_field_name(first) == (
+        tag_backends._normalise_field_name(second)
+    )
+
+
 def test_resolve_image_mime_rejects_unknown_data_without_a_type():
     assert (
         tag_backends.resolve_image_mime(b"unknown")

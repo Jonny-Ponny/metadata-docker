@@ -131,3 +131,118 @@ def test_expired_cache_is_refreshed_once(system_module, monkeypatch):
     assert first["update_available"] is True
     assert second == first
     assert len(calls) == 1
+
+
+def test_a_fresh_cache_does_not_call_github(system_module, monkeypatch):
+    import time
+
+    def fail(*args, **kwargs):
+        raise AssertionError("network must not be used")
+
+    monkeypatch.setattr(system_module, "DISABLE_VERSION_CHECK", False)
+    monkeypatch.setattr(system_module, "CACHE_TTL_SECONDS", 3600)
+    monkeypatch.setattr(system_module.requests, "get", fail)
+    system_module._version_cache.update(
+        {
+            "latest": "v9.9.9",
+            "update_available": True,
+            "timestamp": time.time(),
+        }
+    )
+
+    info = system_module.get_version_info()
+
+    assert info == {
+        "current": system_module.APP_VERSION,
+        "latest": "v9.9.9",
+        "update_available": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"status_code": 503, "body": None},
+        {"status_code": 200, "body": {"tag_name": ""}},
+        {"status_code": 200, "body": {}},
+        {"status_code": 200, "body": {"tag_name": "not-a-version"}},
+    ],
+)
+def test_failed_version_checks_keep_the_last_known_release(
+    system_module, monkeypatch, response
+):
+    class FakeResponse:
+        status_code = response["status_code"]
+
+        @staticmethod
+        def json():
+            return response["body"]
+
+    monkeypatch.setattr(system_module, "DISABLE_VERSION_CHECK", False)
+    monkeypatch.setattr(system_module, "CACHE_TTL_SECONDS", 3600)
+    monkeypatch.setattr(
+        system_module.requests, "get", lambda *a, **k: FakeResponse()
+    )
+    system_module._version_cache.update(
+        {"latest": "v1.0.0", "update_available": True, "timestamp": 0}
+    )
+
+    info = system_module.get_version_info()
+
+    assert info == {
+        "current": system_module.APP_VERSION,
+        "latest": "v1.0.0",
+        "update_available": False,
+    }
+    assert system_module._version_cache["timestamp"] > 0
+
+
+def test_a_network_error_keeps_the_last_known_release(
+    system_module, monkeypatch
+):
+    def fail(*args, **kwargs):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(system_module, "DISABLE_VERSION_CHECK", False)
+    monkeypatch.setattr(system_module.requests, "get", fail)
+    system_module._version_cache.update(
+        {"latest": "v1.0.0", "update_available": False, "timestamp": 0}
+    )
+
+    info = system_module.get_version_info()
+
+    assert info["latest"] == "v1.0.0"
+    assert info["update_available"] is False
+
+
+def test_the_version_route_reports_the_full_update_payload(
+    client, system_module, monkeypatch
+):
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"tag_name": "v99.0.0"}
+
+    monkeypatch.setattr(system_module, "DISABLE_VERSION_CHECK", False)
+    monkeypatch.setattr(system_module.requests, "get", lambda *a, **k: Response())
+    system_module._version_cache.update(
+        {"latest": None, "update_available": False, "timestamp": 0}
+    )
+
+    response = client.get("/api/version")
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "current_version": system_module.APP_VERSION,
+        "latest_version": "v99.0.0",
+        "update_available": True,
+        "git_sha": system_module.APP_GIT_SHA,
+        "max_upload_bytes": system_module.MAX_UPLOAD_BYTES,
+    }
+
+
+def test_compare_versions_rejects_unparseable_values(system_module):
+    with pytest.raises(ValueError):
+        system_module._compare_versions("v1.0.5", "release-candidate")
