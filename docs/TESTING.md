@@ -15,15 +15,17 @@ directory.
 
 ## Coverage
 
-Line coverage is not part of CI yet. To measure it locally:
+Line coverage is reported in CI as a non-blocking step: it prints the
+`term-missing` table but has no threshold and cannot fail the required `pytest`
+job. To see the same report locally:
 
 ```bash
-pip install pytest-cov
+pip install -r requirements-dev.txt
 python -m pytest -q --cov=backend --cov-report=term-missing
 ```
 
 The first measurement on this branch was **83%** (2583 statements, 437 missed).
-After the coverage pass it is **89%** (2588 statements, 282 missed, 770 tests).
+After the coverage pass it is **89%** (2588 statements, 276 missed, 800 tests).
 `config.py` is under-reported because its tests import the app in a subprocess.
 
 Lowest areas after the coverage pass:
@@ -100,8 +102,8 @@ Priority items still to cover, grouped by risk.
 
 - [x] MP4 number-pair parsing/formatting and malformed freeform keys.
 - [x] Custom-field name normalisation and case-insensitive deletion.
-- [ ] Clearing the last field removes the tag; multi-value and Unicode values.
-- [ ] FLAC front-cover preference; Vorbis invalid base64; empty image data.
+- [x] Clearing the last field removes the tag; multi-value and Unicode values.
+- [x] FLAC front-cover preference; Vorbis invalid base64; empty image data.
 - [x] `_apply_to_folder` failure accounting and empty-folder results.
 - [x] Raw log line parsing; a non-asset static file is revalidated.
 
