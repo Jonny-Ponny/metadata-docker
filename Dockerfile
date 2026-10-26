@@ -1,12 +1,16 @@
+# syntax=docker/dockerfile:1
+
 # ---- Stage 1: Build the Svelte frontend ----
-# FROM node:current-alpine3.23 AS frontend-builder
-# Changed for armv7 support
-FROM node:20-bookworm-slim AS frontend-builder
+# The frontend output is platform-independent, so build it once on the host
+# architecture instead of under QEMU for every target. Node 24+ publishes no
+# linux/arm/v7 image, so the builder stays on 22 (still armv7-capable and
+# supported until April 2027); the final stage keeps targeting armv7.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS frontend-builder
 WORKDIR /app/frontend
 
-# Copy package files and install dependencies
-COPY frontend/package*.json ./
-RUN npm install
+# Install from the lockfile so the image matches CI and the repository
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 
 # Copy the rest of the frontend source and build
 COPY frontend/ .
