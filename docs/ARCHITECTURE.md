@@ -65,6 +65,8 @@ frontend/
   src/utils/             pure helpers and the utils barrel
   src/utils/__tests__/   Vitest unit tests (jsdom)
   src/test/setup.js      Vitest setup
+  eslint.config.js       ESLint flat config
+  .prettierrc.json       Prettier + Svelte plugin
 tests/                   pytest suite (see below)
 docs/                    this file, deployment, addons, fixed bugs
 ```
@@ -185,6 +187,11 @@ cd frontend && npm run dev
 # Frontend unit tests (Vitest + jsdom)
 cd frontend && npm test
 
+# Frontend static checks (ESLint, Prettier, svelte-check)
+cd frontend && npm run lint
+cd frontend && npm run format:check
+cd frontend && npm run check
+
 # Production frontend build
 cd frontend && npm run build
 
@@ -216,8 +223,9 @@ the browser out.
 and `pytest -q` on pull requests and on `main`, `master`, `fix/**`, `test/**`,
 `refactor/**` and `ci/**`; a second, non-blocking step prints line coverage with
 `pytest-cov`, with no threshold. The `frontend` job installs with `npm ci` and
-runs `npm test` (Vitest) and `npm run build` under `frontend/`. Both jobs are
-required by the release workflow.
+runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test`
+(Vitest) and `npm run build` under `frontend/`. Both jobs are required by the
+release workflow.
 
 `.github/workflows/container-release.yml` runs on pushes to `main`/`master` and
 on `v*` tags. It calls `tests.yml` as a `test` job and `build-and-push` declares

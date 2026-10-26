@@ -106,14 +106,31 @@ There are no open test tasks.
 
 ## Frontend
 
-Run the suite from `frontend/`:
+Run the checks from `frontend/`:
 
 ```bash
 npm ci
-npm test          # vitest run
-npm run test:watch
+npm run lint          # ESLint
+npm run format:check  # Prettier, no writes
+npm run check         # svelte-check
+npm test              # vitest run
 npm run build
 ```
+
+`eslint.config.js` uses the flat config format with `@eslint/js`,
+`eslint-plugin-svelte` (recommended rules) and `eslint-config-prettier` to turn
+off formatting rules that would fight Prettier. Browser globals apply to
+`src/`; Node globals apply to the config files.
+
+`.prettierrc.json` enables `prettier-plugin-svelte`. Use `npm run format` to
+rewrite files; `format:check` is the CI-facing read-only check.
+`.prettierignore` excludes `dist/`, `node_modules/`, coverage output and
+`package-lock.json`.
+
+`svelte-check --tsconfig ./jsconfig.json` validates Svelte templates and
+compiler diagnostics. `checkJs` is still false because enabling it surfaces the
+existing JSDoc/type backlog (tracked in `PLAN.md`); template checking runs
+today.
 
 `frontend/vitest.config.js` uses a jsdom environment, picks up
 `src/**/*.test.js`, and registers the Svelte plugin for the component tests that
@@ -143,8 +160,9 @@ Conventions:
 - Mock `fetch`/`XMLHttpRequest`; the suite must not contact the network.
 - Add a regression test for every frontend bug, as for the backend.
 
-CI runs `npm test` and `npm run build` in the `frontend` job of
-`.github/workflows/tests.yml`; a failure blocks image publication.
+CI runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test` and
+`npm run build` in the `frontend` job of `.github/workflows/tests.yml`; a
+failure blocks image publication.
 
 ## Maintaining this guide
 

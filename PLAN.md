@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-02`, `B-32`. Next:
-  `T-03`, `B-33`.
+- IDs are permanent and never reused. Last used: `T-03`, `B-32`. Next:
+  `T-04`, `B-33`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -37,12 +37,20 @@ image build. What remains is optional hardening and new features.
 - **Frontend tests (start).** Vitest + jsdom over the pure timestamp, lyrics,
   sort, upload, API-error and version-cache utilities. `npm test` and
   `npm run build` are a separate CI job that gates the image build.
+- **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
+  `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
+  Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are
+  `lint`, `format`, `format:check` and `check`; CI runs all of them before the
+  tests and build. Details: [docs/TESTING.md](docs/TESTING.md).
 
 ## Planned
 
 ### Known issues and small fixes
 
-No open items.
+- `T-03 (P3)` - Enable `checkJs` for `svelte-check`. It stays off because
+  turning it on reports roughly 660 existing JSDoc/type errors across `src/`;
+  clearing them would give `npm run check` full type checking instead of
+  template/compiler diagnostics only.
 
 ### Optional security hardening
 
@@ -89,11 +97,9 @@ No open items.
 
 ### Frontend checks and tests
 
-The frontend has a Vitest suite over the first pure utilities and CI now runs
-`npm test` plus `npm run build`. Remaining, in this order:
+The frontend has a Vitest suite over the first pure utilities, ESLint,
+Prettier and `svelte-check` in CI. Remaining, in this order:
 
-- ESLint (with the Svelte plugin) and Prettier, plus `svelte-check` for template
-  and JSDoc type errors, with a `lint`/`check` script in `frontend/package.json`.
 - Component tests for the editor, upload tray and context menu once the
   utilities are covered, and coverage for the remaining stores and utilities.
 - A UI bug pass once the checks and tests exist, so fixes can be pinned by a
