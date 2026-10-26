@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-02`, `B-31`. Next:
-  `T-03`, `B-32`.
+- IDs are permanent and never reused. Last used: `T-02`, `B-32`. Next:
+  `T-03`, `B-33`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -34,6 +34,9 @@ image build. What remains is optional hardening and new features.
 - **Docs.** The README is an overview/usage guide; deployment, addons and
   architecture are separate documents and security is consolidated in
   [SECURITY.md](SECURITY.md).
+- **Frontend tests (start).** Vitest + jsdom over the pure timestamp, lyrics,
+  sort, upload, API-error and version-cache utilities. `npm test` and
+  `npm run build` are a separate CI job that gates the image build.
 
 ## Planned
 
@@ -86,17 +89,13 @@ No open items.
 
 ### Frontend checks and tests
 
-The frontend currently has no linter or test runner; `npm run build` is the only
-check. Add, in this order:
+The frontend has a Vitest suite over the first pure utilities and CI now runs
+`npm test` plus `npm run build`. Remaining, in this order:
 
 - ESLint (with the Svelte plugin) and Prettier, plus `svelte-check` for template
   and JSDoc type errors, with a `lint`/`check` script in `frontend/package.json`.
-- Vitest over the pure utilities first: `upload.utils.js`, `lyrics.utils.js`,
-  `timestamp.utils.js`, `sort.utils.js`.
 - Component tests for the editor, upload tray and context menu once the
-  utilities are covered.
-- Run the checks in CI (extend `tests.yml` or add a frontend workflow) so a
-  failing check blocks the release build, like `pytest` does.
+  utilities are covered, and coverage for the remaining stores and utilities.
 - A UI bug pass once the checks and tests exist, so fixes can be pinned by a
   regression test.
 
