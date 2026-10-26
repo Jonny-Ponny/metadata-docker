@@ -46,7 +46,9 @@ export function isJunkPath(relativePath) {
   return segments.some((segment, index) => {
     const isLast = index === segments.length - 1;
     if (JUNK_DIR_NAMES.has(segment)) return true;
-    return isLast && JUNK_FILE_PATTERNS.some((pattern) => pattern.test(segment));
+    return (
+      isLast && JUNK_FILE_PATTERNS.some((pattern) => pattern.test(segment))
+    );
   });
 }
 
@@ -175,7 +177,7 @@ async function mapLimit(items, limit, run) {
         next += 1;
         // Needed so a rejected entry stops the others instead of rejecting an
         // unhandled sibling promise.
-        // eslint-disable-next-line no-await-in-loop
+
         await run(items[index]);
       }
     },
@@ -254,9 +256,7 @@ async function readJsonBody(response, fallback) {
     }
   }
   if (!response.ok) {
-    throw new Error(
-      formatApiErrorMessage(text, fallback, response.status),
-    );
+    throw new Error(formatApiErrorMessage(text, fallback, response.status));
   }
   return data;
 }

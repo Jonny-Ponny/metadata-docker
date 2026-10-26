@@ -8,6 +8,7 @@
     readApiError,
   } from "../utils/index.js";
   import CoverPreview from "./CoverPreview.svelte";
+  import { SvelteSet } from "svelte/reactivity";
 
   let { isOpen, onClose, mode, targetPath, isFolder = false } = $props();
 
@@ -22,7 +23,7 @@
 
   let fetchedTracks = $state([]);
   let selectedTrackIndex = $state(0);
-  let singleFileFields = $state(new Set());
+  let singleFileFields = new SvelteSet();
 
   let folderFiles = $state([]);
   let fileAssignments = $state([]);
@@ -30,16 +31,22 @@
   let fileFieldSets = $state([]);
 
   let fetchedSong = $state(null);
-  let songFields = $state(new Set());
+  let songFields = new SvelteSet();
 
   let isFetching = $state(false);
   let isApplying = $state(false);
   let queryInput = $state(null);
 
-  let allFields = $state(new Set()); // all available fields
-  let globalSelectedFields = $state(new Set()); // which fields are selected globally
+  let allFields = new SvelteSet(); // all available fields
+  let globalSelectedFields = new SvelteSet(); // which fields are selected globally
 
   let globalFieldsExpanded = $state(true);
+
+  /** Replace a reactive set in place so SvelteSet updates the UI. */
+  function replaceSet(target, values) {
+    target.clear();
+    for (const value of values) target.add(value);
+  }
 
   // Presets for global field selection
   const PRESETS = [
@@ -178,7 +185,7 @@
       } else {
         query = data.album || data.filename || filePath.split("/").pop();
       }
-    } catch (e) {
+    } catch {
       query = filePath.split("/").pop();
     }
   }
@@ -195,8 +202,8 @@
       fileAssignments = [];
       fileEnabled = [];
       fileFieldSets = [];
-      singleFileFields = new Set();
-      songFields = new Set();
+      singleFileFields.clear();
+      songFields.clear();
       selectedTrackIndex = 0;
       isFetching = false;
     }
@@ -256,7 +263,7 @@
       if (data.success) {
         if (mode === "song") {
           fetchedSong = data.metadata;
-          songFields = new Set(selectableFields(fetchedSong));
+          replaceSet(songFields, selectableFields(fetchedSong));
         } else {
           const tracks = data.metadata || [];
           fetchedTracks = tracks;
@@ -274,16 +281,16 @@
             autoMatchFilesToTracks(tracks);
 
             // Compute union of all field keys from all tracks
-            const allKeys = new Set();
+            const allKeys = new SvelteSet();
             tracks.forEach((t) =>
               selectableFields(t).forEach((k) => allKeys.add(k)),
             );
-            allFields = allKeys;
-            globalSelectedFields = new Set(allKeys); // start with all selected
+            replaceSet(allFields, allKeys);
+            replaceSet(globalSelectedFields, allKeys); // start with all selected
 
             // Initialize each file's field set to the global selection
             fileFieldSets = folderFiles.map(
-              () => new Set(globalSelectedFields),
+              () => new SvelteSet(globalSelectedFields),
             );
             fileEnabled = folderFiles.map(() => true);
 
@@ -292,13 +299,13 @@
               const assign = fileAssignments.find((a) => a.fileIndex === idx);
               if (assign && assign.trackIndex !== null) {
                 const track = fetchedTracks[assign.trackIndex];
-                if (track) return new Set(selectableFields(track));
+                if (track) return new SvelteSet(selectableFields(track));
               }
-              return new Set();
+              return new SvelteSet();
             });
           } else {
             selectedTrackIndex = 0;
-            singleFileFields = new Set(selectableFields(tracks[0]));
+            replaceSet(singleFileFields, selectableFields(tracks[0]));
           }
         }
       } else {
@@ -320,16 +327,9 @@
       fileAssignments = [];
       return;
     }
-    const sortedFiles = [...folderFiles].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { numeric: true }),
-    );
     const sortedTracks = [...tracks].sort((a, b) => {
-      const aTrack = getTrackNumber(a)
-        ? parseInt(getTrackNumber(a))
-        : Infinity;
-      const bTrack = getTrackNumber(b)
-        ? parseInt(getTrackNumber(b))
-        : Infinity;
+      const aTrack = getTrackNumber(a) ? parseInt(getTrackNumber(a)) : Infinity;
+      const bTrack = getTrackNumber(b) ? parseInt(getTrackNumber(b)) : Infinity;
       return aTrack - bTrack;
     });
     const mapping = folderFiles.map((file, idx) => ({
@@ -355,12 +355,12 @@
     if (assign && assign.trackIndex !== null) {
       const track = fetchedTracks[assign.trackIndex];
       if (track) {
-        fileFieldSets[fileIndex] = new Set(globalSelectedFields);
+        fileFieldSets[fileIndex] = new SvelteSet(globalSelectedFields);
       } else {
-        fileFieldSets[fileIndex] = new Set();
+        fileFieldSets[fileIndex] = new SvelteSet();
       }
     } else {
-      fileFieldSets[fileIndex] = new Set();
+      fileFieldSets[fileIndex] = new SvelteSet();
     }
     fileFieldSets = [...fileFieldSets];
   }
@@ -376,11 +376,9 @@
     if (mode === "song") {
       if (songFields.has(field)) songFields.delete(field);
       else songFields.add(field);
-      songFields = new Set(songFields);
     } else {
       if (singleFileFields.has(field)) singleFileFields.delete(field);
       else singleFileFields.add(field);
-      singleFileFields = new Set(singleFileFields);
     }
   }
 
@@ -395,7 +393,7 @@
           if (!assign || assign.trackIndex === null) continue;
           const track = fetchedTracks[assign.trackIndex];
           if (!track) continue;
-          const fields = Array.from(fileFieldSets[i] || new Set());
+          const fields = Array.from(fileFieldSets[i] || new SvelteSet());
           if (fields.length === 0) continue;
           const file = folderFiles[i];
           for (const field of fields) {
@@ -542,10 +540,9 @@
     } else {
       globalSelectedFields.add(field);
     }
-    globalSelectedFields = new Set(globalSelectedFields);
     // Apply to all files
     for (let i = 0; i < fileFieldSets.length; i++) {
-      fileFieldSets[i] = new Set(globalSelectedFields);
+      fileFieldSets[i] = new SvelteSet(globalSelectedFields);
     }
     fileFieldSets = [...fileFieldSets];
   }
@@ -557,17 +554,17 @@
   function applyPreset(preset) {
     let fields;
     if (preset.label === "All") {
-      fields = new Set(allFields);
+      fields = new SvelteSet(allFields);
     } else if (preset.label === "None") {
-      fields = new Set();
+      fields = new SvelteSet();
     } else {
       // Only include fields that actually exist in the fetched tracks
-      fields = new Set(preset.fields.filter((f) => allFields.has(f)));
+      fields = new SvelteSet(preset.fields.filter((f) => allFields.has(f)));
     }
-    globalSelectedFields = fields;
+    replaceSet(globalSelectedFields, fields);
     // Apply to all file cards
     for (let i = 0; i < fileFieldSets.length; i++) {
-      fileFieldSets[i] = new Set(globalSelectedFields);
+      fileFieldSets[i] = new SvelteSet(globalSelectedFields);
     }
     fileFieldSets = [...fileFieldSets];
   }
@@ -576,16 +573,18 @@
     if (!fetchedSong) return;
     let fields;
     if (preset.label === "All") {
-      fields = new Set(selectableFields(fetchedSong));
+      fields = new SvelteSet(selectableFields(fetchedSong));
     } else if (preset.label === "None") {
-      fields = new Set();
+      fields = new SvelteSet();
     } else {
       // Only include fields that exist on the fetched song
-      fields = new Set(
-        preset.fields.filter((f) => fetchedSong.hasOwnProperty(f)),
+      fields = new SvelteSet(
+        preset.fields.filter((f) =>
+          Object.prototype.hasOwnProperty.call(fetchedSong, f),
+        ),
       );
     }
-    songFields = fields;
+    replaceSet(songFields, fields);
   }
 
   function applySingleTrackPreset(preset) {
@@ -593,13 +592,17 @@
     if (!track) return;
     let fields;
     if (preset.label === "All") {
-      fields = new Set(selectableFields(track));
+      fields = new SvelteSet(selectableFields(track));
     } else if (preset.label === "None") {
-      fields = new Set();
+      fields = new SvelteSet();
     } else {
-      fields = new Set(preset.fields.filter((f) => track.hasOwnProperty(f)));
+      fields = new SvelteSet(
+        preset.fields.filter((f) =>
+          Object.prototype.hasOwnProperty.call(track, f),
+        ),
+      );
     }
-    singleFileFields = fields;
+    replaceSet(singleFileFields, fields);
   }
 </script>
 
@@ -624,7 +627,7 @@
           <!-- svelte-ignore a11y_label_has_associated_control -->
           <label>Add‑on</label>
           <select bind:value={selectedAddonId}>
-            {#each addons as addon}
+            {#each addons as addon (addon.id)}
               <option value={addon.id}>{addon.name}</option>
             {/each}
           </select>
@@ -662,7 +665,7 @@
           <div class="loading">Searching…</div>
         {:else if searchResults.length > 0}
           <div class="results-list">
-            {#each searchResults as result}
+            {#each searchResults as result (result.id)}
               <div
                 class="result-item"
                 class:selected={selectedResultId === result.id}
@@ -703,7 +706,7 @@
               <div class="extra-info">{getExtraInfo(fetchedSong)}</div>
             {/if}
             <div class="presets">
-              {#each PRESETS as preset}
+              {#each PRESETS as preset (preset.label)}
                 <button
                   class="preset-btn"
                   onclick={() => applySongPreset(preset)}
@@ -713,7 +716,7 @@
               {/each}
             </div>
             <div class="fields-list">
-              {#each metadataEntries(fetchedSong) as [key, value]}
+              {#each metadataEntries(fetchedSong) as [key, value] (key)}
                 <div class="field-item">
                   <label title={getFieldDescription(key) || undefined}>
                     <input
@@ -746,7 +749,7 @@
                 </div>
                 {#if globalFieldsExpanded}
                   <div class="presets">
-                    {#each PRESETS as preset}
+                    {#each PRESETS as preset (preset.label)}
                       <button
                         class="preset-btn"
                         onclick={() => applyPreset(preset)}
@@ -756,7 +759,7 @@
                     {/each}
                   </div>
                   <div class="fields-list">
-                    {#each Array.from(allFields) as field}
+                    {#each Array.from(allFields) as field (field)}
                       <div class="field-item">
                         <label title={getFieldDescription(field) || undefined}>
                           <input
@@ -774,7 +777,7 @@
               <!-- File cards -->
               <h3>Files in folder</h3>
               <div class="file-cards">
-                {#each folderFiles as file, fileIndex}
+                {#each folderFiles as file, fileIndex (file.name)}
                   {@const assign = fileAssignments.find(
                     (a) => a.fileIndex === fileIndex,
                   )}
@@ -782,7 +785,7 @@
                   {@const track =
                     trackIndex !== null ? fetchedTracks[trackIndex] : null}
                   {@const enabled = fileEnabled[fileIndex] || false}
-                  {@const fields = fileFieldSets[fileIndex] || new Set()}
+                  {@const fields = fileFieldSets[fileIndex] || new SvelteSet()}
 
                   <div class="file-card" class:disabled={!enabled}>
                     <div class="file-header">
@@ -801,12 +804,11 @@
                         disabled={!enabled}
                       >
                         <option value="">Skip</option>
-                        {#each fetchedTracks as t, idx}
+                        {#each fetchedTracks as t, idx (idx)}
                           <option value={idx}>
                             {getTrackNumber(t)
                               ? `Track ${getTrackNumber(t)}: `
-                              : ""}{t.title ||
-                              "Untitled"}
+                              : ""}{t.title || "Untitled"}
                           </option>
                         {/each}
                       </select>
@@ -818,9 +820,11 @@
 
                     {#if enabled && track}
                       <div class="file-fields">
-                        {#each metadataEntries(track) as [key, value]}
+                        {#each metadataEntries(track) as [key, value] (key)}
                           <div class="field-item">
-                            <label title={getFieldDescription(key) || undefined}>
+                            <label
+                              title={getFieldDescription(key) || undefined}
+                            >
                               <input
                                 type="checkbox"
                                 checked={fields.has(key)}
@@ -851,12 +855,11 @@
               <!-- svelte-ignore a11y_label_has_associated_control -->
               <label>Select track to apply:</label>
               <select bind:value={selectedTrackIndex}>
-                {#each fetchedTracks as track, idx}
+                {#each fetchedTracks as track, idx (idx)}
                   <option value={idx}>
                     {getTrackNumber(track)
                       ? `Track ${getTrackNumber(track)}: `
-                      : ""}{track.title ||
-                      "Untitled"}
+                      : ""}{track.title || "Untitled"}
                   </option>
                 {/each}
               </select>
@@ -869,7 +872,7 @@
                 </div>
               {/if}
               <div class="presets">
-                {#each PRESETS as preset}
+                {#each PRESETS as preset (preset.label)}
                   <button
                     class="preset-btn"
                     onclick={() => applySingleTrackPreset(preset)}
@@ -879,7 +882,7 @@
                 {/each}
               </div>
               <div class="fields-list">
-                {#each metadataEntries(fetchedTracks[selectedTrackIndex]) as [key, value]}
+                {#each metadataEntries(fetchedTracks[selectedTrackIndex]) as [key, value] (key)}
                   <div class="field-item">
                     <label title={getFieldDescription(key) || undefined}>
                       <input

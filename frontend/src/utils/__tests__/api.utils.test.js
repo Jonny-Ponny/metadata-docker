@@ -23,9 +23,9 @@ describe("messageFromBody", () => {
   });
 
   it("prefers error over message", () => {
-    expect(
-      messageFromBody('{"error":"First","message":"Second"}'),
-    ).toBe("First");
+    expect(messageFromBody('{"error":"First","message":"Second"}')).toBe(
+      "First",
+    );
   });
 
   it("ignores empty and non-string JSON values", () => {
@@ -52,9 +52,9 @@ describe("messageFromBody", () => {
 
 describe("formatApiErrorMessage", () => {
   it("prefers the parsed body message", () => {
-    expect(
-      formatApiErrorMessage('{"error":"Bad"}', "Upload failed", 400),
-    ).toBe("Bad");
+    expect(formatApiErrorMessage('{"error":"Bad"}', "Upload failed", 400)).toBe(
+      "Bad",
+    );
   });
 
   it("appends the status to the fallback", () => {
@@ -83,9 +83,9 @@ describe("readApiError", () => {
   });
 
   it("falls back with the status for unusable bodies", async () => {
-    await expect(
-      readApiError(response("<html>"), "Fallback"),
-    ).resolves.toBe("Fallback (HTTP 400)");
+    await expect(readApiError(response("<html>"), "Fallback")).resolves.toBe(
+      "Fallback (HTTP 400)",
+    );
   });
 
   it("falls back when the body cannot be read", async () => {

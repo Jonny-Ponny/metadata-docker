@@ -169,9 +169,7 @@ export function shiftTimestamps(timestamps, offsetSeconds) {
   let count = 0;
   for (const timestamp of timestamps) {
     if (!timestamp || timestamp === TIMESTAMP_PLACEHOLDER) continue;
-    const centiseconds = Math.round(
-      parseTimestampToSeconds(timestamp) * 100,
-    );
+    const centiseconds = Math.round(parseTimestampToSeconds(timestamp) * 100);
     minCentiseconds = Math.min(minCentiseconds, centiseconds);
     count++;
   }

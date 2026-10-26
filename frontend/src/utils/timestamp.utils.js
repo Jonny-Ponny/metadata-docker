@@ -18,7 +18,6 @@ export function parseTimestampToSeconds(timestamp) {
   return minutes * 60 + seconds;
 }
 
-
 /**
  * Convert seconds to timestamp string [MM:SS.ss]
  * @param {number} seconds - Time in seconds
@@ -55,7 +54,6 @@ export function validateTimestampFormat(timestamp) {
 
   return minutes >= 0 && seconds >= 0 && seconds < 60;
 }
-
 
 /**
  * Validate timestamp is within allowed range (between previous and next timestamps)
@@ -108,8 +106,6 @@ export function validateTimestampRange(lineIndex, newSeconds, timestamps) {
 
   return result;
 }
-
-
 
 /**
  * Format time for display (MM:SS)

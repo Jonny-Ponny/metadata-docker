@@ -6,7 +6,7 @@
   let toasts = $state([]);
 
   // Subscribe to toast store
-  toast.subscribe(value => {
+  toast.subscribe((value) => {
     toasts = value;
   });
 

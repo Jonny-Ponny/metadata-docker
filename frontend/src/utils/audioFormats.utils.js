@@ -4,20 +4,20 @@
 // truth for which files appear in the tree; this helper is for UI filtering and
 // labels where a synchronous check is needed.
 export const AUDIO_FORMAT_LABELS = {
-    mp3: "MP3",
-    wav: "WAV",
-    aiff: "AIFF",
-    aif: "AIFF",
-    flac: "FLAC",
-    ogg: "OGG",
-    oga: "OGG",
-    opus: "OPUS",
-    m4a: "M4A",
-    m4b: "M4B",
+  mp3: "MP3",
+  wav: "WAV",
+  aiff: "AIFF",
+  aif: "AIFF",
+  flac: "FLAC",
+  ogg: "OGG",
+  oga: "OGG",
+  opus: "OPUS",
+  m4a: "M4A",
+  m4b: "M4B",
 };
 
 export const AUDIO_EXTENSIONS = Object.keys(AUDIO_FORMAT_LABELS).map(
-    (extension) => `.${extension}`,
+  (extension) => `.${extension}`,
 );
 
 /**
@@ -26,9 +26,9 @@ export const AUDIO_EXTENSIONS = Object.keys(AUDIO_FORMAT_LABELS).map(
  * @returns {string}
  */
 export function getFileExtension(filename) {
-    if (!filename) return "";
-    const dot = filename.lastIndexOf(".");
-    return dot === -1 ? "" : filename.substring(dot + 1).toLowerCase();
+  if (!filename) return "";
+  const dot = filename.lastIndexOf(".");
+  return dot === -1 ? "" : filename.substring(dot + 1).toLowerCase();
 }
 
 /**
@@ -38,8 +38,8 @@ export function getFileExtension(filename) {
  * @returns {boolean}
  */
 export function isAudioFile(filename, fileType) {
-    if (fileType === "audio") return true;
-    return AUDIO_EXTENSIONS.includes(`.${getFileExtension(filename)}`);
+  if (fileType === "audio") return true;
+  return AUDIO_EXTENSIONS.includes(`.${getFileExtension(filename)}`);
 }
 
 /**
@@ -48,6 +48,6 @@ export function isAudioFile(filename, fileType) {
  * @returns {string}
  */
 export function getAudioFormatLabel(filename) {
-    const extension = getFileExtension(filename);
-    return AUDIO_FORMAT_LABELS[extension] || extension.toUpperCase();
+  const extension = getFileExtension(filename);
+  return AUDIO_FORMAT_LABELS[extension] || extension.toUpperCase();
 }

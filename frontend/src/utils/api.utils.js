@@ -46,7 +46,11 @@ export function messageFromBody(body) {
  * XHR responses do not produce a `Response` object, so uploads need the same
  * parsing that `readApiError` applies to fetch responses.
  */
-export function formatApiErrorMessage(body, fallback = "Request failed", status) {
+export function formatApiErrorMessage(
+  body,
+  fallback = "Request failed",
+  status,
+) {
   return messageFromBody(body) || withStatus(fallback, status);
 }
 
@@ -59,7 +63,7 @@ export function formatApiErrorMessage(body, fallback = "Request failed", status)
  */
 export async function readApiError(response, fallback = "Request failed") {
   const status = response?.status;
-  let body = "";
+  let body;
 
   try {
     body = await response.text();

@@ -142,9 +142,7 @@ describe("buildExistingIndex", () => {
           { type: "file", path: "Album/one.mp3", size: 1 },
           {
             type: "directory",
-            children: [
-              { type: "file", path: "Album/CD2/two.flac", size: 2 },
-            ],
+            children: [{ type: "file", path: "Album/CD2/two.flac", size: 2 }],
           },
         ],
       },
@@ -268,7 +266,11 @@ describe("ensureDirectory", () => {
   it("returns the requested path when the response has no path", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, status: 200, text: async () => "not json" })),
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => "not json",
+      })),
     );
 
     await expect(ensureDirectory("Album")).resolves.toBe("Album");
@@ -403,10 +405,9 @@ describe("uploadWithProgress", () => {
 
   it("uses the backend error message for a rejected upload", async () => {
     const promise = uploadWithProgress(makeFile());
-    FakeXHR.instances.at(-1).respond(
-      400,
-      JSON.stringify({ error: "File type is not supported" }),
-    );
+    FakeXHR.instances
+      .at(-1)
+      .respond(400, JSON.stringify({ error: "File type is not supported" }));
 
     await expect(promise).rejects.toMatchObject({
       message: "File type is not supported",

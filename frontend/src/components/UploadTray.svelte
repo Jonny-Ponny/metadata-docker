@@ -111,7 +111,8 @@
       `${formatBytes($upload.doneBytes)} / ${formatBytes($upload.totalBytes)}`,
       `${$upload.doneFiles} / ${$upload.totalFiles} files`,
     ];
-    if (remainingSeconds > 0) parts.push(`~${formatDuration(remainingSeconds)} left`);
+    if (remainingSeconds > 0)
+      parts.push(`~${formatDuration(remainingSeconds)} left`);
     if ($upload.queued > 0) parts.push(`${$upload.queued} queued`);
     return parts.join(" · ");
   });
@@ -247,7 +248,8 @@
           class:indeterminate={$upload.phase === "preparing" ||
             isRefreshing ||
             $upload.totalBytes === 0}
-          style="width: {$upload.phase === 'preparing' || $upload.totalBytes === 0
+          style="width: {$upload.phase === 'preparing' ||
+          $upload.totalBytes === 0
             ? 100
             : percent}%"
         ></div>
@@ -256,7 +258,7 @@
 
     {#if expanded && $upload.failures.length > 0}
       <div class="tray-details">
-        {#each $upload.failures.slice(0, 50) as failure}
+        {#each $upload.failures.slice(0, 50) as failure, failureIndex (failureIndex)}
           <div class="tray-failure">
             <span class="tray-failure-name" title={failure.name}
               >{failure.name}</span
@@ -353,7 +355,9 @@
     font-size: 12px;
     line-height: 1.4;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      color 0.15s;
     white-space: nowrap;
   }
 

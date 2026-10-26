@@ -122,7 +122,7 @@ body {
 }
 
 .resizer::after {
-  content: '';
+  content: "";
   position: absolute;
   left: -4px;
   right: -4px;
@@ -269,7 +269,9 @@ body.dark .retry-btn:hover {
 .settings-toggle.blurred {
   filter: blur(4px);
   opacity: 0.6;
-  transition: filter 0.2s, opacity 0.2s;
+  transition:
+    filter 0.2s,
+    opacity 0.2s;
   pointer-events: none;
 }
 
@@ -609,7 +611,6 @@ body.dark .settings-toggle:hover {
   background: #4a5568;
   /* Same as help-toggle hover dark mode */
 }
-
 
 /* Create folder button */
 .create-folder-btn {

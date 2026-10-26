@@ -97,7 +97,14 @@ export async function startDrop({
   conflict = UPLOAD_CONFLICT_SKIP_IDENTICAL,
   onComplete = null,
 } = {}) {
-  const options = { entries, files, targetPath, existing, conflict, onComplete };
+  const options = {
+    entries,
+    files,
+    targetPath,
+    existing,
+    conflict,
+    onComplete,
+  };
 
   if (running) {
     queuedBatches.push(options);
@@ -282,7 +289,13 @@ export async function proceedAnyway() {
   await continueBatch(batch);
 }
 
-async function continueBatch({ items, conflict, skipped, totalBytes, failures }) {
+async function continueBatch({
+  items,
+  conflict,
+  skipped,
+  totalBytes,
+  failures,
+}) {
   updateState({
     phase: "running",
     blocked: null,
@@ -470,7 +483,7 @@ async function runQueue(items, conflict) {
   const worker = async () => {
     while (queue.length && !cancelled) {
       const item = queue.shift();
-      // eslint-disable-next-line no-await-in-loop
+
       await uploadOne(item);
     }
   };

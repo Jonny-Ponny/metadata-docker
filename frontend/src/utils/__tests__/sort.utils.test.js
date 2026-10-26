@@ -96,11 +96,7 @@ describe("sortItems", () => {
   });
 
   it("falls back to name sorting for unknown modes", () => {
-    const result = sortItems(
-      [file("b.mp3"), file("a.mp3")],
-      "unknown",
-      "asc",
-    );
+    const result = sortItems([file("b.mp3"), file("a.mp3")], "unknown", "asc");
 
     expect(result.map((item) => item.name)).toEqual(["a.mp3", "b.mp3"]);
   });

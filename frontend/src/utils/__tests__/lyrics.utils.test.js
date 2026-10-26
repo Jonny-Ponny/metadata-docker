@@ -40,9 +40,7 @@ describe("parseLrc", () => {
   });
 
   it("expands a line with several timestamps into several entries", () => {
-    const result = parseLrc(
-      "[00:10.00][01:00.00]Chorus\n[00:20.00]Verse",
-    );
+    const result = parseLrc("[00:10.00][01:00.00]Chorus\n[00:20.00]Verse");
 
     expect(result.text).toBe("Chorus\nChorus\nVerse");
     expect(result.timestamps).toEqual([
@@ -86,10 +84,7 @@ describe("parseLrc", () => {
 
     expect(result.headers).toEqual({});
     expect(result.text).toBe("[xx:not-a-tag]\nLine");
-    expect(result.timestamps).toEqual([
-      TIMESTAMP_PLACEHOLDER,
-      "[00:01.00]",
-    ]);
+    expect(result.timestamps).toEqual([TIMESTAMP_PLACEHOLDER, "[00:01.00]"]);
   });
 
   it("accepts single-digit seconds and one to three minute digits", () => {

@@ -4,9 +4,9 @@
     show = false,
     editingText = $bindable(), // Mark as bindable for two-way binding
     onClose = () => {},
-    onSave = (text) => {},
+    onSave = () => {},
   } = $props();
-  
+
   let textareaElement = $state(null);
 
   function handleClose() {
@@ -72,8 +72,7 @@
           placeholder="Enter lyrics here. You can include timestamps like [00:00.00] at the beginning of lines..."
           class="edit-textarea"
           rows="15"
-          onkeydown={(e) => e.stopPropagation()}
-        ></textarea>
+          onkeydown={(e) => e.stopPropagation()}></textarea>
         <div class="modal-info">
           <p>Each line will create a timestamp entry</p>
           <p>You can add timestamps like [00:00.00] at line beginnings</p>

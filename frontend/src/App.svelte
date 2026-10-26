@@ -1,6 +1,7 @@
 <!-- src/App.svelte -->
 <script>
   import { onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
 
   import ToastContainer from "./components/ToastContainer.svelte";
   import TreeNode from "./components/TreeNode.svelte";
@@ -55,7 +56,7 @@
   let selectedFile = $state(null);
 
   // Tree expansion state
-  let expandedDirs = $state(new Set());
+  let expandedDirs = new SvelteSet();
 
   // UI states
   let leftPanelWidth = $state(50); // percentage
@@ -63,7 +64,6 @@
 
   // Player-related state variables
   let audioFile = $state(null);
-  let currentTime = $state(0);
 
   // svelte-ignore non_reactive_update
   let playerComponent; // Player component reference (not reactive)
@@ -101,7 +101,6 @@
 
   // ========== SEARCH STATE ==========
   let searchQuery = $state("");
-  let searchResults = $state(null); // null means show all, otherwise filtered results
 
   let showHelpModal = $state(false);
 
@@ -131,7 +130,7 @@
 
   let isTextDrag = $state(false);
 
-  function collectAudioFilesRecursively(node, basePath = node.path) {
+  function collectAudioFilesRecursively(node) {
     const result = [];
     const limit = 500; // safety limit
 
@@ -491,7 +490,9 @@
       const api_url = "/api/files"; // build
       const res = await fetch(api_url);
       if (!res.ok) {
-        throw new Error(await readApiError(res, "Could not load the file tree"));
+        throw new Error(
+          await readApiError(res, "Could not load the file tree"),
+        );
       }
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
@@ -517,8 +518,6 @@
     } else {
       expandedDirs.add(path);
     }
-    // Trigger reactivity
-    expandedDirs = new Set(expandedDirs);
   }
 
   function selectFile(path) {
@@ -571,12 +570,8 @@
     selectedFile = null;
   }
 
-  function handleTimeUpdate(time) {
-    currentTime = time;
-  }
-
   // ========== RESIZE HANDLERS ==========
-  function startResize(e) {
+  function startResize() {
     isResizing = true;
     document.body.classList.add("resizing"); // Add class to body for global text selection prevention
     document.addEventListener("mousemove", handleResize);
@@ -688,7 +683,6 @@
       if (expandedDirs.has(oldPath)) {
         expandedDirs.delete(oldPath);
         expandedDirs.add(data.newPath);
-        expandedDirs = new Set(expandedDirs);
       }
 
       // Update selected item if it was renamed
@@ -722,7 +716,6 @@
       // Remove from expanded set if it was a directory
       if (expandedDirs.has(path)) {
         expandedDirs.delete(path);
-        expandedDirs = new Set(expandedDirs);
       }
 
       await loadFileTree();
@@ -746,7 +739,6 @@
       if (!res.ok) {
         throw new Error(await readApiError(res));
       }
-      const data = await res.json();
       toast.success("Moved successfully");
       // Reload tree to reflect changes
       await loadFileTree();
@@ -775,7 +767,6 @@
       // If creating inside a folder, make sure that parent is expanded
       if (parentPath) {
         expandedDirs.add(parentPath);
-        expandedDirs = new Set(expandedDirs); // trigger reactivity
       }
 
       // Select the newly created folder
@@ -865,12 +856,6 @@
       scrollSelectedIntoView();
     }
   });
-
-  function selectImage(path) {
-    // selectedImage = path;
-    selectedFile = null;
-    selectedFolder = null;
-  }
 
   // ========== SEARCH FUNCTION ==========
   function filterTreeBySearch(nodes, query) {
@@ -1492,11 +1477,7 @@
 
   <!-- Player component -->
   <div class="player-wrapper" class:blurred={isDragging}>
-    <Player
-      {audioFile}
-      ontimeupdate={handleTimeUpdate}
-      bind:this={playerComponent}
-    />
+    <Player {audioFile} bind:this={playerComponent} />
   </div>
   <HelpModal
     isOpen={showHelpModal}
