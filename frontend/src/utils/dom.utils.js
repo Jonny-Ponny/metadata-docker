@@ -1,12 +1,14 @@
+// @ts-check
 // src/utils/dom.utils.js
 
 /**
  * Debounce function to limit how often a function is called
  * @param {Function} func - Function to debounce
  * @param {number} wait - Wait time in milliseconds
- * @returns {Function} Debounced function
+ * @returns {(...args: any[]) => void} Debounced function
  */
 export function debounce(func, wait) {
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
   let timeout;
   return function executedFunction(...args) {
     const later = () => {
@@ -21,7 +23,7 @@ export function debounce(func, wait) {
 /**
  * Scroll an element into view with center alignment
  * @param {HTMLElement} element - Element to scroll to
- * @param {Object} options - Scroll options
+ * @param {ScrollIntoViewOptions} [options] - Scroll options
  */
 export function scrollToElement(element, options = {}) {
   if (!element) return;
