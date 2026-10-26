@@ -1,5 +1,19 @@
+// @ts-check
 import { writable } from "svelte/store";
 
+/**
+ * @typedef {Object} HoldToConfirmOptions
+ * @property {number} [duration]
+ * @property {(event: Event) => void} [onConfirm]
+ * @property {(event: Event) => void} [onStart]
+ * @property {(event: Event) => void} [onCancel]
+ * @property {(progress: number) => void} [onProgress]
+ */
+
+/**
+ * @param {HTMLElement} node
+ * @param {HoldToConfirmOptions} [options]
+ */
 export function createHoldToConfirm(node, options = {}) {
   const {
     duration = 800, // Hold duration in ms
@@ -9,14 +23,20 @@ export function createHoldToConfirm(node, options = {}) {
     onProgress = () => {},
   } = options;
 
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
   let timeoutId;
-  let startTime;
+  /** @type {number} */
+  let startTime = 0;
+  /** @type {ReturnType<typeof setInterval> | undefined} */
   let progressInterval;
   let isHolding = false;
 
   // Progress store for visual feedback
   const progress = writable(0);
 
+  /**
+   * @param {Event} e
+   */
   function startHold(e) {
     e.preventDefault();
     if (isHolding) return;
@@ -43,6 +63,9 @@ export function createHoldToConfirm(node, options = {}) {
     }, duration);
   }
 
+  /**
+   * @param {Event} e
+   */
   function completeHold(e) {
     if (!isHolding) return;
 
@@ -51,6 +74,9 @@ export function createHoldToConfirm(node, options = {}) {
     onConfirm(e);
   }
 
+  /**
+   * @param {Event} e
+   */
   function cancelHold(e) {
     if (!isHolding) return;
 
@@ -90,12 +116,19 @@ export function createHoldToConfirm(node, options = {}) {
 }
 
 // Svelte action version
+/**
+ * @param {HTMLElement} node
+ * @param {HoldToConfirmOptions} [options]
+ */
 export function holdToConfirm(node, options) {
   const holdInstance = createHoldToConfirm(node, options);
 
   return {
     destroy: holdInstance.destroy,
 
+    /**
+     * @param {HoldToConfirmOptions} [newOptions]
+     */
     update(newOptions) {
       holdInstance.destroy();
       Object.assign(holdInstance, createHoldToConfirm(node, newOptions));
