@@ -1,3 +1,4 @@
+// @ts-check
 // src/utils/favicon.utils.js
 import iconSvg from "../assets/icon.svg?raw";
 
@@ -22,6 +23,7 @@ export function updateFavicon() {
   const svg = iconSvg.replace(DEFAULT_ACCENT, accent);
   const href = "data:image/svg+xml," + encodeURIComponent(svg);
 
+  /** @type {HTMLLinkElement | null} */
   let link = document.querySelector('link[rel="icon"][type="image/svg+xml"]');
   if (!link) {
     link = document.createElement("link");

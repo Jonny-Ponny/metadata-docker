@@ -1,3 +1,4 @@
+// @ts-check
 // src/utils/version.utils.js
 
 // Shared /api/version lookup. The app needs the same payload for the
@@ -9,6 +10,7 @@ import { readApiError, readJsonResponse } from "./api.utils.js";
 
 const VERSION_FALLBACK = "Could not read the version information";
 
+/** @type {Promise<any> | null} */
 let versionRequest = null;
 
 /**

@@ -1,3 +1,4 @@
+// @ts-check
 // src/utils/lyrics.utils.js
 
 import {
@@ -62,6 +63,7 @@ function takeLeadingTimestamp(value) {
 export function parseLrc(text) {
   const lines = [];
   const timestamps = [];
+  /** @type {Record<string, string>} */
   const headers = {};
   let hasOffset = false;
 
@@ -209,7 +211,7 @@ export function shiftTimestamps(timestamps, offsetSeconds) {
  *
  * @param {string[]} lines - Lyric lines
  * @param {string[]} timestamps - Timestamps matching the lines
- * @param {{ title?: string, artist?: string, album?: string }} headers
+ * @param {Record<string, string>} headers
  * @returns {string}
  */
 export function buildLrc(lines, timestamps = [], headers = {}) {

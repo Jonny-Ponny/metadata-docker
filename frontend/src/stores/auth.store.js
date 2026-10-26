@@ -91,6 +91,9 @@ export function logout() {
   isAuthenticated.set(false);
 }
 
+/**
+ * @returns {Record<string, string>}
+ */
 export function getAuthHeaders() {
   let token;
   authToken.subscribe((value) => (token = value))();
