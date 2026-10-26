@@ -25,13 +25,19 @@ export function parseTimestampToSeconds(timestamp) {
  * @returns {string} Format: [MM:SS.ss]
  */
 export function secondsToTimestamp(seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
+  // Round to centiseconds first: rounding the seconds field on its own turns
+  // 59.999 into the invalid "[00:60.00]" instead of carrying into the minute.
+  const totalCentiseconds = Math.round(seconds * 100);
+  const minutes = Math.floor(totalCentiseconds / 6000);
+  const remainingCentiseconds = totalCentiseconds % 6000;
+  const wholeSeconds = Math.floor(remainingCentiseconds / 100);
+  const centiseconds = remainingCentiseconds % 100;
 
   const minutesStr = minutes.toString().padStart(2, "0");
-  const secondsStr = remainingSeconds.toFixed(2).padStart(5, "0");
+  const secondsStr = wholeSeconds.toString().padStart(2, "0");
+  const centisecondsStr = centiseconds.toString().padStart(2, "0");
 
-  return `[${minutesStr}:${secondsStr}]`;
+  return `[${minutesStr}:${secondsStr}.${centisecondsStr}]`;
 }
 
 /**
