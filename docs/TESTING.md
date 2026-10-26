@@ -128,9 +128,12 @@ rewrite files; `format:check` is the CI-facing read-only check.
 `package-lock.json`.
 
 `svelte-check --tsconfig ./jsconfig.json` validates Svelte templates and
-compiler diagnostics. `checkJs` is still false because enabling it surfaces the
-existing JSDoc/type backlog (tracked in `PLAN.md`); template checking runs
-today.
+compiler diagnostics. `checkJs` is still false globally because turning it on
+reports the remaining JSDoc/type backlog in the stores and components (tracked
+in `PLAN.md`). Files opt in individually with a `// @ts-check` first line; all of
+`src/utils/*.js` does, so `npm run check` type-checks them and any new type error
+there fails CI. Add the pragma to a file once its errors are fixed, rather than
+suppressing them.
 
 `frontend/vitest.config.js` uses a jsdom environment, picks up
 `src/**/*.test.js`, and registers the Svelte plugin for the component tests that

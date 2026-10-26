@@ -1,3 +1,4 @@
+// @ts-check
 // src/utils/timestamp.utils.js
 
 /**

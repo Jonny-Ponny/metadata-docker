@@ -1,3 +1,4 @@
+// @ts-check
 // src/utils/index.js
 
 // stores
