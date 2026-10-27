@@ -312,8 +312,11 @@ describe("App", () => {
   it("scrolls the file tree with the wheel while an item is dragged", async () => {
     isAuthenticated.set(true);
     const view = await renderAuthenticated();
+    // The scroll container is the panel itself; .file-tree-container has no
+    // overflow. This is the regression check for binding the handler to the
+    // wrong element.
     const container = /** @type {HTMLElement} */ (
-      view.container.querySelector(".file-tree-container")
+      view.container.querySelector(".file-tree-panel")
     );
     let scrollTop = 0;
     Object.defineProperty(container, "scrollTop", {
@@ -329,12 +332,17 @@ describe("App", () => {
     expect(container.scrollTop).toBe(0);
 
     const dataTransfer = {
-      types: ["application/x-music-player-item"],
+      // Firefox does not always expose the custom type here, so this also
+      // covers detection from the dragged tree element.
+      types: [],
       setData: vi.fn(),
       getData: vi.fn(() => ""),
       effectAllowed: "",
     };
     await fireEvent.dragStart(node(view, "loose.flac"), { dataTransfer });
+    // A stray pointer event from the browser must not cancel the internal drag
+    // and make the wheel work only intermittently.
+    await fireEvent.pointerMove(window, { buttons: 0 });
     await fireEvent.wheel(container, { deltaY: 120 });
 
     expect(container.scrollTop).toBe(120);

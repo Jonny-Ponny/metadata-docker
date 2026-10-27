@@ -1095,10 +1095,17 @@
         (el.closest && el.closest('input, textarea, [contenteditable="true"]')))
     );
     // TreeNode sets this custom type in its own dragstart before the event
-    // bubbles here, so it identifies a move inside the library.
+    // bubbles here, so it identifies a move inside the library. Fall back to
+    // the dragged element because Firefox does not always expose custom types
+    // on dataTransfer this early.
+    const treeNode =
+      el instanceof Element
+        ? el.closest("[data-file-path], [data-folder-path]")
+        : null;
     isInternalDrag =
       !isTextDrag &&
-      hasType(e.dataTransfer?.types, "application/x-music-player-item");
+      (!!treeNode ||
+        hasType(e.dataTransfer?.types, "application/x-music-player-item"));
   }
 
   function handleDocumentDragEnd() {
@@ -1169,7 +1176,10 @@
     };
     /** @param {PointerEvent} event */
     const handleWindowPointer = (event) => {
-      if (!isDragging && !isInternalDrag) return;
+      // Only the external-file overlay needs this fallback. An internal tree
+      // drag ends via dragend/drop/Esc; cancelling it on a stray pointer event
+      // would silently disable wheel scrolling mid-drag.
+      if (!isDragging) return;
       // A pointerdown means the previous drag session is definitely over.
       // While a native drag is running the browser suppresses mouse/pointer
       // events, so one arriving with no button held is also terminal.
@@ -1496,7 +1506,11 @@
           </div>
         </div>
 
-        <div class="panel-content file-tree-panel">
+        <div
+          class="panel-content file-tree-panel"
+          bind:this={fileTreeContainer}
+          onwheel={handleTreeWheel}
+        >
           {#if isLoading && treeData.length === 0}
             <div class="empty-state">
               <svg
@@ -1531,11 +1545,7 @@
               <button class="retry-btn" onclick={loadFileTree}>Retry</button>
             </div>
           {:else}
-            <div
-              class="file-tree-container"
-              bind:this={fileTreeContainer}
-              onwheel={handleTreeWheel}
-            >
+            <div class="file-tree-container">
               {#if treeData.length === 0}
                 <div class="empty-state">
                   <svg
