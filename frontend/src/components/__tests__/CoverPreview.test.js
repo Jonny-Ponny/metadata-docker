@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 
 import CoverPreview from "../CoverPreview.svelte";
 
@@ -69,6 +69,36 @@ describe("CoverPreview", () => {
       `/api/metadata/picture/preview?url=${encodeURIComponent(remote)}`,
       { headers: {} },
     );
+  });
+
+  it("shows the natural image size in the tooltip once it loads", async () => {
+    const remote = "https://example.test/cover.jpg";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse(200)));
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:cover"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    const { container } = render(CoverPreview, {
+      props: { url: remote, variant: "result" },
+    });
+    const preview = container.querySelector(".cover-preview");
+
+    expect(preview?.getAttribute("title")).toBe(remote);
+
+    const image = await screen.findByRole("img");
+    Object.defineProperty(image, "naturalWidth", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(image, "naturalHeight", {
+      value: 450,
+      configurable: true,
+    });
+    await fireEvent.load(image);
+
+    expect(preview?.getAttribute("title")).toBe(`600x450 - ${remote}`);
   });
 
   it("shows a failed marker when the remote cover cannot be loaded", async () => {
