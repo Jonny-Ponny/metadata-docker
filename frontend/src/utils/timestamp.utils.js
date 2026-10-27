@@ -60,8 +60,8 @@ export function validateTimestampFormat(timestamp) {
  * Validate timestamp is within allowed range (between previous and next timestamps)
  * @param {number} lineIndex - Index of the line being edited
  * @param {number} newSeconds - New timestamp in seconds
- * @param {Array<string>} timestamps - All timestamps array
- * @returns {Object} { valid: boolean, message: string }
+ * @param {string[]} timestamps - All timestamps array
+ * @returns {{ valid: boolean, message: string }}
  */
 export function validateTimestampRange(lineIndex, newSeconds, timestamps) {
   const result = { valid: true, message: "" };

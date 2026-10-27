@@ -1,5 +1,6 @@
 <!-- src/components/Login.svelte -->
 <script>
+  // @ts-check
   import { login, authError, theme, toggleTheme } from "../utils/index";
 
   let username = $state("");
@@ -7,6 +8,9 @@
   let isLoading = $state(false);
   let error = $state("");
 
+  /**
+   * @param {Event} e
+   */
   async function handleSubmit(e) {
     e.preventDefault();
     isLoading = true;
@@ -15,7 +19,7 @@
     const result = await login(username, password);
 
     if (!result.success) {
-      error = result.error;
+      error = result.error ?? "";
     }
 
     isLoading = false;

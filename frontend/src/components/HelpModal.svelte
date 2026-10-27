@@ -1,13 +1,26 @@
 <!-- src/components/HelpModal.svelte -->
 <script>
+  // @ts-check
   import { onMount } from "svelte";
 
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [isOpen]
+   * @property {() => void} onClose
+   * @property {string | null} [currentVersion]
+   * @property {string | null} [gitSha]
+   */
+
+  /** @type {Props} */
   let { isOpen, onClose, currentVersion, gitSha } = $props();
 
   // Track which tab is active
   let activeTab = $state("basics"); // 'basics' or 'tags'
 
   // Handle escape key to close
+  /**
+   * @param {KeyboardEvent} e
+   */
   function handleKeyDown(e) {
     if (e.key === "Escape" && isOpen) {
       onClose();
@@ -20,6 +33,9 @@
   });
 
   // Stop propagation to prevent modal from closing when clicking inside
+  /**
+   * @param {MouseEvent} e
+   */
   function handleModalClick(e) {
     e.stopPropagation();
   }
