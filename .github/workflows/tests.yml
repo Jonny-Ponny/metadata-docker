@@ -48,6 +48,8 @@ jobs:
         continue-on-error: true
         run: python -m pytest -q --cov=backend --cov-report=term-missing
 
+  # Branch protection must require this job in addition to `pytest`; otherwise a
+  # failing frontend test still allows a merge.
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
