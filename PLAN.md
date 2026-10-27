@@ -107,7 +107,9 @@ in this order:
 
 - **T-04 (P2)** - Component tests for the editor, upload tray and context menu
   once the utilities are covered, and coverage for the remaining stores and
-  utilities. Started with the test harness and the `Toast` component.
+  utilities. The harness and tests for `Toast`, `ToastContainer`, `SortButton`,
+  `Login`, `CoverPreview`, `HoldButton`, `MetadataEditor`, `UploadTray` and
+  `TreeNode` are in place; the remaining stores and utilities are still open.
 - A UI bug pass once the checks and tests exist, so fixes can be pinned by a
   regression test.
 

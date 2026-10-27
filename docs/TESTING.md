@@ -29,25 +29,25 @@ pip install -r requirements-dev.txt
 python -m pytest -q --cov=backend --cov-report=term-missing
 ```
 
-| Measurement | Tests | Line coverage | Statements | Missed |
-|---|---:|---:|---:|---:|
-| Baseline before the coverage work | 616 | 83% | 2583 | 437 |
-| Current (2026-10-25) | 848 | 92% | 2591 | 206 |
+| Measurement                       | Tests | Line coverage | Statements | Missed |
+| --------------------------------- | ----: | ------------: | ---------: | -----: |
+| Baseline before the coverage work |   616 |           83% |       2583 |    437 |
+| Current (2026-10-25)              |   848 |           92% |       2591 |    206 |
 
 `config.py` is under-reported because its tests import the app in a subprocess.
 
 Lowest-covered areas:
 
-| Area | Cover | Main gap |
-|---|---:|---|
-| `config.py` | 55% | parsed in a subprocess, so coverage cannot see it |
-| `routes/tags.py` | 83% | per-endpoint validation and generic error exits |
-| `logger_config.py` | 85% | fallback/error branches |
-| `paths.py` | 90% | symlink and `commonpath` edge cases |
-| `routes/text.py` | 91% | stat and temp-file cleanup races |
-| `routes/logs.py` | 91% | empty and undecodable log lines |
-| `renaming.py` | 91% | remaining filename edge cases |
-| everything else | 92-100% | |
+| Area               |   Cover | Main gap                                          |
+| ------------------ | ------: | ------------------------------------------------- |
+| `config.py`        |     55% | parsed in a subprocess, so coverage cannot see it |
+| `routes/tags.py`   |     83% | per-endpoint validation and generic error exits   |
+| `logger_config.py` |     85% | fallback/error branches                           |
+| `paths.py`         |     90% | symlink and `commonpath` edge cases               |
+| `routes/text.py`   |     91% | stat and temp-file cleanup races                  |
+| `routes/logs.py`   |     91% | empty and undecodable log lines                   |
+| `renaming.py`      |     91% | remaining filename edge cases                     |
+| everything else    | 92-100% |                                                   |
 
 ## Backend coverage backlog
 
@@ -155,8 +155,13 @@ Covered areas:
   free-space preflight, byte/duration formatting and the XHR upload request
   (progress, success, HTTP/network/timeout/abort failures).
 - API error parsing and the cached `/api/version` request.
-- Components: `Toast` rendering, type styling, manual dismiss and the
-  auto-dismiss timer.
+- Components: `Toast` and `ToastContainer` rendering, type styling, manual
+  dismiss, auto-dismiss and store updates; `SortButton` menu, selection and
+  direction; the `Login` form states, backend error and theme toggle;
+  `CoverPreview` data/remote/placeholder/failure rendering; `HoldButton` hold,
+  cancel and disabled states; `MetadataEditor` loading, read-only mode, dirty
+  tracking and file saves; `UploadTray` phases, progress, failure details and
+  auto-hide; `TreeNode` selection, context-menu actions and inline rename.
 
 Conventions:
 
@@ -167,6 +172,8 @@ Conventions:
   unless the class is the behaviour under test.
 - Use fake timers for components that schedule work in `onMount`; advance them
   with `await vi.advanceTimersByTimeAsync()` so Svelte flushes the update.
+- Store updates made after `render()` and input events need `await tick()`
+  from `svelte` before asserting on the DOM.
 - Stub browser globals with `vi.stubGlobal()` and restore them in `afterEach`.
 - Reset modules with `vi.resetModules()` before testing module-level caches
   such as `version.utils.js`.
