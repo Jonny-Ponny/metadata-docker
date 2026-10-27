@@ -131,7 +131,14 @@
        * @param {KeyboardEvent} e
        */
       const handleKeyDown = (e) => {
-        // Stop propagation for all keyboard events when modal is open
+        // The dialog handles Enter and Escape in the timestamp input itself.
+        // Only swallow keys that would otherwise reach the app-wide shortcuts.
+        if (
+          e.target instanceof Element &&
+          e.target.closest(".timestamp-editor")
+        ) {
+          return;
+        }
         e.stopPropagation();
       };
 

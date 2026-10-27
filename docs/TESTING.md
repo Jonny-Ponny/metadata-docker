@@ -161,7 +161,11 @@ Covered areas:
   `CoverPreview` data/remote/placeholder/failure rendering; `HoldButton` hold,
   cancel and disabled states; `MetadataEditor` loading, read-only mode, dirty
   tracking and file saves; `UploadTray` phases, progress, failure details and
-  auto-hide; `TreeNode` selection, context-menu actions and inline rename.
+  auto-hide; `TreeNode` selection, context-menu actions and inline rename;
+  `TextEditor` load, save and clipboard; `EditModal` save and close paths;
+  `FolderOverview` missing-field reports; `ImageViewer` loading, retry and the
+  full-size view; `TimestampEditModal` validation, range hints and keyboard
+  shortcuts.
 
 Conventions:
 
