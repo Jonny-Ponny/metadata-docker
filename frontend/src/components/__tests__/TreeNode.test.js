@@ -5,6 +5,7 @@ import { get } from "svelte/store";
 
 import TreeNode from "../TreeNode.svelte";
 import { contextMenu, renamingPath } from "../../stores/context.store.js";
+import { settings } from "../../utils/settings.utils.js";
 
 /**
  * @typedef {Object} TreeItem
@@ -80,12 +81,18 @@ async function openMenu(name) {
 }
 
 describe("TreeNode", () => {
+  /** @type {Record<string, any>} */
+  let originalSettings;
+
   beforeEach(() => {
+    originalSettings = get(settings);
     contextMenu.set({ isOpen: false, path: null, x: 0, y: 0, type: null });
     renamingPath.set(null);
   });
 
   afterEach(() => {
+    settings.set(originalSettings);
+    vi.useRealTimers();
     contextMenu.set({ isOpen: false, path: null, x: 0, y: 0, type: null });
     renamingPath.set(null);
   });
@@ -125,6 +132,26 @@ describe("TreeNode", () => {
     expect(screen.getByText("Download")).toBeTruthy();
     expect(screen.getByText("Create folder")).toBeTruthy();
     expect(screen.getByText("Delete")).toBeTruthy();
+  });
+
+  it("uses the configured hold duration for delete", async () => {
+    settings.set({ ...get(settings), holdDeleteDuration: 700 });
+    const { onDelete } = setup(audioItem);
+    await openMenu("song.mp3");
+
+    vi.useFakeTimers();
+    try {
+      const deleteButton = screen.getByRole("button", { name: "Delete" });
+
+      await fireEvent.mouseDown(deleteButton);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(onDelete).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(onDelete).toHaveBeenCalledWith("folder/song.mp3");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("hides audio-only actions for an image", async () => {

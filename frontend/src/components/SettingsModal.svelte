@@ -8,6 +8,10 @@
     FIELD_METADATA,
     toast,
     defaultColors,
+    sanitizeHoldDuration,
+    DEFAULT_HOLD_DURATIONS,
+    HOLD_DURATION_MIN,
+    HOLD_DURATION_MAX,
   } from "../utils/index.js";
 
   /**
@@ -134,7 +138,23 @@
   }
 
   function handleSave() {
-    saveSettings(localSettings);
+    // Normalize before persisting: an empty or out-of-range number input must
+    // not produce an unusable hold time.
+    saveSettings({
+      ...localSettings,
+      holdApplyDuration: sanitizeHoldDuration(
+        localSettings.holdApplyDuration,
+        DEFAULT_HOLD_DURATIONS.apply,
+      ),
+      holdTagDeleteDuration: sanitizeHoldDuration(
+        localSettings.holdTagDeleteDuration,
+        DEFAULT_HOLD_DURATIONS.tagDelete,
+      ),
+      holdDeleteDuration: sanitizeHoldDuration(
+        localSettings.holdDeleteDuration,
+        DEFAULT_HOLD_DURATIONS.delete,
+      ),
+    });
     onClose();
   }
 
@@ -321,6 +341,80 @@
             </label>
             <p class="setting-description">
               When disabled, audio files won't be loaded when selected.
+            </p>
+          </div>
+        </div>
+
+        <!-- Hold Durations -->
+        <div class="settings-section">
+          <h3>Hold Durations</h3>
+          <p class="section-description">
+            How long to hold a button before its action runs. Shorter times are
+            faster; longer times are harder to trigger by accident. Values are
+            clamped to {HOLD_DURATION_MIN}&ndash;{HOLD_DURATION_MAX} ms.
+          </p>
+          <div class="setting-item">
+            <label class="select-label" for="hold-apply"
+              >Apply a tag or cover to the whole folder</label
+            >
+            <div class="duration-input-row">
+              <input
+                id="hold-apply"
+                class="setting-number"
+                type="number"
+                min={HOLD_DURATION_MIN}
+                max={HOLD_DURATION_MAX}
+                step="100"
+                bind:value={localSettings.holdApplyDuration}
+              />
+              <span>ms</span>
+            </div>
+            <p class="setting-description">
+              The folder button next to a tag field or the cover art applies the
+              current value to every file in the folder.
+            </p>
+          </div>
+          <div class="setting-item">
+            <label class="select-label" for="hold-tag-delete"
+              >Delete a tag field or cover art</label
+            >
+            <div class="duration-input-row">
+              <input
+                id="hold-tag-delete"
+                class="setting-number"
+                type="number"
+                min={HOLD_DURATION_MIN}
+                max={HOLD_DURATION_MAX}
+                step="100"
+                bind:value={localSettings.holdTagDeleteDuration}
+              />
+              <span>ms</span>
+            </div>
+            <p class="setting-description">
+              The trash button next to a tag field or the cover-art delete
+              button. Deletes the tag from the current file or, when folder mode
+              is on, from the folder.
+            </p>
+          </div>
+          <div class="setting-item">
+            <label class="select-label" for="hold-delete"
+              >Delete a file or folder</label
+            >
+            <div class="duration-input-row">
+              <input
+                id="hold-delete"
+                class="setting-number"
+                type="number"
+                min={HOLD_DURATION_MIN}
+                max={HOLD_DURATION_MAX}
+                step="100"
+                bind:value={localSettings.holdDeleteDuration}
+              />
+              <span>ms</span>
+            </div>
+            <p class="setting-description">
+              The hold-to-delete item in a file or folder's context menu. This
+              is the most destructive action, so it defaults to 1500 ms.
             </p>
           </div>
         </div>
@@ -824,6 +918,33 @@
     box-shadow: 0 0 0 2px var(--color-primary-transparent);
   }
 
+  .duration-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .setting-number {
+    width: 120px;
+    padding: 7px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    font-size: 13px;
+  }
+
+  .setting-number:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-transparent);
+  }
+
+  .duration-input-row span {
+    font-size: 13px;
+    color: #888;
+  }
+
   .scheme-input-group {
     margin-bottom: 16px;
     width: 100%;
@@ -1322,6 +1443,16 @@
     background: #3d3d3d;
     border-color: #555;
     color: #e0e0e0;
+  }
+
+  :global(body.dark) .setting-number {
+    background: #3d3d3d;
+    border-color: #555;
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .duration-input-row span {
+    color: #aaa;
   }
 
   :global(body.dark) .scheme-input {

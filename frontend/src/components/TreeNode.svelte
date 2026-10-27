@@ -12,6 +12,8 @@
     sortItems,
     sortConfig,
     settings,
+    sanitizeHoldDuration,
+    DEFAULT_HOLD_DURATIONS,
     applyRenamingScheme,
     toast,
     getFolderSummary,
@@ -73,6 +75,15 @@
     item.children
       ? sortItems(item.children, $sortConfig.by, $sortConfig.direction)
       : [],
+  );
+
+  // File and folder deletes share one setting so a single preference covers
+  // every destructive hold action in the tree.
+  const holdDeleteDuration = $derived(
+    sanitizeHoldDuration(
+      $settings.holdDeleteDuration,
+      DEFAULT_HOLD_DURATIONS.delete,
+    ),
   );
 
   // Calculate hint for folders
@@ -654,7 +665,7 @@
           <li class="hold-delete-item">
             <HoldButton
               variant="menu"
-              duration={1500}
+              duration={holdDeleteDuration}
               onConfirm={handleDeleteWithHold}
               title="Hold to delete"
             >
@@ -819,7 +830,7 @@
           <li class="hold-delete-item">
             <HoldButton
               variant="menu"
-              duration={800}
+              duration={holdDeleteDuration}
               onConfirm={() => {
                 onDelete(item.path);
                 contextMenu.update((curr) => ({

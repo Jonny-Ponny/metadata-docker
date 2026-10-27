@@ -32,10 +32,41 @@ describe("settings utils", () => {
       fileScheme: "[ALBUMARTIST] - [ALBUM] - [TRACK] - [TITLE]",
       uploadDuplicates: "skip-identical",
       recursiveOverview: false,
+      holdApplyDuration: 800,
+      holdTagDeleteDuration: 800,
+      holdDeleteDuration: 1500,
       "color-primary": "#fd7d05",
     });
     expect(get(settings).overviewFields).toContain("title");
     expect(get(settings).overviewFields).toContain("picture");
+  });
+
+  it("sanitizes configured hold durations", async () => {
+    const { HOLD_DURATION_MAX, HOLD_DURATION_MIN, sanitizeHoldDuration } =
+      await import("../settings.utils.js");
+
+    expect(sanitizeHoldDuration("1200", 800)).toBe(1200);
+    expect(sanitizeHoldDuration(0, 800)).toBe(HOLD_DURATION_MIN);
+    expect(sanitizeHoldDuration(99999, 800)).toBe(HOLD_DURATION_MAX);
+    expect(sanitizeHoldDuration(undefined, 800)).toBe(800);
+    expect(sanitizeHoldDuration("not a number", 800)).toBe(800);
+  });
+
+  it("clamps hold durations from storage", async () => {
+    localStorage.setItem(
+      "appSettings",
+      JSON.stringify({
+        holdApplyDuration: "fast",
+        holdTagDeleteDuration: 10,
+        holdDeleteDuration: 99999,
+      }),
+    );
+
+    const { settings } = await import("../settings.utils.js");
+
+    expect(get(settings).holdApplyDuration).toBe(800);
+    expect(get(settings).holdTagDeleteDuration).toBe(200);
+    expect(get(settings).holdDeleteDuration).toBe(5000);
   });
 
   it("merges saved settings and migrates old field names", async () => {

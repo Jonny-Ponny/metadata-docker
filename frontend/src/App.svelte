@@ -424,7 +424,8 @@
   /**
    * @param {DragEvent} e
    */
-  function handleDragLeave(e) {    if (isTextDrag) return;
+  function handleDragLeave(e) {
+    if (isTextDrag) return;
     e.preventDefault();
     e.stopPropagation();
 

@@ -138,6 +138,26 @@ describe("SettingsModal", () => {
     expect(saved.uploadDuplicates).toBe("keep-both");
   });
 
+  it("saves clamped hold durations", async () => {
+    stubAddons();
+    render(SettingsModal, { props: { isOpen: true, onClose: vi.fn() } });
+
+    const apply = screen.getByLabelText(
+      "Apply a tag or cover to the whole folder",
+    );
+    const fileDelete = screen.getByLabelText("Delete a file or folder");
+
+    await fireEvent.input(apply, { target: { value: "50" } });
+    await fireEvent.input(fileDelete, { target: { value: "9999" } });
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Save Settings" }),
+    );
+
+    expect(get(settings).holdApplyDuration).toBe(200);
+    expect(get(settings).holdDeleteDuration).toBe(5000);
+    expect(get(settings).holdTagDeleteDuration).toBe(800);
+  });
+
   it("discards the edits on cancel and Escape", async () => {
     stubAddons();
     const onClose = vi.fn();

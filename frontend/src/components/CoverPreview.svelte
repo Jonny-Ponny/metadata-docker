@@ -89,12 +89,7 @@
 
 <div class="cover-preview {variant}" {title}>
   {#if previewSrc}
-    <img
-      src={previewSrc}
-      {alt}
-      class="cover-image"
-      onload={handleImageLoad}
-    />
+    <img src={previewSrc} {alt} class="cover-image" onload={handleImageLoad} />
   {:else if showPlaceholder}
     <img src={placeholder} {alt} class="cover-image" />
   {:else if loadFailed}
