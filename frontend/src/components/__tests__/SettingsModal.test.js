@@ -69,6 +69,34 @@ describe("SettingsModal", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("collapses the hold and upload sections by default", () => {
+    stubAddons();
+    const { container } = render(SettingsModal, {
+      props: { isOpen: true, onClose: vi.fn() },
+    });
+
+    const headings = [...container.querySelectorAll("h3")].map(
+      (heading) => heading.textContent?.trim() ?? "",
+    );
+    expect(headings.indexOf("Folder Overview")).toBeLessThan(
+      headings.indexOf("Hold Durations"),
+    );
+    expect(headings.indexOf("Hold Durations")).toBeLessThan(
+      headings.indexOf("Uploads"),
+    );
+    expect(headings.indexOf("Uploads")).toBeLessThan(
+      headings.indexOf("Color Customization"),
+    );
+
+    const collapsibles = [
+      ...container.querySelectorAll("details.settings-collapsible"),
+    ];
+    expect(collapsibles).toHaveLength(2);
+    for (const section of collapsibles) {
+      expect(section.hasAttribute("open")).toBe(false);
+    }
+  });
+
   it("loads and lists the available addons", async () => {
     stubAddons();
 
@@ -136,6 +164,26 @@ describe("SettingsModal", () => {
     const saved = JSON.parse(localStorage.getItem("appSettings") ?? "{}");
     expect(saved.enablePlayer).toBe(false);
     expect(saved.uploadDuplicates).toBe("keep-both");
+  });
+
+  it("saves clamped hold durations", async () => {
+    stubAddons();
+    render(SettingsModal, { props: { isOpen: true, onClose: vi.fn() } });
+
+    const apply = screen.getByLabelText(
+      "Apply a tag or cover to the whole folder",
+    );
+    const fileDelete = screen.getByLabelText("Delete a file or folder");
+
+    await fireEvent.input(apply, { target: { value: "50" } });
+    await fireEvent.input(fileDelete, { target: { value: "9999" } });
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Save Settings" }),
+    );
+
+    expect(get(settings).holdApplyDuration).toBe(200);
+    expect(get(settings).holdDeleteDuration).toBe(5000);
+    expect(get(settings).holdTagDeleteDuration).toBe(800);
   });
 
   it("discards the edits on cancel and Escape", async () => {

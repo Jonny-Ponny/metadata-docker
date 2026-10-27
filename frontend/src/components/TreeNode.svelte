@@ -12,6 +12,8 @@
     sortItems,
     sortConfig,
     settings,
+    sanitizeHoldDuration,
+    DEFAULT_HOLD_DURATIONS,
     applyRenamingScheme,
     toast,
     getFolderSummary,
@@ -73,6 +75,15 @@
     item.children
       ? sortItems(item.children, $sortConfig.by, $sortConfig.direction)
       : [],
+  );
+
+  // File and folder deletes share one setting so a single preference covers
+  // every destructive hold action in the tree.
+  const holdDeleteDuration = $derived(
+    sanitizeHoldDuration(
+      $settings.holdDeleteDuration,
+      DEFAULT_HOLD_DURATIONS.delete,
+    ),
   );
 
   // Calculate hint for folders
@@ -200,23 +211,6 @@
 
   function cancelRename() {
     renamingPath.set(null);
-  }
-
-  /**
-   * @param {DragEvent} e
-   */
-  function handleDragStart(e) {
-    // Store item info for internal move
-    const itemData = {
-      path: item.path,
-      type: item.type,
-      name: item.name,
-    };
-    e.dataTransfer?.setData(
-      "application/x-music-player-item",
-      JSON.stringify(itemData),
-    );
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
   }
 
   $effect(() => {
@@ -529,9 +523,6 @@
         handleContextMenu(e);
       }}
       data-folder-path={item.path}
-      draggable={$renamingPath !== item.path}
-      // Disable dragging when renaming
-      ondragstart={handleDragStart}
     >
       <span class="toggle">
         {#if expanded.has(item.path)}
@@ -654,7 +645,7 @@
           <li class="hold-delete-item">
             <HoldButton
               variant="menu"
-              duration={1500}
+              duration={holdDeleteDuration}
               onConfirm={handleDeleteWithHold}
               title="Hold to delete"
             >
@@ -719,9 +710,6 @@
       }}
       data-file-path={item.path}
       data-folder-path={item.path.substring(0, item.path.lastIndexOf("/"))}
-      draggable={$renamingPath !== item.path}
-      // Disable dragging when renaming
-      ondragstart={handleDragStart}
     >
       <span class="file-icon">
         <!-- File icon - same for both, just different color maybe -->
@@ -819,7 +807,7 @@
           <li class="hold-delete-item">
             <HoldButton
               variant="menu"
-              duration={800}
+              duration={holdDeleteDuration}
               onConfirm={() => {
                 onDelete(item.path);
                 contextMenu.update((curr) => ({

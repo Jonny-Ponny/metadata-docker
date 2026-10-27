@@ -4,7 +4,14 @@
   import LyricsEditorModal from "./LRCEditor.svelte";
   import { SvelteSet } from "svelte/reactivity";
 
-  import { toast, processEditedLyrics, getFieldLabel } from "../utils/index.js";
+  import {
+    toast,
+    processEditedLyrics,
+    getFieldLabel,
+    settings,
+    sanitizeHoldDuration,
+    DEFAULT_HOLD_DURATIONS,
+  } from "../utils/index.js";
 
   /**
    * @typedef {Object} MetadataFields
@@ -78,6 +85,21 @@
   let customFieldEditing = $state(/** @type {boolean[]} */ ([]));
 
   let applyToSubfolders = $state(false); // false = current folder only, true = include subfolders
+
+  // Hold times come from Settings; sanitize guards against old or hand-edited
+  // saved values (missing, non-numeric or out of range).
+  const holdApplyDuration = $derived(
+    sanitizeHoldDuration(
+      $settings.holdApplyDuration,
+      DEFAULT_HOLD_DURATIONS.apply,
+    ),
+  );
+  const holdTagDeleteDuration = $derived(
+    sanitizeHoldDuration(
+      $settings.holdTagDeleteDuration,
+      DEFAULT_HOLD_DURATIONS.tagDelete,
+    ),
+  );
 
   // Derived: filename from path
   let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
@@ -997,7 +1019,7 @@
               </button>
               <HoldButton
                 variant="icon"
-                duration={800}
+                duration={holdApplyDuration}
                 onConfirm={() => triggerPictureUpload(true)}
                 disabled={isUploadingPicture}
                 title={applyToSubfolders
@@ -1023,7 +1045,7 @@
               {#if metadata.picture}
                 <HoldButton
                   variant="icon"
-                  duration={800}
+                  duration={holdTagDeleteDuration}
                   onConfirm={deleteCoverArt}
                   disabled={isUploadingPicture}
                   title="Hold to delete cover art"
@@ -1126,7 +1148,7 @@
               {#if metadata[field]}
                 <HoldButton
                   variant="icon"
-                  duration={800}
+                  duration={holdTagDeleteDuration}
                   onConfirm={() => {
                     if (applyDeleteToFolder) {
                       deleteFieldFromFolder(field);
@@ -1185,7 +1207,7 @@
               <!-- Folder button -->
               <HoldButton
                 variant="icon"
-                duration={800}
+                duration={holdApplyDuration}
                 onConfirm={() => applyToFolder(field, metadata[field])}
                 title={applyToSubfolders
                   ? "Hold to apply to all files in folder (including subfolders)"
@@ -1268,7 +1290,7 @@
                   {#if metadata[field]}
                     <HoldButton
                       variant="icon"
-                      duration={800}
+                      duration={holdTagDeleteDuration}
                       onConfirm={() => {
                         if (applyDeleteToFolder) {
                           deleteFieldFromFolder(field);
@@ -1326,7 +1348,7 @@
                   <!-- Folder button -->
                   <HoldButton
                     variant="icon"
-                    duration={800}
+                    duration={holdApplyDuration}
                     onConfirm={() => applyToFolder(field, value)}
                     title={applyToSubfolders
                       ? "Hold to apply to all files in folder (including subfolders)"
@@ -1384,7 +1406,7 @@
                   {#if value}
                     <HoldButton
                       variant="icon"
-                      duration={800}
+                      duration={holdTagDeleteDuration}
                       onConfirm={() => {
                         if (applyDeleteToFolder) {
                           deleteFieldFromFolder(key);
@@ -1442,7 +1464,7 @@
                   <!-- Folder button -->
                   <HoldButton
                     variant="icon"
-                    duration={800}
+                    duration={holdApplyDuration}
                     onConfirm={() => applyToFolder(key, value)}
                     title={applyToSubfolders
                       ? "Hold to apply to all files in folder (including subfolders)"
@@ -1544,7 +1566,7 @@
             <!-- Folder button -->
             <HoldButton
               variant="icon"
-              duration={800}
+              duration={holdApplyDuration}
               onConfirm={() =>
                 applyToFolder(customFields[i].name, customFields[i].value)}
               title={applyToSubfolders
