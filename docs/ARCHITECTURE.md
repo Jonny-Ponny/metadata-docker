@@ -235,6 +235,15 @@ embeds SBOM and provenance, and attests the multi-arch digest with Sigstore via
 the workflow's OIDC identity. `latest` follows the default branch; `vX.Y.Z`
 tags produce `X.Y.Z`, `X.Y` and `X` image tags.
 
+The frontend is built once per build in a stage pinned to `$BUILDPLATFORM`, so
+the bundle is not recompiled under QEMU for each target. The bundle is
+platform-independent and is copied into every architecture's final stage. That
+stage stays on `node:22-bookworm-slim`: Node 24 and newer publish no
+`linux/arm/v7` image, while the final `python:3.12-alpine` stage does. The
+frontend installs with `npm ci` from `frontend/package-lock.json`, and
+`frontend/.nvmrc` plus the `engines` field in `frontend/package.json` document
+the Node range the tooling needs.
+
 The commit SHA is baked into the image (`APP_GIT_SHA`) and exposed by
 `/api/version`, so a running container can be matched to its attestation. See
 [SECURITY.md](../SECURITY.md#image-trust-and-verification) for the verification
