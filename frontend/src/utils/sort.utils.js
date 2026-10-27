@@ -19,10 +19,11 @@ export const sortConfig = writable({
 
 // Helper function to sort items
 /**
- * @param {SortableItem[]} items
+ * @template {SortableItem} T
+ * @param {T[]} items
  * @param {string} sortBy
  * @param {string} direction
- * @returns {SortableItem[]}
+ * @returns {T[]}
  */
 export function sortItems(items, sortBy, direction) {
   if (!items || items.length === 0) return items;

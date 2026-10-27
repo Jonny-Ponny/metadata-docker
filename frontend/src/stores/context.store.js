@@ -3,12 +3,23 @@
 
 import { writable } from "svelte/store";
 
-export const contextMenu = writable({
-  isOpen: false,
-  path: null,
-  x: 0,
-  y: 0,
-  type: null,
-});
+/**
+ * @typedef {Object} ContextMenuState
+ * @property {boolean} isOpen
+ * @property {string | null} path
+ * @property {number} x
+ * @property {number} y
+ * @property {string | null} type
+ */
 
-export const renamingPath = writable(null);
+export const contextMenu = writable(
+  /** @type {ContextMenuState} */ ({
+    isOpen: false,
+    path: null,
+    x: 0,
+    y: 0,
+    type: null,
+  }),
+);
+
+export const renamingPath = writable(/** @type {string | null} */ (null));

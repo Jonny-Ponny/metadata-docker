@@ -1,5 +1,6 @@
 <!-- src/components/TreeNode.svelte -->
 <script>
+  // @ts-check
   // VS Code doesnt like this
   // @ts-ignore
   import Self from "./TreeNode.svelte";
@@ -21,6 +22,34 @@
     readApiError,
   } from "../utils/index.js";
 
+  /**
+   * One node of the library tree, as returned by /api/files.
+   * @typedef {Object} TreeItem
+   * @property {string} name
+   * @property {string} path
+   * @property {string} type
+   * @property {string} [file_type]
+   * @property {number} [size]
+   * @property {TreeItem[]} [children]
+   */
+
+  /**
+   * @typedef {Object} Props
+   * @property {TreeItem} item
+   * @property {{ has(path: string): boolean }} expanded
+   * @property {(path: string) => void} toggleDir
+   * @property {(path: string) => void} selectFile
+   * @property {(path: string) => void} selectFolder
+   * @property {string | null} [selectedFolder]
+   * @property {string | null} [selectedFile]
+   * @property {number} [level]
+   * @property {(path: string, newName: string) => Promise<void>} onRename
+   * @property {(path: string) => Promise<void>} onDelete
+   * @property {(path: string) => void} onCreateFolder
+   * @property {(path: string) => void} onCopy
+   */
+
+  /** @type {Props} */
   let {
     item,
     expanded,
@@ -37,7 +66,7 @@
   } = $props();
 
   // Input state
-  let inputRef = $state(null);
+  let inputRef = $state(/** @type {HTMLInputElement | null} */ (null));
   let newName = $derived(item.name);
 
   // Derived sorted children
@@ -88,7 +117,7 @@
       : "", // Return empty string for files (non-folders)
   );
 
-  let menuRef = $state(null);
+  let menuRef = $state(/** @type {HTMLDivElement | null} */ (null));
   let menuStyle = $state({ left: "0px", top: "0px" });
 
   function handleDirectoryClick() {
@@ -101,6 +130,9 @@
   }
 
   // Context menu handlers
+  /**
+   * @param {MouseEvent} e
+   */
   function handleContextMenu(e) {
     e.preventDefault();
     renamingPath.set(null); // close any ongoing rename
@@ -115,14 +147,20 @@
   }
 
   // Close menu when clicking outside or pressing Escape
+  /**
+   * @param {MouseEvent} e
+   */
   function handleClickOutside(e) {
     const menuId = `context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`;
     const menuEl = document.getElementById(menuId);
-    if (menuEl && !menuEl.contains(e.target)) {
+    if (menuEl && e.target instanceof Node && !menuEl.contains(e.target)) {
       contextMenu.update((c) => ({ ...c, isOpen: false }));
     }
   }
 
+  /**
+   * @param {KeyboardEvent} e
+   */
   function handleKeyDown(e) {
     if (e.key === "Escape") {
       contextMenu.update((c) => ({ ...c, isOpen: false }));
@@ -165,6 +203,9 @@
     renamingPath.set(null);
   }
 
+  /**
+   * @param {DragEvent} e
+   */
   function handleDragStart(e) {
     // Store item info for internal move
     const itemData = {
@@ -172,31 +213,32 @@
       type: item.type,
       name: item.name,
     };
-    e.dataTransfer.setData(
+    e.dataTransfer?.setData(
       "application/x-music-player-item",
       JSON.stringify(itemData),
     );
-    e.dataTransfer.effectAllowed = "move";
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
   }
 
   $effect(() => {
     if ($renamingPath === item.path) {
       newName = item.name;
       if (inputRef) {
+        const input = inputRef;
         // Small delay to ensure the input is ready in Firefox
         setTimeout(() => {
-          inputRef.focus();
+          input.focus();
 
           // For files, select name without extension
           if (item.type === "file") {
             const lastDotIndex = item.name.lastIndexOf(".");
             if (lastDotIndex > 0) {
-              inputRef.setSelectionRange(0, lastDotIndex);
+              input.setSelectionRange(0, lastDotIndex);
             } else {
-              inputRef.select();
+              input.select();
             }
           } else {
-            inputRef.select();
+            input.select();
           }
         }, 10); // Small delay for Firefox
       }
@@ -223,6 +265,10 @@
   }
 
   // Function to position menu
+  /**
+   * @param {number} clickX
+   * @param {number} clickY
+   */
   function positionMenu(clickX, clickY) {
     if (!menuRef) return;
 
@@ -298,7 +344,11 @@
         window.dispatchEvent(event);
       }
     } catch (error) {
-      toast.error(`Smart rename failed: ${error.message}`);
+      toast.error(
+        `Smart rename failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     } finally {
       // Close context menu
       contextMenu.update((curr) => ({ ...curr, isOpen: false }));
@@ -350,7 +400,11 @@
           }
         } catch (error) {
           failCount++;
-          errors.push(`${file.name}: ${error.message}`);
+          errors.push(
+            `${file.name}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
         }
       }
 
@@ -369,7 +423,11 @@
       const event = new CustomEvent("refreshFileTree");
       window.dispatchEvent(event);
     } catch (error) {
-      toast.error(`Smart rename failed: ${error.message}`);
+      toast.error(
+        `Smart rename failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     } finally {
       // Close context menu
       contextMenu.update((curr) => ({ ...curr, isOpen: false }));
@@ -426,7 +484,11 @@
       );
     } catch (error) {
       toast.remove(preparingToast);
-      toast.error(`Download failed: ${error.message}`);
+      toast.error(
+        `Download failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       console.error("Download error:", error);
     }
   }
@@ -436,6 +498,11 @@
   let fetcherPath = $state("");
   let fetcherIsFolder = $state(false);
 
+  /**
+   * @param {string} mode
+   * @param {string} path
+   * @param {boolean} isFolder
+   */
   function openFetcher(mode, path, isFolder) {
     fetcherMode = mode;
     fetcherPath = path;
@@ -601,9 +668,9 @@
   </li>
 {:else}
   <!-- Get filename from path -->
-  {@const filename = item.path.split(/[\\/]/).pop()}
+  {@const filename = item.path.split(/[\\/]/).pop() ?? item.path}
   <!-- Get format from file extension -->
-  {@const fileExt = filename.split(".").pop().toLowerCase()}
+  {@const fileExt = (filename.split(".").pop() ?? "").toLowerCase()}
 
   {@const isAudio = isAudioFile(filename, item.file_type)}
   {@const isImage =
@@ -614,6 +681,7 @@
   {@const isOther = !isAudio && !isImage && !isText}
 
   {@const format = (() => {
+    /** @type {Record<string, string>} */
     const imageFormatMap = {
       jpg: "JPG",
       jpeg: "JPEG",
@@ -622,6 +690,7 @@
       bmp: "BMP",
       webp: "WEBP",
     };
+    /** @type {Record<string, string>} */
     const textFormatMap = {
       txt: "TXT",
       lrc: "LRC",
@@ -713,7 +782,7 @@
           >
             {format}
           </span>
-          <span class="size">({(item.size / 1024).toFixed(0)} KB)</span>
+          <span class="size">({((item.size ?? 0) / 1024).toFixed(0)} KB)</span>
         </span>
       {/if}
     </div>
