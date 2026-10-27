@@ -1,11 +1,12 @@
+// @ts-check
 // src/stores/auth.store.js
 import { writable } from "svelte/store";
 
 export const isAuthenticated = writable(false);
-export const authToken = writable(null);
-export const authUser = writable(null);
-export const authError = writable(null);
-export const tokenExpiry = writable(null);
+export const authToken = writable(/** @type {string | null} */ (null));
+export const authUser = writable(/** @type {string | null} */ (null));
+export const authError = writable(/** @type {string | null} */ (null));
+export const tokenExpiry = writable(/** @type {number | null} */ (null));
 
 export async function initAuth() {
   const token = localStorage.getItem("auth_token");
@@ -44,6 +45,11 @@ export async function initAuth() {
   }
 }
 
+/**
+ * @param {string} username
+ * @param {string} password
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
 export async function login(username, password) {
   authError.set(null);
 
@@ -75,8 +81,9 @@ export async function login(username, password) {
 
     return { success: true };
   } catch (error) {
-    authError.set(error.message);
-    return { success: false, error: error.message };
+    const message = error instanceof Error ? error.message : String(error);
+    authError.set(message);
+    return { success: false, error: message };
   }
 }
 
