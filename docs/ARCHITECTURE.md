@@ -63,6 +63,10 @@ frontend/
   src/components/        editor, player, browser, modals
   src/stores/            auth, tree, player, upload, settings, toasts
   src/utils/             pure helpers and the utils barrel
+  src/utils/__tests__/   Vitest unit tests (jsdom)
+  src/test/setup.js      Vitest setup
+  eslint.config.js       ESLint flat config
+  .prettierrc.json       Prettier + Svelte plugin
 tests/                   pytest suite (see below)
 docs/                    this file, deployment, addons, fixed bugs
 ```
@@ -180,7 +184,15 @@ cover art, LRC/SYLT parsing, ZIP streaming, addons, logs and configuration.
 # Frontend dev server (port 5173, proxies /api to localhost:5000)
 cd frontend && npm run dev
 
-# Production frontend build (also the only real frontend check)
+# Frontend unit tests (Vitest + jsdom)
+cd frontend && npm test
+
+# Frontend static checks (ESLint, Prettier, svelte-check)
+cd frontend && npm run lint
+cd frontend && npm run format:check
+cd frontend && npm run check
+
+# Production frontend build
 cd frontend && npm run build
 
 # Backend locally; run from backend/ so addons/ is found
@@ -207,11 +219,13 @@ the browser out.
 
 ## CI and release pipeline
 
-`.github/workflows/tests.yml` runs `py_compile` and `pytest -q` on pull
-requests and on `main`, `master`, `fix/**`, `test/**`, `refactor/**` and
-`ci/**`. Its job id (and required check name) is `pytest`. A second,
-non-blocking step prints line coverage with `pytest-cov`; it has no threshold
-and never fails the required job.
+`.github/workflows/tests.yml` has two jobs. The `pytest` job runs `py_compile`
+and `pytest -q` on pull requests and on `main`, `master`, `fix/**`, `test/**`,
+`refactor/**` and `ci/**`; a second, non-blocking step prints line coverage with
+`pytest-cov`, with no threshold. The `frontend` job installs with `npm ci` and
+runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test`
+(Vitest) and `npm run build` under `frontend/`. Both jobs are required by the
+release workflow.
 
 `.github/workflows/container-release.yml` runs on pushes to `main`/`master` and
 on `v*` tags. It calls `tests.yml` as a `test` job and `build-and-push` declares

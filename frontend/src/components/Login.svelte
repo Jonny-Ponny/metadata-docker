@@ -1,26 +1,26 @@
 <!-- src/components/Login.svelte -->
 <script>
-  import { login, authError, theme, toggleTheme } from '../utils/index';
-  
-  let username = $state('');
-  let password = $state('');
+  import { login, authError, theme, toggleTheme } from "../utils/index";
+
+  let username = $state("");
+  let password = $state("");
   let isLoading = $state(false);
-  let error = $state('');
-  
+  let error = $state("");
+
   async function handleSubmit(e) {
     e.preventDefault();
     isLoading = true;
-    error = '';
-    
+    error = "";
+
     const result = await login(username, password);
-    
+
     if (!result.success) {
       error = result.error;
     }
-    
+
     isLoading = false;
   }
-  
+
   // Sync authError store to local error state
   $effect(() => {
     if ($authError) {
@@ -29,7 +29,7 @@
   });
 </script>
 
-<div class="login-container" class:dark={$theme === 'dark'}>
+<div class="login-container" class:dark={$theme === "dark"}>
   <!-- Theme switch toggle (same as main app) -->
   <button class="theme-toggle" onclick={toggleTheme}>
     {#if $theme === "light"}
@@ -38,11 +38,11 @@
       <span>Dark</span>
     {/if}
   </button>
-  
+
   <div class="login-box">
     <h1>metadata-docker</h1>
     <h2>Login</h2>
-    
+
     <form onsubmit={handleSubmit}>
       <div class="form-group">
         <label for="username">Username</label>
@@ -55,7 +55,7 @@
           disabled={isLoading}
         />
       </div>
-      
+
       <div class="form-group">
         <label for="password">Password</label>
         <input
@@ -67,11 +67,11 @@
           disabled={isLoading}
         />
       </div>
-      
+
       {#if error}
         <div class="error-message">{error}</div>
       {/if}
-      
+
       <button type="submit" disabled={isLoading}>
         {#if isLoading}
           Logging in...
@@ -92,12 +92,12 @@
     background: linear-gradient(135deg, #dddddd 0%, #ebf1fa 100%);
     position: relative;
   }
-  
+
   /* Dark mode gradient */
   .login-container.dark {
     background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
   }
-  
+
   /* Theme toggle button - matching main app style */
   .theme-toggle {
     position: fixed;
@@ -117,62 +117,62 @@
     align-items: center;
     gap: 4px;
   }
-  
+
   .theme-toggle:hover {
     background: var(--color-primary-focus);
     transform: translateY(-2px);
   }
-  
+
   .login-box {
     background: white;
     padding: 2rem;
     border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
     width: 100%;
     max-width: 400px;
   }
-  
+
   /* Dark mode login box */
   .dark .login-box {
     background: #2d2d2d;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
   }
-  
+
   h1 {
     margin: 0 0 0.5rem 0;
     color: #333;
     text-align: center;
   }
-  
+
   .dark h1 {
     color: #e0e0e0;
   }
-  
+
   h2 {
     margin: 0 0 1.5rem 0;
     color: #666;
     text-align: center;
     font-weight: normal;
   }
-  
+
   .dark h2 {
     color: #b0b0b0;
   }
-  
+
   .form-group {
     margin-bottom: 1rem;
   }
-  
+
   label {
     display: block;
     margin-bottom: 0.5rem;
     color: #555;
   }
-  
+
   .dark label {
     color: #b0b0b0;
   }
-  
+
   input {
     width: 100%;
     padding: 0.75rem;
@@ -183,24 +183,24 @@
     background: white;
     color: #333;
   }
-  
+
   .dark input {
     background: #3d3d3d;
     border-color: #444;
     color: #e0e0e0;
   }
-  
+
   input:focus {
     outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 2px var(--color-primary-transparent);
   }
-  
+
   .dark input:focus {
     border-color: var(--color-primary-dark);
     box-shadow: 0 0 0 2px var(--color-primary-transparent-dark);
   }
-  
+
   button[type="submit"] {
     width: 100%;
     padding: 0.75rem;
@@ -212,13 +212,13 @@
     cursor: pointer;
     transition: all 0.2s;
   }
-  
+
   button[type="submit"]:hover:not(:disabled) {
     background: var(--color-primary-focus);
     transform: translateY(-2px);
     /* box-shadow: 0 4px 12px var(--color-primary-transparent); */
   }
-  
+
   button[type="submit"]:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -235,7 +235,7 @@
   .dark button[type="submit"]:hover:not(:disabled) {
     background: var(--color-primary-dark-focus);
   }
-  
+
   .error-message {
     background: #fee;
     color: #c33;
@@ -244,7 +244,7 @@
     margin-bottom: 1rem;
     border: 1px solid #fcc;
   }
-  
+
   .dark .error-message {
     background: #442222;
     color: #ff9999;

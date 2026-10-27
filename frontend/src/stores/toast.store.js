@@ -9,21 +9,21 @@ export function createToastStore() {
   function subscribe(fn) {
     subscribers.push(fn);
     fn(toasts);
-    
+
     return () => {
-      subscribers = subscribers.filter(sub => sub !== fn);
+      subscribers = subscribers.filter((sub) => sub !== fn);
     };
   }
 
   function notify() {
-    subscribers.forEach(fn => fn(toasts));
+    subscribers.forEach((fn) => fn(toasts));
   }
 
   function generateId() {
     return Date.now() + Math.random().toString(36).substr(2, 9);
   }
 
-  function show(message, type = 'info', duration = 5000) {
+  function show(message, type = "info", duration = 5000) {
     const id = generateId();
     toasts = [...toasts, { id, message, type, duration }];
     notify();
@@ -37,7 +37,7 @@ export function createToastStore() {
   }
 
   function remove(id) {
-    toasts = toasts.filter(t => t.id !== id);
+    toasts = toasts.filter((t) => t.id !== id);
     notify();
   }
 
@@ -47,19 +47,19 @@ export function createToastStore() {
   }
 
   function success(message, duration = 5000) {
-    return show(message, 'success', duration);
+    return show(message, "success", duration);
   }
 
   function error(message, duration = 5000) {
-    return show(message, 'error', duration);
+    return show(message, "error", duration);
   }
 
   function warning(message, duration = 5000) {
-    return show(message, 'warning', duration);
+    return show(message, "warning", duration);
   }
 
   function info(message, duration = 5000) {
-    return show(message, 'info', duration);
+    return show(message, "info", duration);
   }
 
   return {
@@ -70,7 +70,7 @@ export function createToastStore() {
     success,
     error,
     warning,
-    info
+    info,
   };
 }
 

@@ -280,6 +280,19 @@ status code, **P2** correctness or polish.
   `AUTH_PASSWORD_HASH`, generates a password different from the configured
   plaintext, and logs both the warning and the temporary credentials.
 
+## Frontend utilities
+
+- [x] **B-32 (P2) Rounded lyrics timestamps can be written as `[00:60.00]`.**
+  `secondsToTimestamp()` (`frontend/src/utils/timestamp.utils.js`) rounded the
+  seconds field after splitting off the minutes, so `59.999` became
+  `[00:60.00]`: a value `validateTimestampFormat()` rejects and players treat
+  as invalid. Found by the first Vitest run.
+  **Fix:** round to centiseconds first, then derive minutes, seconds and
+  centiseconds so the value carries into the next minute.
+  **Test:** `frontend/src/utils/__tests__/timestamp.utils.test.js` - `59.999`
+  -> `[01:00.00]`; `lyrics.utils.test.js` - parsing `[00:59.999]` writes
+  `[01:00.00]`.
+
 ## Regression tests
 
 Each bug above is pinned by at least one test, so a fix cannot be reverted
@@ -318,3 +331,4 @@ silently.
 | B-29 | `test_config.py::test_installed_flask_supports_per_request_upload_limits` |
 | B-30 | `test_zip_stream.py::test_sentinel_waits_for_queue_space` |
 | B-31 | `test_config.py::test_invalid_password_hash_generates_a_temporary_password` |
+| B-32 | `frontend/src/utils/__tests__/timestamp.utils.test.js` - `secondsToTimestamp` rounds to centiseconds |

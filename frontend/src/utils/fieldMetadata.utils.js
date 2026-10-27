@@ -2,48 +2,52 @@
 
 export const FIELD_METADATA = {
   title: {
-    label: 'Title',
-    description: 'Song title. Fundamental field that identifies the specific name of an individual piece of music',
+    label: "Title",
+    description:
+      "Song title. Fundamental field that identifies the specific name of an individual piece of music",
   },
   album: {
-    label: 'Album',
-    description: 'Album name. Field used to store the name of the collection a song belongs to',
+    label: "Album",
+    description:
+      "Album name. Field used to store the name of the collection a song belongs to",
   },
   artist: {
-    label: 'Artist',
-    description: 'Artist name. Identifies the specific performer(s) for a single song',
+    label: "Artist",
+    description:
+      "Artist name. Identifies the specific performer(s) for a single song",
   },
   albumArtist: {
-    label: 'Album Artist',
-    description: 'Specific field used to identify the primary artist or group responsible for an entire album. It is separate from the standard Artist (or Track Artist) tag, which identifies the performer(s) on an individual song',
+    label: "Album Artist",
+    description:
+      "Specific field used to identify the primary artist or group responsible for an entire album. It is separate from the standard Artist (or Track Artist) tag, which identifies the performer(s) on an individual song",
   },
   trackNumber: {
-    label: 'Track Number',
-    description: 'The track number on the album',
+    label: "Track Number",
+    description: "The track number on the album",
   },
   diskNumber: {
-    label: 'Disk Number',
-    description: 'The disc number',
+    label: "Disk Number",
+    description: "The disc number",
   },
   date: {
-    label: 'Date',
-    description: 'Release date (YYYY or YYYY-MM-DD).',
+    label: "Date",
+    description: "Release date (YYYY or YYYY-MM-DD).",
   },
   genre: {
-    label: 'Genre',
-    description: 'The musical genre',
+    label: "Genre",
+    description: "The musical genre",
   },
   unsyncedLyrics: {
-    label: 'Unsynced Lyrics',
-    description: 'Plain text lyrics',
+    label: "Unsynced Lyrics",
+    description: "Plain text lyrics",
   },
   lyrics: {
-    label: 'Synced Lyrics',
-    description: 'Time‑synced lyrics',
+    label: "Synced Lyrics",
+    description: "Time‑synced lyrics",
   },
   picture: {
-    label: 'Cover Art',
-    description: 'Embedded album cover image',
+    label: "Cover Art",
+    description: "Embedded album cover image",
   },
 };
 
@@ -54,5 +58,5 @@ export function getFieldLabel(key) {
 
 // Helper to get description for a field key
 export function getFieldDescription(key) {
-  return FIELD_METADATA[key]?.description || '';
+  return FIELD_METADATA[key]?.description || "";
 }

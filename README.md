@@ -166,10 +166,11 @@ in a reverse proxy and set real credentials. The threat model, addon trust,
 path/SSRF protections and hardening options are in [SECURITY.md](SECURITY.md).
 
 Release model (commit -> CI checks -> build -> attestation -> release): every push
-to `main` and every `v*` tag runs the pytest suite first. Only a passing commit
-is built into a multi-arch image, signed with a build-provenance attestation and
-published to GHCR; a failing suite publishes nothing. `latest` follows `main`,
-while `vX.Y.Z` tags produce versioned image tags. Run `gh attestation verify`
+to `main` and every `v*` tag runs the pytest and Vitest suites first. Only a
+passing commit is built into a multi-arch image, signed with a build-provenance
+attestation and published to GHCR; a failing suite publishes nothing. `latest`
+follows `main`, while `vX.Y.Z` tags produce versioned image tags. Run
+`gh attestation verify`
 (see [SECURITY.md](SECURITY.md#image-trust-and-verification)) to confirm an
 image was built by this repository's workflow from the expected commit.
 

@@ -14,9 +14,8 @@
     currentValue = "",
     currentTime = 0,
     timestamps = [],
-    USLT = "",
     onClose = () => {},
-    onSave = (index, value) => {},
+    onSave = () => {},
   } = $props();
 
   // Svelte 5: Use $state() for local reactive state
@@ -80,7 +79,6 @@
   // Calculate allowed range for hints
   const allowedRange = $derived(
     (() => {
-      const lines = USLT.split("\n");
       let prevSeconds = 0;
       for (let i = lineIndex - 1; i >= 0; i--) {
         if (timestamps[i] && timestamps[i] !== "[--:--.--]") {
@@ -174,9 +172,6 @@
     const rawValue = input.value;
     const cursorPos = input.selectionStart;
 
-    // Store the raw digit count before formatting
-    const digitCountBefore = editingTimestampValue.replace(/\D/g, "").length;
-
     // Format the input
     const formatted = formatTimestampInput(rawValue);
 
@@ -184,9 +179,6 @@
       editingTimestampValue = formatted;
 
       // Calculate new cursor position based on digit count
-      const digitCountAfter = formatted.replace(/\D/g, "").length;
-      const digitsTyped = digitCountAfter > digitCountBefore ? 1 : 0;
-
       if (cursorPos) {
         // Count digits up to cursor position
         const textBeforeCursor = rawValue.slice(0, cursorPos);

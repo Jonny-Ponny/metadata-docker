@@ -17,8 +17,8 @@ export * from "./settings.utils";
 export * from "./folderSummary.utils";
 export * from "./fieldMetadata.utils";
 export * from "./audioFormats.utils";
-export * from "./color.utils"
-export * from "./favicon.utils"
+export * from "./color.utils";
+export * from "./favicon.utils";
 export * from "./preview.utils";
 export * from "./api.utils";
 export * from "./version.utils";

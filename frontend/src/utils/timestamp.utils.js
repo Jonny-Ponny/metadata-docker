@@ -18,20 +18,25 @@ export function parseTimestampToSeconds(timestamp) {
   return minutes * 60 + seconds;
 }
 
-
 /**
  * Convert seconds to timestamp string [MM:SS.ss]
  * @param {number} seconds - Time in seconds
  * @returns {string} Format: [MM:SS.ss]
  */
 export function secondsToTimestamp(seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
+  // Round to centiseconds first: rounding the seconds field on its own turns
+  // 59.999 into the invalid "[00:60.00]" instead of carrying into the minute.
+  const totalCentiseconds = Math.round(seconds * 100);
+  const minutes = Math.floor(totalCentiseconds / 6000);
+  const remainingCentiseconds = totalCentiseconds % 6000;
+  const wholeSeconds = Math.floor(remainingCentiseconds / 100);
+  const centiseconds = remainingCentiseconds % 100;
 
   const minutesStr = minutes.toString().padStart(2, "0");
-  const secondsStr = remainingSeconds.toFixed(2).padStart(5, "0");
+  const secondsStr = wholeSeconds.toString().padStart(2, "0");
+  const centisecondsStr = centiseconds.toString().padStart(2, "0");
 
-  return `[${minutesStr}:${secondsStr}]`;
+  return `[${minutesStr}:${secondsStr}.${centisecondsStr}]`;
 }
 
 /**
@@ -49,7 +54,6 @@ export function validateTimestampFormat(timestamp) {
 
   return minutes >= 0 && seconds >= 0 && seconds < 60;
 }
-
 
 /**
  * Validate timestamp is within allowed range (between previous and next timestamps)
@@ -102,8 +106,6 @@ export function validateTimestampRange(lineIndex, newSeconds, timestamps) {
 
   return result;
 }
-
-
 
 /**
  * Format time for display (MM:SS)

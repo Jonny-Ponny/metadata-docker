@@ -1,77 +1,210 @@
 <!-- src/components/MetadataEditor.svelte -->
 <script>
-    import HoldButton from "./HoldButton.svelte";
-    import LyricsEditorModal from "./LRCEditor.svelte";
+  import HoldButton from "./HoldButton.svelte";
+  import LyricsEditorModal from "./LRCEditor.svelte";
+  import { SvelteSet } from "svelte/reactivity";
 
-    import { toast, processEditedLyrics, getFieldLabel } from "../utils/index.js";
+  import { toast, processEditedLyrics, getFieldLabel } from "../utils/index.js";
 
-    // Props
-    let { filePath } = $props();
+  // Props
+  let { filePath } = $props();
 
-    // Reactive state for metadata
-    let metadata = $state({
-        title: "",
-        album: "",
-        artist: "",
-        trackNumber: "",
-        diskNumber: "",
-        date: "",
-        genre: "",
-        comment: "",
-        description: "",
-        lyrics: "",
-        unsyncedLyrics: "",
-        otherFields: {
-            composer: "",
-            publisher: "",
+  // Reactive state for metadata
+  let metadata = $state({
+    title: "",
+    album: "",
+    artist: "",
+    trackNumber: "",
+    diskNumber: "",
+    date: "",
+    genre: "",
+    comment: "",
+    description: "",
+    lyrics: "",
+    unsyncedLyrics: "",
+    otherFields: {
+      composer: "",
+      publisher: "",
+    },
+    picture: null,
+  });
+
+  // UI state
+  let otherExpanded = $state(false);
+  let customFields = $state([]); // { name: '', value: '' }
+
+  // Unsupported files are listed in the tree for inspection only. The API
+  // returns ``readOnly`` for them, which disables every editing control.
+  let readOnly = $state(false);
+  let readOnlyFormat = $state("");
+
+  // Track which field is being edited (by field name)
+  let editingFields = new SvelteSet();
+
+  let customFieldEditing = $state([]);
+
+  let applyToSubfolders = $state(false); // false = current folder only, true = include subfolders
+
+  // Derived: filename from path
+  let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
+
+  let pictureEditing = $state(false);
+  let pictureFileInput = $state(null);
+  let isUploadingPicture = $state(false);
+
+  let showFullImage = $state(false);
+
+  // Lyrics modal state
+  let lyricsModalContent = $state("");
+
+  let applyDeleteToFolder = $state(false); // false = current file only, true = all files in folder
+
+  // Separate modals for synced and unsynced lyrics
+  let showSyncedLyricsModal = $state(false);
+  let showUnsyncedLyricsModal = $state(false);
+  let syncedLyricsData = $state({ lyrics: "", timestamps: [] });
+
+  // Track fields that have been edited but not saved
+  let dirtyFields = new SvelteSet();
+
+  // Track original values
+  let originalMetadata = $state(null);
+
+  // Field definitions for main and always‑visible other fields
+  const mainFields = [
+    "title",
+    "album",
+    "artist",
+    "albumArtist",
+    "trackNumber",
+    "diskNumber",
+    "date",
+    "genre",
+  ];
+
+  const textareaFields = ["comment", "description"];
+
+  function startEditing(fieldName) {
+    if (readOnly) return;
+    editingFields.add(fieldName);
+  }
+
+  function stopEditing(fieldName) {
+    // Small delay to allow clicking the icon before blur removes it
+    setTimeout(() => {
+      if (editingFields.has(fieldName)) {
+        editingFields.delete(fieldName);
+      }
+    }, 150);
+  }
+
+  function addCustomField() {
+    if (readOnly) return;
+    customFields = [...customFields, { name: "", value: "" }];
+    customFieldEditing = [...customFieldEditing, false];
+  }
+
+  async function applyToFile(field, value, showToast = true) {
+    if (!filePath || readOnly) return;
+
+    try {
+      const URL = `/api/metadata/file`;
+
+      const response = await fetch(URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        picture: null,
-    });
+        body: JSON.stringify({
+          path: filePath,
+          field: field,
+          value: value,
+        }),
+      });
 
-    // UI state
-    let otherExpanded = $state(false);
-    let customFields = $state([]); // { name: '', value: '' }
+      const result = await response.json();
 
-    // Unsupported files are listed in the tree for inspection only. The API
-    // returns ``readOnly`` for them, which disables every editing control.
-    let readOnly = $state(false);
-    let readOnlyFormat = $state("");
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update metadata");
+      }
 
-    // Track which field is being edited (by field name)
-    let editingFields = $state(new Set());
+      if (showToast) {
+        toast.success(`Updated ${field} for this file`);
+      }
 
-    let customFieldEditing = $state([]);
+      // Clear dirty status for this field
+      markFieldClean(field);
 
-    let applyToSubfolders = $state(false); // false = current folder only, true = include subfolders
+      // Refresh metadata to show any changes
+      await fetchMetadata(filePath);
+    } catch (error) {
+      console.error("Error updating metadata:", error);
+      toast.error(`Failed to update: ${error.message}`);
+    }
+  }
 
-    // Derived: filename from path
-    let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
+  async function applyToFolder(field, value) {
+    if (!filePath || readOnly) return;
 
-    let pictureEditing = $state(false);
-    let pictureFileInput = $state(null);
-    let isUploadingPicture = $state(false);
+    // Get the folder path from the file path
+    const folderPath = filePath.split("/").slice(0, -1).join("/");
 
-    let showFullImage = $state(false);
+    try {
+      // Choose endpoint based on whether to include subfolders
+      const endpoint = applyToSubfolders ? "folder" : "folder/current";
+      const URL = `/api/metadata/${endpoint}`;
 
-    // Lyrics modal state
-    let lyricsModalType = $state("unsynced"); // 'unsynced' or 'synced'
-    let lyricsModalContent = $state("");
+      const requestBody = {
+        path: folderPath === "" ? "/" : folderPath, // Send "/" for root
+        field: field,
+        value: value,
+      };
 
-    let applyDeleteToFolder = $state(false); // false = current file only, true = all files in folder
+      const response = await fetch(URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-    // Separate modals for synced and unsynced lyrics
-    let showSyncedLyricsModal = $state(false);
-    let showUnsyncedLyricsModal = $state(false);
-    let syncedLyricsData = $state({ lyrics: "", timestamps: [] });
+      const result = await response.json();
 
-    // Track fields that have been edited but not saved
-    let dirtyFields = $state(new Set());
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update folder");
+      }
 
-    // Track original values
-    let originalMetadata = $state(null);
+      toast.success(result.message || `Updated folder: ${field}`);
 
-    // Field definitions for main and always‑visible other fields
-    const mainFields = [
+      // Refresh current file's metadata in case it was updated
+      await fetchMetadata(filePath);
+    } catch (error) {
+      console.error("Error updating folder:", error);
+      toast.error(`Failed to update folder: ${error.message}`);
+    }
+  }
+
+  async function fetchMetadata(path) {
+    if (!path) return;
+
+    readOnly = false;
+    readOnlyFormat = "";
+
+    try {
+      const URL = `/api/metadata?path=${encodeURIComponent(path)}`;
+      const response = await fetch(URL);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      readOnly = data.readOnly === true || data.supported === false;
+      readOnlyFormat = readOnly ? data.format || "" : "";
+
+      // Fields that have dedicated top‑level properties in the component
+      const mainFields = [
         "title",
         "album",
         "artist",
@@ -80,2455 +213,2257 @@
         "diskNumber",
         "date",
         "genre",
-    ];
+      ];
+      const specialFields = [
+        "comment",
+        "description",
+        "lyrics",
+        "unsyncedLyrics",
+      ];
+      const excludeFields = [
+        ...mainFields,
+        ...specialFields,
+        "picture",
+        "customFields",
+        "otherFields",
+        "readOnly",
+        "supported",
+        "format",
+      ];
 
-    const textareaFields = ["comment", "description"];
+      // Start with an empty otherFields object
+      let other = {};
 
-    function startEditing(fieldName) {
-        if (readOnly) return;
-        editingFields.add(fieldName);
-        editingFields = new Set(editingFields); // trigger reactivity
-    }
-
-    function stopEditing(fieldName) {
-        // Small delay to allow clicking the icon before blur removes it
-        setTimeout(() => {
-            if (editingFields.has(fieldName)) {
-                editingFields.delete(fieldName);
-                editingFields = new Set(editingFields);
-            }
-        }, 150);
-    }
-
-    function addCustomField() {
-        if (readOnly) return;
-        customFields = [...customFields, { name: "", value: "" }];
-        customFieldEditing = [...customFieldEditing, false];
-    }
-
-    async function applyToFile(field, value, showToast = true) {
-        if (!filePath || readOnly) return;
-
-        try {
-            const URL = `/api/metadata/file`;
-
-            const response = await fetch(URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    path: filePath,
-                    field: field,
-                    value: value,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || "Failed to update metadata");
-            }
-
-            if (showToast) {
-                toast.success(`Updated ${field} for this file`);
-            }
-
-            // Clear dirty status for this field
-            markFieldClean(field);
-
-            // Refresh metadata to show any changes
-            await fetchMetadata(filePath);
-        } catch (error) {
-            console.error("Error updating metadata:", error);
-            toast.error(`Failed to update: ${error.message}`);
+      // Add any top‑level fields that are not in excludeFields (e.g. composer, publisher)
+      for (let key in data) {
+        if (
+          !excludeFields.includes(key) &&
+          data[key] &&
+          typeof data[key] === "string"
+        ) {
+          other[key] = data[key];
         }
+      }
+
+      // Add all entries from data.customFields (unknown tags)
+      if (data.customFields && Array.isArray(data.customFields)) {
+        for (let field of data.customFields) {
+          other[field.name] = field.value;
+        }
+      }
+
+      // Merge any existing data.otherFields (for future compatibility)
+      if (data.otherFields) {
+        other = { ...other, ...data.otherFields };
+      }
+
+      // Keep the editor stable: the API returns unknown tags in tag
+      // order, so sort the "Other" fields alphabetically by name.
+      other = Object.fromEntries(
+        Object.entries(other).sort(([a], [b]) =>
+          a.localeCompare(b, undefined, { sensitivity: "base" }),
+        ),
+      );
+
+      // Update the main metadata object
+      metadata = {
+        title: data.title || "",
+        album: data.album || "",
+        artist: data.artist || "",
+        albumArtist: data.albumArtist || "",
+        trackNumber: data.trackNumber?.toString() || "",
+        diskNumber: data.diskNumber?.toString() || "",
+        date: data.date?.toString() || "",
+        genre: data.genre || "",
+        comment: data.comment || "",
+        description: data.description || "",
+        lyrics: data.lyrics || "",
+        unsyncedLyrics: data.unsyncedLyrics || "",
+        // @ts-ignore
+        otherFields: other,
+        picture: data.picture || null,
+      };
+
+      customFields = [];
+
+      // After setting metadata, store original values
+      originalMetadata = {
+        title: data.title || "",
+        album: data.album || "",
+        artist: data.artist || "",
+        albumArtist: data.albumArtist || "",
+        trackNumber: data.trackNumber?.toString() || "",
+        diskNumber: data.diskNumber?.toString() || "",
+        date: data.date?.toString() || "",
+        genre: data.genre || "",
+        comment: data.comment || "",
+        description: data.description || "",
+        lyrics: data.lyrics || "",
+        unsyncedLyrics: data.unsyncedLyrics || "",
+        otherFields: { ...other },
+        customFields: [...customFields],
+      };
+
+      // Clear dirty fields when new metadata loads
+      dirtyFields.clear();
+    } catch (error) {
+      console.error("Error fetching metadata:", error);
+      toast.error(`Failed to load metadata: ${error.message}`);
+    }
+  }
+
+  $effect(() => {
+    if (filePath) {
+      fetchMetadata(filePath);
+    }
+  });
+
+  async function handlePictureUpload(
+    file,
+    applyToFolder = false,
+    showToast = true,
+  ) {
+    if (!file || !filePath || readOnly) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
     }
 
-    async function applyToFolder(field, value) {
-        if (!filePath || readOnly) return;
-
-        // Get the folder path from the file path
-        const folderPath = filePath.split("/").slice(0, -1).join("/");
-
-        try {
-            // Choose endpoint based on whether to include subfolders
-            const endpoint = applyToSubfolders ? "folder" : "folder/current";
-            const URL = `/api/metadata/${endpoint}`;
-
-            const requestBody = {
-                path: folderPath === "" ? "/" : folderPath, // Send "/" for root
-                field: field,
-                value: value,
-            };
-
-            const response = await fetch(URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(requestBody),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || "Failed to update folder");
-            }
-
-            toast.success(result.message || `Updated folder: ${field}`);
-
-            // Refresh current file's metadata in case it was updated
-            await fetchMetadata(filePath);
-        } catch (error) {
-            console.error("Error updating folder:", error);
-            toast.error(`Failed to update folder: ${error.message}`);
-        }
+    // Validate file size (e.g., max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
     }
 
-    async function fetchMetadata(path) {
-        if (!path) return;
+    isUploadingPicture = true;
 
-        readOnly = false;
-        readOnlyFormat = "";
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append(
+        "path",
+        applyToFolder
+          ? filePath.split("/").slice(0, -1).join("/") // folder path
+          : filePath, // file path
+      );
 
-        try {
-            const URL = `/api/metadata?path=${encodeURIComponent(path)}`;
-            const response = await fetch(URL);
+      // Choose endpoint based on whether to include subfolders
+      const endpoint = applyToFolder
+        ? applyToSubfolders
+          ? "folder"
+          : "folder/current"
+        : "file";
 
-            if (!response.ok) {
-                throw new Error(
-                    `Failed to fetch metadata: ${response.statusText}`,
-                );
-            }
+      const URL = `/api/metadata/picture/${endpoint}`;
 
-            const data = await response.json();
+      const response = await fetch(URL, {
+        method: "POST",
+        body: formData,
+      });
 
-            readOnly = data.readOnly === true || data.supported === false;
-            readOnlyFormat = readOnly ? data.format || "" : "";
+      const result = await response.json();
 
-            // Fields that have dedicated top‑level properties in the component
-            const mainFields = [
-                "title",
-                "album",
-                "artist",
-                "albumArtist",
-                "trackNumber",
-                "diskNumber",
-                "date",
-                "genre",
-            ];
-            const specialFields = [
-                "comment",
-                "description",
-                "lyrics",
-                "unsyncedLyrics",
-            ];
-            const excludeFields = [
-                ...mainFields,
-                ...specialFields,
-                "picture",
-                "customFields",
-                "otherFields",
-                "readOnly",
-                "supported",
-                "format",
-            ];
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to upload picture");
+      }
 
-            // Start with an empty otherFields object
-            let other = {};
+      if (showToast) {
+        toast.success(
+          applyToFolder
+            ? `Updated cover art for folder (${result.updated} files)`
+            : "Updated cover art for this file",
+        );
+      }
 
-            // Add any top‑level fields that are not in excludeFields (e.g. composer, publisher)
-            for (let key in data) {
-                if (
-                    !excludeFields.includes(key) &&
-                    data[key] &&
-                    typeof data[key] === "string"
-                ) {
-                    other[key] = data[key];
-                }
-            }
+      // Refresh metadata to show new picture
+      await fetchMetadata(filePath);
+    } catch (error) {
+      console.error("Error uploading picture:", error);
+      toast.error(`Failed to upload picture: ${error.message}`);
+    } finally {
+      isUploadingPicture = false;
+      pictureEditing = false;
+      // Reset file input
+      if (pictureFileInput) {
+        pictureFileInput.value = "";
+      }
+    }
+  }
 
-            // Add all entries from data.customFields (unknown tags)
-            if (data.customFields && Array.isArray(data.customFields)) {
-                for (let field of data.customFields) {
-                    other[field.name] = field.value;
-                }
-            }
+  function triggerPictureUpload(applyToFolder = false) {
+    if (readOnly) return;
+    // Create hidden file input if it doesn't exist
+    if (!pictureFileInput) {
+      pictureFileInput = document.createElement("input");
+      pictureFileInput.type = "file";
+      pictureFileInput.accept = "image/*";
+      pictureFileInput.style.display = "none";
+      document.body.appendChild(pictureFileInput);
 
-            // Merge any existing data.otherFields (for future compatibility)
-            if (data.otherFields) {
-                other = { ...other, ...data.otherFields };
-            }
-
-            // Keep the editor stable: the API returns unknown tags in tag
-            // order, so sort the "Other" fields alphabetically by name.
-            other = Object.fromEntries(
-                Object.entries(other).sort(([a], [b]) =>
-                    a.localeCompare(b, undefined, { sensitivity: "base" }),
-                ),
-            );
-
-            // Update the main metadata object
-            metadata = {
-                title: data.title || "",
-                album: data.album || "",
-                artist: data.artist || "",
-                albumArtist: data.albumArtist || "",
-                trackNumber: data.trackNumber?.toString() || "",
-                diskNumber: data.diskNumber?.toString() || "",
-                date: data.date?.toString() || "",
-                genre: data.genre || "",
-                comment: data.comment || "",
-                description: data.description || "",
-                lyrics: data.lyrics || "",
-                unsyncedLyrics: data.unsyncedLyrics || "",
-                // @ts-ignore
-                otherFields: other,
-                picture: data.picture || null,
-            };
-
-            customFields = [];
-
-            // After setting metadata, store original values
-            originalMetadata = {
-                title: data.title || "",
-                album: data.album || "",
-                artist: data.artist || "",
-                albumArtist: data.albumArtist || "",
-                trackNumber: data.trackNumber?.toString() || "",
-                diskNumber: data.diskNumber?.toString() || "",
-                date: data.date?.toString() || "",
-                genre: data.genre || "",
-                comment: data.comment || "",
-                description: data.description || "",
-                lyrics: data.lyrics || "",
-                unsyncedLyrics: data.unsyncedLyrics || "",
-                otherFields: { ...other },
-                customFields: [...customFields],
-            };
-
-            // Clear dirty fields when new metadata loads
-            dirtyFields.clear();
-            dirtyFields = new Set(dirtyFields);
-        } catch (error) {
-            console.error("Error fetching metadata:", error);
-            toast.error(`Failed to load metadata: ${error.message}`);
+      pictureFileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          handlePictureUpload(file, applyToFolder);
         }
+      };
+    } else {
+      // Update the applyToFolder flag for the change handler
+      pictureFileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          handlePictureUpload(file, applyToFolder);
+        }
+      };
     }
 
-    $effect(() => {
-        if (filePath) {
-            fetchMetadata(filePath);
-        }
-    });
+    pictureFileInput.click();
+  }
 
-    async function handlePictureUpload(
-        file,
-        applyToFolder = false,
-        showToast = true,
+  async function deleteField(field) {
+    if (!filePath || !field || readOnly) return;
+
+    try {
+      const URL = `/api/metadata/field/delete`;
+
+      const response = await fetch(URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          path: filePath,
+          field: field,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to delete field");
+      }
+
+      toast.success(`Deleted ${field} from file`);
+
+      // Refresh metadata to reflect changes
+      await fetchMetadata(filePath);
+
+      // Clear editing state
+      if (editingFields.has(field)) {
+        editingFields.delete(field);
+      }
+    } catch (error) {
+      console.error("Error deleting field:", error);
+      toast.error(`Failed to delete: ${error.message}`);
+    }
+  }
+
+  async function deleteCoverArt() {
+    if (!filePath || readOnly) return;
+
+    try {
+      const URL = `/api/metadata/picture/delete`;
+
+      const response = await fetch(URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          path: filePath,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to delete cover art");
+      }
+
+      toast.success("Deleted cover art from file");
+
+      // Refresh metadata to reflect changes
+      await fetchMetadata(filePath);
+    } catch (error) {
+      console.error("Error deleting cover art:", error);
+      toast.error(`Failed to delete cover art: ${error.message}`);
+    }
+  }
+
+  function openFullImage() {
+    if (metadata.picture) {
+      showFullImage = true;
+    }
+  }
+
+  function closeFullImage() {
+    showFullImage = false;
+  }
+
+  async function saveCoverAsFile() {
+    if (!filePath || !metadata.picture) return;
+
+    try {
+      const URL = `/api/metadata/picture/save-as-file`;
+
+      const response = await fetch(URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          path: filePath,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to save cover art");
+      }
+
+      toast.success(result.message);
+
+      // Dispatch event to refresh the file tree
+      const event = new CustomEvent("refreshFileTree");
+      window.dispatchEvent(event);
+    } catch (error) {
+      console.error("Error saving cover art:", error);
+      toast.error(`Failed to save: ${error.message}`);
+    }
+  }
+
+  function openSyncedLyricsModal() {
+    // For synced lyrics, we need to parse timestamps
+    if (metadata.lyrics) {
+      const result = processEditedLyrics(metadata.lyrics);
+      syncedLyricsData = {
+        lyrics: result.text,
+        timestamps: result.timestamps,
+      };
+    } else {
+      syncedLyricsData = {
+        lyrics: "",
+        timestamps: [],
+      };
+    }
+    showSyncedLyricsModal = true;
+  }
+
+  function openUnsyncedLyricsModal() {
+    lyricsModalContent = metadata.unsyncedLyrics || "";
+    showUnsyncedLyricsModal = true;
+  }
+
+  function closeUnsyncedLyricsModal() {
+    showUnsyncedLyricsModal = false;
+  }
+
+  async function saveUnsyncedLyrics() {
+    const field = "unsyncedLyrics";
+
+    // Update local state
+    metadata.unsyncedLyrics = lyricsModalContent;
+
+    // Save to file
+    await applyToFile(field, lyricsModalContent);
+
+    // Close modal
+    closeUnsyncedLyricsModal();
+  }
+
+  // Handle save from synced lyrics modal
+  async function handleSyncedLyricsSave(data) {
+    const field = "lyrics";
+
+    // If nothing was actually synced, write the plain text
+    // (FLAC/OGG/Opus/M4A lyrics fields accept both LRC and plain text).
+    // Otherwise write the LRC-formatted string.
+    const value = data.hasTimestamps ? data.synchronizedLyrics : data.lyrics;
+
+    metadata.lyrics = value;
+    // Save to file
+    await applyToFile(field, value);
+
+    // Close modal
+    showSyncedLyricsModal = false;
+  }
+
+  function stopPropagation(e) {
+    e.stopPropagation();
+  }
+
+  async function applyAllChanges() {
+    if (!filePath || readOnly) return;
+
+    try {
+      // Collect all fields that have values
+      const updates = [];
+
+      // Main fields
+      for (const field of mainFields) {
+        if (metadata[field] && metadata[field].trim() !== "") {
+          updates.push({ field, value: metadata[field] });
+        }
+      }
+
+      // Textarea fields
+      for (const field of textareaFields) {
+        if (metadata[field] && metadata[field].trim() !== "") {
+          updates.push({ field, value: metadata[field] });
+        }
+      }
+
+      // Other fields
+      for (const [key, value] of Object.entries(metadata.otherFields || {})) {
+        if (value && value.trim() !== "") {
+          updates.push({ field: key, value });
+        }
+      }
+
+      // Custom fields
+      for (const field of customFields) {
+        if (
+          field.name &&
+          field.name.trim() !== "" &&
+          field.value &&
+          field.value.trim() !== ""
+        ) {
+          updates.push({ field: field.name, value: field.value });
+        }
+      }
+
+      if (updates.length === 0 && !metadata.picture) {
+        toast.info("No changes to apply");
+        return;
+      }
+
+      // Apply all updates
+      for (const update of updates) {
+        await applyToFile(update.field, update.value, false);
+      }
+
+      // Handle picture if present
+      if (metadata.picture && metadata.picture.startsWith("data:")) {
+        // Convert data URL to file and upload
+        const response = await fetch(metadata.picture);
+        const blob = await response.blob();
+        const file = new File([blob], "cover.jpg", { type: blob.type });
+        await handlePictureUpload(file, false, false);
+      }
+
+      // Clear all dirty statuses
+      markAllClean();
+
+      toast.success("All changes applied successfully");
+    } catch (error) {
+      console.error("Error applying all changes:", error);
+      toast.error(`Failed to apply all changes: ${error.message}`);
+    }
+  }
+
+  async function deleteFieldFromFolder(field) {
+    if (!filePath || !field || readOnly) return;
+
+    // Get the folder path from the file path
+    const folderPath = filePath.split("/").slice(0, -1).join("/") || "/";
+
+    try {
+      // Same endpoint but with folder path and recursive flag
+      const URL = `/api/metadata/field/delete`;
+
+      const response = await fetch(URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          path: folderPath, // Send folder path instead of file path
+          field: field,
+          recursive: applyToSubfolders, // Add recursive flag
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to delete field from folder");
+      }
+
+      toast.success(
+        result.message || `Deleted "${field}" from files in folder`,
+      );
+
+      // Refresh current file's metadata in case it was updated
+      await fetchMetadata(filePath);
+
+      // Clear editing state
+      if (editingFields.has(field)) {
+        editingFields.delete(field);
+      }
+    } catch (error) {
+      console.error("Error deleting field from folder:", error);
+      toast.error(`Failed to delete from folder: ${error.message}`);
+    }
+  }
+
+  // Mark field as dirty by comparing with original value
+  function trackChange(fieldName, newValue) {
+    if (!originalMetadata) return;
+    // Get the original value
+    let originalValue;
+
+    // Handle different field types
+    if (mainFields.includes(fieldName) || textareaFields.includes(fieldName)) {
+      originalValue = originalMetadata?.[fieldName] || "";
+    } else if (fieldName in metadata.otherFields) {
+      originalValue = originalMetadata?.otherFields?.[fieldName] || "";
+    } else {
+      originalValue = originalMetadata?.[fieldName] || "";
+    }
+
+    // Compare with original value
+    if (newValue !== originalValue) {
+      dirtyFields.add(fieldName);
+    } else {
+      dirtyFields.delete(fieldName);
+    }
+  }
+
+  // Clear dirty status after saving
+  function markFieldClean(fieldName) {
+    dirtyFields.delete(fieldName);
+  }
+
+  // Clear all dirty statuses
+  function markAllClean() {
+    dirtyFields.clear();
+  }
+
+  function handleRefreshMetadata(e) {
+    const refreshedPath = e.detail?.path;
+    if (!refreshedPath || !filePath) {
+      fetchMetadata(filePath);
+      return;
+    }
+    // Refresh if the selected file itself was updated, or if it lives inside a folder that was updated.
+    if (
+      refreshedPath === filePath ||
+      filePath.startsWith(refreshedPath + "/")
     ) {
-        if (!file || !filePath || readOnly) return;
-
-        // Validate file type
-        if (!file.type.startsWith("image/")) {
-            toast.error("Please select an image file");
-            return;
-        }
-
-        // Validate file size (e.g., max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            toast.error("Image must be less than 5MB");
-            return;
-        }
-
-        isUploadingPicture = true;
-
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append(
-                "path",
-                applyToFolder
-                    ? filePath.split("/").slice(0, -1).join("/") // folder path
-                    : filePath, // file path
-            );
-
-            // Choose endpoint based on whether to include subfolders
-            const endpoint = applyToFolder
-                ? applyToSubfolders
-                    ? "folder"
-                    : "folder/current"
-                : "file";
-
-            const URL = `/api/metadata/picture/${endpoint}`;
-
-            const response = await fetch(URL, {
-                method: "POST",
-                body: formData,
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || "Failed to upload picture");
-            }
-
-            if (showToast) {
-                toast.success(
-                    applyToFolder
-                        ? `Updated cover art for folder (${result.updated} files)`
-                        : "Updated cover art for this file",
-                );
-            }
-
-            // Refresh metadata to show new picture
-            await fetchMetadata(filePath);
-        } catch (error) {
-            console.error("Error uploading picture:", error);
-            toast.error(`Failed to upload picture: ${error.message}`);
-        } finally {
-            isUploadingPicture = false;
-            pictureEditing = false;
-            // Reset file input
-            if (pictureFileInput) {
-                pictureFileInput.value = "";
-            }
-        }
+      fetchMetadata(filePath);
     }
-
-    function triggerPictureUpload(applyToFolder = false) {
-        if (readOnly) return;
-        // Create hidden file input if it doesn't exist
-        if (!pictureFileInput) {
-            pictureFileInput = document.createElement("input");
-            pictureFileInput.type = "file";
-            pictureFileInput.accept = "image/*";
-            pictureFileInput.style.display = "none";
-            document.body.appendChild(pictureFileInput);
-
-            pictureFileInput.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    handlePictureUpload(file, applyToFolder);
-                }
-            };
-        } else {
-            // Update the applyToFolder flag for the change handler
-            const originalOnChange = pictureFileInput.onchange;
-            pictureFileInput.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    handlePictureUpload(file, applyToFolder);
-                }
-            };
-        }
-
-        pictureFileInput.click();
-    }
-
-    async function deleteField(field) {
-        if (!filePath || !field || readOnly) return;
-
-        try {
-            const URL = `/api/metadata/field/delete`;
-
-            const response = await fetch(URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    path: filePath,
-                    field: field,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || "Failed to delete field");
-            }
-
-            toast.success(`Deleted ${field} from file`);
-
-            // Refresh metadata to reflect changes
-            await fetchMetadata(filePath);
-
-            // Clear editing state
-            if (editingFields.has(field)) {
-                editingFields.delete(field);
-                editingFields = new Set(editingFields);
-            }
-        } catch (error) {
-            console.error("Error deleting field:", error);
-            toast.error(`Failed to delete: ${error.message}`);
-        }
-    }
-
-    async function deleteCoverArt() {
-        if (!filePath || readOnly) return;
-
-        try {
-            const URL = `/api/metadata/picture/delete`;
-
-            const response = await fetch(URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    path: filePath,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || "Failed to delete cover art");
-            }
-
-            toast.success("Deleted cover art from file");
-
-            // Refresh metadata to reflect changes
-            await fetchMetadata(filePath);
-        } catch (error) {
-            console.error("Error deleting cover art:", error);
-            toast.error(`Failed to delete cover art: ${error.message}`);
-        }
-    }
-
-    function openFullImage() {
-        if (metadata.picture) {
-            showFullImage = true;
-        }
-    }
-
-    function closeFullImage() {
-        showFullImage = false;
-    }
-
-    async function saveCoverAsFile() {
-        if (!filePath || !metadata.picture) return;
-
-        try {
-            const URL = `/api/metadata/picture/save-as-file`;
-
-            const response = await fetch(URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    path: filePath,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || "Failed to save cover art");
-            }
-
-            toast.success(result.message);
-
-            // Dispatch event to refresh the file tree
-            const event = new CustomEvent("refreshFileTree");
-            window.dispatchEvent(event);
-        } catch (error) {
-            console.error("Error saving cover art:", error);
-            toast.error(`Failed to save: ${error.message}`);
-        }
-    }
-
-    function openSyncedLyricsModal() {
-        // For synced lyrics, we need to parse timestamps
-        if (metadata.lyrics) {
-            const result = processEditedLyrics(metadata.lyrics);
-            syncedLyricsData = {
-                lyrics: result.text,
-                timestamps: result.timestamps,
-            };
-        } else {
-            syncedLyricsData = {
-                lyrics: "",
-                timestamps: [],
-            };
-        }
-        showSyncedLyricsModal = true;
-    }
-
-    function openUnsyncedLyricsModal() {
-        lyricsModalType = "unsynced";
-        lyricsModalContent = metadata.unsyncedLyrics || "";
-        showUnsyncedLyricsModal = true;
-    }
-
-    function closeUnsyncedLyricsModal() {
-        showUnsyncedLyricsModal = false;
-    }
-
-    async function saveUnsyncedLyrics() {
-        const field = "unsyncedLyrics";
-
-        // Update local state
-        metadata.unsyncedLyrics = lyricsModalContent;
-
-        // Save to file
-        await applyToFile(field, lyricsModalContent);
-
-        // Close modal
-        closeUnsyncedLyricsModal();
-    }
-
-    // Handle save from synced lyrics modal
-    async function handleSyncedLyricsSave(data) {
-        const field = "lyrics";
-
-        // If nothing was actually synced, write the plain text
-        // (FLAC/OGG/Opus/M4A lyrics fields accept both LRC and plain text).
-        // Otherwise write the LRC-formatted string.
-        const value = data.hasTimestamps
-            ? data.synchronizedLyrics
-            : data.lyrics;
-
-        metadata.lyrics = value;
-        // Save to file
-        await applyToFile(field, value);
-
-        // Close modal
-        showSyncedLyricsModal = false;
-    }
-
-    function stopPropagation(e) {
-        e.stopPropagation();
-    }
-
-    async function applyAllChanges() {
-        if (!filePath || readOnly) return;
-
-        try {
-            // Collect all fields that have values
-            const updates = [];
-
-            // Main fields
-            for (const field of mainFields) {
-                if (metadata[field] && metadata[field].trim() !== "") {
-                    updates.push({ field, value: metadata[field] });
-                }
-            }
-
-            // Textarea fields
-            for (const field of textareaFields) {
-                if (metadata[field] && metadata[field].trim() !== "") {
-                    updates.push({ field, value: metadata[field] });
-                }
-            }
-
-            // Other fields
-            for (const [key, value] of Object.entries(
-                metadata.otherFields || {},
-            )) {
-                if (value && value.trim() !== "") {
-                    updates.push({ field: key, value });
-                }
-            }
-
-            // Custom fields
-            for (const field of customFields) {
-                if (
-                    field.name &&
-                    field.name.trim() !== "" &&
-                    field.value &&
-                    field.value.trim() !== ""
-                ) {
-                    updates.push({ field: field.name, value: field.value });
-                }
-            }
-
-            if (updates.length === 0 && !metadata.picture) {
-                toast.info("No changes to apply");
-                return;
-            }
-
-            // Apply all updates
-            for (const update of updates) {
-                await applyToFile(update.field, update.value, false);
-            }
-
-            // Handle picture if present
-            if (metadata.picture && metadata.picture.startsWith("data:")) {
-                // Convert data URL to file and upload
-                const response = await fetch(metadata.picture);
-                const blob = await response.blob();
-                const file = new File([blob], "cover.jpg", { type: blob.type });
-                await handlePictureUpload(file, false, false);
-            }
-
-            // Clear all dirty statuses
-            markAllClean();
-
-            toast.success("All changes applied successfully");
-        } catch (error) {
-            console.error("Error applying all changes:", error);
-            toast.error(`Failed to apply all changes: ${error.message}`);
-        }
-    }
-
-    async function deleteFieldFromFolder(field) {
-        if (!filePath || !field || readOnly) return;
-
-        // Get the folder path from the file path
-        const folderPath = filePath.split("/").slice(0, -1).join("/") || "/";
-
-        try {
-            // Same endpoint but with folder path and recursive flag
-            const URL = `/api/metadata/field/delete`;
-
-            const response = await fetch(URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    path: folderPath, // Send folder path instead of file path
-                    field: field,
-                    recursive: applyToSubfolders, // Add recursive flag
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    result.error || "Failed to delete field from folder",
-                );
-            }
-
-            toast.success(
-                result.message || `Deleted "${field}" from files in folder`,
-            );
-
-            // Refresh current file's metadata in case it was updated
-            await fetchMetadata(filePath);
-
-            // Clear editing state
-            if (editingFields.has(field)) {
-                editingFields.delete(field);
-                editingFields = new Set(editingFields);
-            }
-        } catch (error) {
-            console.error("Error deleting field from folder:", error);
-            toast.error(`Failed to delete from folder: ${error.message}`);
-        }
-    }
-
-    // Mark field as dirty by comparing with original value
-    function trackChange(fieldName, newValue) {
-        if (!originalMetadata) return;
-        // Get the original value
-        let originalValue;
-
-        // Handle different field types
-        if (
-            mainFields.includes(fieldName) ||
-            textareaFields.includes(fieldName)
-        ) {
-            originalValue = originalMetadata?.[fieldName] || "";
-        } else if (fieldName in metadata.otherFields) {
-            originalValue = originalMetadata?.otherFields?.[fieldName] || "";
-        } else {
-            originalValue = originalMetadata?.[fieldName] || "";
-        }
-
-        // Compare with original value
-        if (newValue !== originalValue) {
-            dirtyFields.add(fieldName);
-        } else {
-            dirtyFields.delete(fieldName);
-        }
-        // Trigger reactivity
-        dirtyFields = new Set(dirtyFields);
-    }
-
-    // Check if a field has unsaved changes
-    function isFieldDirty(fieldName) {
-        return dirtyFields.has(fieldName);
-    }
-
-    // Clear dirty status after saving
-    function markFieldClean(fieldName) {
-        dirtyFields.delete(fieldName);
-        dirtyFields = new Set(dirtyFields);
-    }
-
-    // Clear all dirty statuses
-    function markAllClean() {
-        dirtyFields.clear();
-        dirtyFields = new Set(dirtyFields);
-    }
-
-    function handleRefreshMetadata(e) {
-        const refreshedPath = e.detail?.path;
-        if (!refreshedPath || !filePath) {
-            fetchMetadata(filePath);
-            return;
-        }
-        // Refresh if the selected file itself was updated, or if it lives inside a folder that was updated.
-        if (
-            refreshedPath === filePath ||
-            filePath.startsWith(refreshedPath + "/")
-        ) {
-            fetchMetadata(filePath);
-        }
-    }
-
-    $effect(() => {
-        window.addEventListener("refreshMetadata", handleRefreshMetadata);
-        return () =>
-            window.removeEventListener(
-                "refreshMetadata",
-                handleRefreshMetadata,
-            );
-    });
+  }
+
+  $effect(() => {
+    window.addEventListener("refreshMetadata", handleRefreshMetadata);
+    return () =>
+      window.removeEventListener("refreshMetadata", handleRefreshMetadata);
+  });
 </script>
 
 <div class="metadata-editor" class:readonly={readOnly}>
-    {#if !readOnly}
-        <div class="operation-controls">
-            <label
-                class="checkbox-label"
-                title="When enabled, folder operations will include subfolders"
-            >
-                <input type="checkbox" bind:checked={applyToSubfolders} />
-                <span>Recursive</span>
-            </label>
-            <label
-                class="checkbox-label"
-                title="When enabled, tag deletetion operations will apply to all files in folder"
-            >
-                <input type="checkbox" bind:checked={applyDeleteToFolder} />
-                <span>Tag deletion applies to folder</span>
-            </label>
-        </div>
-    {/if}
-
-    <!-- Filename badge -->
-    <div class="editor-header">
-        <div class="filename-badge">{filename}</div>
+  {#if !readOnly}
+    <div class="operation-controls">
+      <label
+        class="checkbox-label"
+        title="When enabled, folder operations will include subfolders"
+      >
+        <input type="checkbox" bind:checked={applyToSubfolders} />
+        <span>Recursive</span>
+      </label>
+      <label
+        class="checkbox-label"
+        title="When enabled, tag deletetion operations will apply to all files in folder"
+      >
+        <input type="checkbox" bind:checked={applyDeleteToFolder} />
+        <span>Tag deletion applies to folder</span>
+      </label>
     </div>
+  {/if}
 
-    {#if readOnly}
-        <div class="readonly-banner" role="note">
-            <span class="readonly-badge">Read-only</span>
-            <span>
-                {#if readOnlyFormat}
-                    {readOnlyFormat} files are not supported for tag editing.
-                {:else}
-                    This file type is not supported for tag editing.
-                {/if}
-                You can still rename, download or delete the file from the
-                tree.
-            </span>
-        </div>
-    {/if}
+  <!-- Filename badge -->
+  <div class="editor-header">
+    <div class="filename-badge">{filename}</div>
+  </div>
 
-    <div class="cover-art-container">
-        <div class="cover-art" class:editing={pictureEditing}>
-            {#if metadata.picture}
-                <img
-                    src={metadata.picture}
-                    alt="Cover Art"
-                    style="width:100%; height:100%; object-fit: cover;"
-                />
-            {:else}
-                <!-- Cover art placeholder -->
-                <svg
-                    width="100%"
-                    height="100%"
-                    viewBox="0 0 200 200"
-                    preserveAspectRatio="none"
-                >
-                    <rect width="200" height="200" fill="#e0e0e0" />
-                    <text
-                        x="50%"
-                        y="50%"
-                        dominant-baseline="middle"
-                        text-anchor="middle"
-                        fill="#999"
-                        font-size="14"
-                    >
-                        Album Art
-                    </text>
-                </svg>
-            {/if}
-
-            <div
-                role="img"
-                class="cover-art-overlay"
-                onmouseenter={() => (pictureEditing = true)}
-                onmouseleave={() => (pictureEditing = false)}
-            >
-                {#if pictureEditing && !isUploadingPicture}
-                    <!-- Expand icon in top-left corner -->
-                    <div class="cover-art-expand">
-                        <button
-                            class="icon-btn expand-btn"
-                            title="View full size"
-                            onclick={openFullImage}
-                            disabled={!metadata.picture}
-                        >
-                            <svg
-                                viewBox="0 0 20 20"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="svelte-1n4vb3j"
-                                width="20"
-                                height="20"
-                                ><path
-                                    d="M7 3H4.5C4 3 4 3 4 3.5V6M17 6V4C17 3 17 3 16 3H14M14 16H16C17 16 17 16 17 15V13M4 13V15C4 16 4 16 5 16H7"
-                                    stroke="currentColor"
-                                    stroke-width="1.8"
-                                    stroke-linecap="round"
-                                ></path></svg
-                            >
-                        </button>
-                    </div>
-                    {#if !readOnly}
-                        <div class="cover-art-actions">
-                            <button
-                                class="icon-btn"
-                                title="Upload cover art for this file only"
-                                onclick={() => triggerPictureUpload(false)}
-                                disabled={isUploadingPicture}
-                            >
-                                <!-- File icon - matches other fields -->
-                                <svg
-                                    width="14"
-                                    height="16"
-                                    viewBox="0 0 14 16"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
-                                        fill="currentColor"
-                                        fill-opacity="0.7"
-                                    />
-                                    <path
-                                        d="M10 1L12 3H10V1Z"
-                                        fill="currentColor"
-                                        fill-opacity="0.7"
-                                    />
-                                </svg>
-                            </button>
-                            <HoldButton
-                                variant="icon"
-                                duration={800}
-                                onConfirm={() => triggerPictureUpload(true)}
-                                disabled={isUploadingPicture}
-                                title={applyToSubfolders
-                                    ? "Hold to apply to all files in folder (including subfolders)"
-                                    : "Hold to apply to all files in folder (same level only)"}
-                                class="cover-art-icon"
-                            >
-                                <!-- Folder icon SVG -->
-                                <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 16 16"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
-                                        fill="currentColor"
-                                        fill-opacity="0.9"
-                                    />
-                                </svg>
-                            </HoldButton>
-                            {#if metadata.picture}
-                                <HoldButton
-                                    variant="icon"
-                                    duration={800}
-                                    onConfirm={deleteCoverArt}
-                                    disabled={isUploadingPicture}
-                                    title="Hold to delete cover art"
-                                    class="delete-btn cover-art-icon"
-                                >
-                                    <!-- Trash can icon -->
-                                    <svg
-                                        width="14"
-                                        height="16"
-                                        viewBox="0 0 14 16"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
-                                            stroke="currentColor"
-                                            stroke-width="1.5"
-                                            stroke-linecap="round"
-                                        />
-                                    </svg>
-                                </HoldButton>
-                                <button
-                                    class="icon-btn"
-                                    title="Save as cover.*"
-                                    onclick={saveCoverAsFile}
-                                    disabled={isUploadingPicture ||
-                                        !metadata.picture}
-                                >
-                                    <!-- Save icon -->
-                                    <svg
-                                        width="14"
-                                        height="16"
-                                        viewBox="0 0 14 16"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M7 2V11M7 11L10 8M7 11L4 8"
-                                            stroke="currentColor"
-                                            stroke-width="1.8"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                        />
-                                        <path
-                                            d="M2 14H12"
-                                            stroke="currentColor"
-                                            stroke-width="1.5"
-                                            stroke-linecap="round"
-                                        />
-                                    </svg>
-                                </button>
-                            {/if}
-                        </div>
-                    {/if}
-                {:else if isUploadingPicture}
-                    <div class="uploading-indicator">
-                        <span>Uploading...</span>
-                    </div>
-                {/if}
-            </div>
-        </div>
-    </div>
-
-    <!-- Main fields (all text inputs) -->
-    <div class="fields-stack">
-        {#each mainFields as field}
-            {@const value = metadata[field]}
-            {@const isDirty = dirtyFields.has(field)}
-            <div
-                class="field"
-                class:editing={editingFields.has(field)}
-                class:dirty={isDirty}
-            >
-                <label for={field}>
-                    {getFieldLabel(field)}
-                </label>
-                <div class="input-wrapper">
-                    <input
-                        type="text"
-                        id={field}
-                        value={metadata[field]}
-                        oninput={(e) => {
-                            const oldValue = metadata[field];
-                            // @ts-ignore
-                            metadata[field] = e.target.value;
-                            trackChange(field, metadata[field]);
-                        }}
-                        onfocus={() => startEditing(field)}
-                        onblur={() => stopEditing(field)}
-                        onkeydown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                applyToFile(field, metadata[field]);
-                            }
-                        }}
-                        placeholder={field}
-                        readonly={readOnly}
-                    />
-                    {#if editingFields.has(field)}
-                        <div class="field-actions">
-                            <!-- Delete button -->
-                            {#if metadata[field]}
-                                <HoldButton
-                                    variant="icon"
-                                    duration={800}
-                                    onConfirm={() => {
-                                        if (applyDeleteToFolder) {
-                                            deleteFieldFromFolder(field);
-                                        } else {
-                                            deleteField(field);
-                                        }
-                                    }}
-                                    title={applyDeleteToFolder
-                                        ? "Hold to delete this field from all files in folder"
-                                        : "Hold to delete this field from current file"}
-                                    class="delete-btn"
-                                >
-                                    <!-- Trash can icon -->
-                                    <svg
-                                        width="14"
-                                        height="16"
-                                        viewBox="0 0 14 16"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
-                                            stroke="currentColor"
-                                            stroke-width="1.5"
-                                            stroke-linecap="round"
-                                        />
-                                    </svg>
-                                </HoldButton>
-                            {/if}
-                            <!-- File button -->
-                            <button
-                                class="icon-btn"
-                                title="Apply to this file only"
-                                onclick={() => applyToFile(field, value)}
-                            >
-                                <!-- File icon SVG -->
-                                <svg
-                                    width="14"
-                                    height="16"
-                                    viewBox="0 0 14 16"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
-                                        fill="currentColor"
-                                        fill-opacity="0.7"
-                                    />
-                                    <path
-                                        d="M10 1L12 3H10V1Z"
-                                        fill="currentColor"
-                                        fill-opacity="0.7"
-                                    />
-                                </svg>
-                            </button>
-                            <!-- Folder button -->
-                            <HoldButton
-                                variant="icon"
-                                duration={800}
-                                onConfirm={() =>
-                                    applyToFolder(field, metadata[field])}
-                                title={applyToSubfolders
-                                    ? "Hold to apply to all files in folder (including subfolders)"
-                                    : "Hold to apply to all files in folder (same level only)"}
-                            >
-                                <!-- Folder icon SVG -->
-                                <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 16 16"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path
-                                        d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
-                                        fill="currentColor"
-                                        fill-opacity="0.9"
-                                    />
-                                </svg>
-                            </HoldButton>
-                        </div>
-                    {/if}
-                </div>
-            </div>
-        {/each}
-    </div>
-
-    <!-- Lyrics action buttons -->
-    {#if !readOnly}
-        <div class="lyrics-actions">
-            <button class="action-btn" onclick={openSyncedLyricsModal}>
-                Edit synced lyrics
-            </button>
-            <button class="action-btn" onclick={openUnsyncedLyricsModal}>
-                Edit unsynced lyrics
-            </button>
-        </div>
-    {/if}
-
-    <!-- Other section (collapsible) -->
-    <div class="other-section">
-        <button
-            class="collapse-toggle"
-            onclick={() => (otherExpanded = !otherExpanded)}
-        >
-            {otherExpanded ? "X" : "▶"} Other
-        </button>
-
-        {#if otherExpanded}
-            <div class="other-fields">
-                <!-- Textarea fields (comment, description) -->
-                {#each textareaFields as field}
-                    {@const value = metadata[field]}
-                    {@const isDirty = dirtyFields.has(field)}
-                    <div
-                        class="field"
-                        class:editing={editingFields.has(field)}
-                        class:dirty={isDirty}
-                    >
-                        <label for={field}>
-                            {field.charAt(0).toUpperCase() + field.slice(1)}
-                        </label>
-                        <div class="input-wrapper">
-                            <textarea
-                                id={field}
-                                value={metadata[field]}
-                                oninput={(e) => {
-                                    const oldValue = metadata[field];
-                                    // @ts-ignore
-                                    metadata[field] = e.target.value;
-                                    trackChange(field, metadata[field]);
-                                }}
-                                onfocus={() => startEditing(field)}
-                                onblur={() => stopEditing(field)}
-                                placeholder={field}
-                                rows="2"
-                                readonly={readOnly}
-                            ></textarea>
-                            {#if editingFields.has(field)}
-                                <div class="field-actions textarea-actions">
-                                    <!-- Delete button -->
-                                    {#if metadata[field]}
-                                        <HoldButton
-                                            variant="icon"
-                                            duration={800}
-                                            onConfirm={() => {
-                                                if (applyDeleteToFolder) {
-                                                    deleteFieldFromFolder(
-                                                        field,
-                                                    );
-                                                } else {
-                                                    deleteField(field);
-                                                }
-                                            }}
-                                            title={applyDeleteToFolder
-                                                ? "Hold to delete this field from all files in folder"
-                                                : "Hold to delete this field from current file"}
-                                            class="delete-btn"
-                                        >
-                                            <!-- Trash can icon -->
-                                            <svg
-                                                width="14"
-                                                height="16"
-                                                viewBox="0 0 14 16"
-                                                fill="none"
-                                                xmlns="http://www.w3.org/2000/svg"
-                                            >
-                                                <path
-                                                    d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
-                                                    stroke="currentColor"
-                                                    stroke-width="1.5"
-                                                    stroke-linecap="round"
-                                                />
-                                            </svg>
-                                        </HoldButton>
-                                    {/if}
-                                    <!-- File button -->
-                                    <button
-                                        class="icon-btn"
-                                        onclick={() =>
-                                            applyToFile(field, value)}
-                                    >
-                                        <!-- File icon SVG -->
-                                        <svg
-                                            width="14"
-                                            height="16"
-                                            viewBox="0 0 14 16"
-                                            fill="none"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                            <path
-                                                d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
-                                                fill="currentColor"
-                                                fill-opacity="0.7"
-                                            />
-                                            <path
-                                                d="M10 1L12 3H10V1Z"
-                                                fill="currentColor"
-                                                fill-opacity="0.7"
-                                            />
-                                        </svg>
-                                    </button>
-                                    <!-- Folder button -->
-                                    <HoldButton
-                                        variant="icon"
-                                        duration={800}
-                                        onConfirm={() =>
-                                            applyToFolder(field, value)}
-                                        title={applyToSubfolders
-                                            ? "Hold to apply to all files in folder (including subfolders)"
-                                            : "Hold to apply to all files in folder (same level only)"}
-                                    >
-                                        <!-- Folder icon SVG -->
-                                        <svg
-                                            width="16"
-                                            height="16"
-                                            viewBox="0 0 16 16"
-                                            fill="none"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                            <path
-                                                d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
-                                                fill="currentColor"
-                                                fill-opacity="0.9"
-                                            />
-                                        </svg>
-                                    </HoldButton>
-                                </div>
-                            {/if}
-                        </div>
-                    </div>
-                {/each}
-
-                <!-- Other fields from metadata.otherFields -->
-                {#each Object.entries(metadata.otherFields || {}) as [key, value]}
-                    {@const isDirty = dirtyFields.has(key)}
-                    <div class="field" class:dirty={isDirty}>
-                        <label for={key}>{key}</label>
-                        <div class="input-wrapper">
-                            <input
-                                type="text"
-                                id={key}
-                                value={metadata.otherFields[key]}
-                                oninput={(e) => {
-                                    const oldValue = metadata.otherFields[key];
-                                    // @ts-ignore
-                                    metadata.otherFields[key] = e.target.value;
-                                    trackChange(key, metadata.otherFields[key]);
-                                }}
-                                onfocus={() => startEditing(key)}
-                                onblur={() => stopEditing(key)}
-                                onkeydown={(e) => {
-                                    if (e.key === "Enter" && !e.shiftKey) {
-                                        e.preventDefault();
-                                        applyToFile(
-                                            key,
-                                            metadata.otherFields[key],
-                                        );
-                                    }
-                                }}
-                                readonly={readOnly}
-                            />
-                            {#if editingFields.has(key)}
-                                <div class="field-actions">
-                                    <!-- Delete button -->
-                                    {#if value}
-                                        <HoldButton
-                                            variant="icon"
-                                            duration={800}
-                                            onConfirm={() => {
-                                                if (applyDeleteToFolder) {
-                                                    deleteFieldFromFolder(key);
-                                                } else {
-                                                    deleteField(key);
-                                                }
-                                            }}
-                                            title={applyDeleteToFolder
-                                                ? "Hold to delete this field from all files in folder"
-                                                : "Hold to delete this field from current file"}
-                                            class="delete-btn"
-                                        >
-                                            <!-- Trash can icon -->
-                                            <svg
-                                                width="14"
-                                                height="16"
-                                                viewBox="0 0 14 16"
-                                                fill="none"
-                                                xmlns="http://www.w3.org/2000/svg"
-                                            >
-                                                <path
-                                                    d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
-                                                    stroke="currentColor"
-                                                    stroke-width="1.5"
-                                                    stroke-linecap="round"
-                                                />
-                                            </svg>
-                                        </HoldButton>
-                                    {/if}
-                                    <!-- File button -->
-                                    <button
-                                        class="icon-btn"
-                                        onclick={() => applyToFile(key, value)}
-                                    >
-                                        <!-- File icon SVG -->
-                                        <svg
-                                            width="14"
-                                            height="16"
-                                            viewBox="0 0 14 16"
-                                            fill="none"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                            <path
-                                                d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
-                                                fill="currentColor"
-                                                fill-opacity="0.7"
-                                            />
-                                            <path
-                                                d="M10 1L12 3H10V1Z"
-                                                fill="currentColor"
-                                                fill-opacity="0.7"
-                                            />
-                                        </svg>
-                                    </button>
-                                    <!-- Folder button -->
-                                    <HoldButton
-                                        variant="icon"
-                                        duration={800}
-                                        onConfirm={() =>
-                                            applyToFolder(key, value)}
-                                        title={applyToSubfolders
-                                            ? "Hold to apply to all files in folder (including subfolders)"
-                                            : "Hold to apply to all files in folder (same level only)"}
-                                    >
-                                        <!-- Folder icon SVG -->
-                                        <svg
-                                            width="16"
-                                            height="16"
-                                            viewBox="0 0 16 16"
-                                            fill="none"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                            <path
-                                                d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
-                                                fill="currentColor"
-                                                fill-opacity="0.9"
-                                            />
-                                        </svg>
-                                    </HoldButton>
-                                </div>
-                            {/if}
-                        </div>
-                    </div>
-                {/each}
-            </div>
+  {#if readOnly}
+    <div class="readonly-banner" role="note">
+      <span class="readonly-badge">Read-only</span>
+      <span>
+        {#if readOnlyFormat}
+          {readOnlyFormat} files are not supported for tag editing.
+        {:else}
+          This file type is not supported for tag editing.
         {/if}
+        You can still rename, download or delete the file from the tree.
+      </span>
     </div>
+  {/if}
 
-    <!-- Add new field button -->
-    {#if !readOnly}
-        <button class="add-field-btn" onclick={addCustomField}>
-            + Add new field
-        </button>
-    {/if}
-
-    <!-- Custom fields added by user -->
-    {#each customFields as field, i (i)}
-        <div
-            class="field custom"
-            class:editing={customFieldEditing[i]}
-            onfocusin={() => (customFieldEditing[i] = true)}
-            onfocusout={(e) => {
-                // @ts-ignore
-                if (!e.currentTarget.contains(e.relatedTarget)) {
-                    customFieldEditing[i] = false;
-                }
-            }}
+  <div class="cover-art-container">
+    <div class="cover-art" class:editing={pictureEditing}>
+      {#if metadata.picture}
+        <img
+          src={metadata.picture}
+          alt="Cover Art"
+          style="width:100%; height:100%; object-fit: cover;"
+        />
+      {:else}
+        <!-- Cover art placeholder -->
+        <svg
+          width="100%"
+          height="100%"
+          viewBox="0 0 200 200"
+          preserveAspectRatio="none"
         >
-            <!-- Field name input -->
-            <input
-                type="text"
-                placeholder="Field name"
-                bind:value={customFields[i].name}
-            />
+          <rect width="200" height="200" fill="#e0e0e0" />
+          <text
+            x="50%"
+            y="50%"
+            dominant-baseline="middle"
+            text-anchor="middle"
+            fill="#999"
+            font-size="14"
+          >
+            Album Art
+          </text>
+        </svg>
+      {/if}
 
-            <!-- Value row: input and icons -->
-            <div class="value-row">
-                <input
-                    type="text"
-                    placeholder="Value"
-                    bind:value={customFields[i].value}
-                    onkeydown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            applyToFile(
-                                customFields[i].name,
-                                customFields[i].value,
-                            );
-                        }
-                    }}
-                />
-                {#if customFieldEditing[i]}
-                    <div
-                        class="field-actions"
-                        style="position: static; transform: none;"
-                    >
-                        <!-- File button -->
-                        <button
-                            class="icon-btn"
-                            title="Apply to this file only"
-                            onclick={() =>
-                                applyToFile(
-                                    customFields[i].name,
-                                    customFields[i].value,
-                                )}
-                        >
-                            <!-- File icon SVG -->
-                            <svg
-                                width="14"
-                                height="16"
-                                viewBox="0 0 14 16"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
-                                    fill="currentColor"
-                                    fill-opacity="0.7"
-                                />
-                                <path
-                                    d="M10 1L12 3H10V1Z"
-                                    fill="currentColor"
-                                    fill-opacity="0.7"
-                                />
-                            </svg>
-                        </button>
-                        <!-- Folder button -->
-                        <HoldButton
-                            variant="icon"
-                            duration={800}
-                            onConfirm={() =>
-                                applyToFolder(
-                                    customFields[i].name,
-                                    customFields[i].value,
-                                )}
-                            title={applyToSubfolders
-                                ? "Hold to apply to all files in folder (including subfolders)"
-                                : "Hold to apply to all files in folder (same level only)"}
-                        >
-                            <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 16 16"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
-                                    fill="currentColor"
-                                    fill-opacity="0.9"
-                                />
-                            </svg>
-                        </HoldButton>
-                    </div>
-                {/if}
-            </div>
-        </div>
-    {/each}
-
-    <!-- Lyrics Modal -->
-    {#if showUnsyncedLyricsModal}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="lyrics-modal-overlay" onclick={closeUnsyncedLyricsModal}>
-            <div class="lyrics-modal" onclick={stopPropagation}>
-                <div class="lyrics-modal-header">
-                    <h3>Edit Unsynced Lyrics</h3>
-                    <button
-                        title="Close"
-                        class="modal-close-btn"
-                        onclick={closeUnsyncedLyricsModal}
-                    >
-                        <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 16 16"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                        >
-                            <path
-                                d="M12 4L4 12M4 4L12 12"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                            />
-                        </svg>
-                    </button>
-                </div>
-
-                <div class="lyrics-modal-content">
-                    <!-- svelte-ignore a11y_autofocus -->
-                    <textarea
-                        bind:value={lyricsModalContent}
-                        placeholder="Enter unsynced lyrics here..."
-                        class="lyrics-textarea"
-                        autofocus
-                    ></textarea>
-                </div>
-
-                <div class="lyrics-modal-footer">
-                    <button
-                        class="cancel-btn"
-                        onclick={closeUnsyncedLyricsModal}
-                    >
-                        Cancel
-                    </button>
-                    <div class="save-actions">
-                        <button
-                            class="save-btn"
-                            onclick={saveUnsyncedLyrics}
-                            title="Save to this file only"
-                        >
-                            <svg
-                                width="14"
-                                height="16"
-                                viewBox="0 0 14 16"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
-                                    fill="currentColor"
-                                    fill-opacity="0.7"
-                                />
-                                <path
-                                    d="M10 1L12 3H10V1Z"
-                                    fill="currentColor"
-                                    fill-opacity="0.7"
-                                />
-                            </svg>
-                            Save
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    {/if}
-
-    <!-- Full-size image modal -->
-    {#if showFullImage && metadata.picture}
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div role="img" class="full-image-modal" onclick={closeFullImage}>
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="modal-content" onclick={(e) => e.stopPropagation()}>
-                <button
-                    class="modal-close-btn"
-                    title="Close"
-                    onclick={closeFullImage}
+      <div
+        role="img"
+        class="cover-art-overlay"
+        onmouseenter={() => (pictureEditing = true)}
+        onmouseleave={() => (pictureEditing = false)}
+      >
+        {#if pictureEditing && !isUploadingPicture}
+          <!-- Expand icon in top-left corner -->
+          <div class="cover-art-expand">
+            <button
+              class="icon-btn expand-btn"
+              title="View full size"
+              onclick={openFullImage}
+              disabled={!metadata.picture}
+            >
+              <svg
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="svelte-1n4vb3j"
+                width="20"
+                height="20"
+                ><path
+                  d="M7 3H4.5C4 3 4 3 4 3.5V6M17 6V4C17 3 17 3 16 3H14M14 16H16C17 16 17 16 17 15V13M4 13V15C4 16 4 16 5 16H7"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                ></path></svg
+              >
+            </button>
+          </div>
+          {#if !readOnly}
+            <div class="cover-art-actions">
+              <button
+                class="icon-btn"
+                title="Upload cover art for this file only"
+                onclick={() => triggerPictureUpload(false)}
+                disabled={isUploadingPicture}
+              >
+                <!-- File icon - matches other fields -->
+                <svg
+                  width="14"
+                  height="16"
+                  viewBox="0 0 14 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
                 >
-                    <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 20 20"
+                  <path
+                    d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                    fill="currentColor"
+                    fill-opacity="0.7"
+                  />
+                  <path
+                    d="M10 1L12 3H10V1Z"
+                    fill="currentColor"
+                    fill-opacity="0.7"
+                  />
+                </svg>
+              </button>
+              <HoldButton
+                variant="icon"
+                duration={800}
+                onConfirm={() => triggerPictureUpload(true)}
+                disabled={isUploadingPicture}
+                title={applyToSubfolders
+                  ? "Hold to apply to all files in folder (including subfolders)"
+                  : "Hold to apply to all files in folder (same level only)"}
+                class="cover-art-icon"
+              >
+                <!-- Folder icon SVG -->
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
+                    fill="currentColor"
+                    fill-opacity="0.9"
+                  />
+                </svg>
+              </HoldButton>
+              {#if metadata.picture}
+                <HoldButton
+                  variant="icon"
+                  duration={800}
+                  onConfirm={deleteCoverArt}
+                  disabled={isUploadingPicture}
+                  title="Hold to delete cover art"
+                  class="delete-btn cover-art-icon"
+                >
+                  <!-- Trash can icon -->
+                  <svg
+                    width="14"
+                    height="16"
+                    viewBox="0 0 14 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </HoldButton>
+                <button
+                  class="icon-btn"
+                  title="Save as cover.*"
+                  onclick={saveCoverAsFile}
+                  disabled={isUploadingPicture || !metadata.picture}
+                >
+                  <!-- Save icon -->
+                  <svg
+                    width="14"
+                    height="16"
+                    viewBox="0 0 14 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M7 2V11M7 11L10 8M7 11L4 8"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M2 14H12"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </button>
+              {/if}
+            </div>
+          {/if}
+        {:else if isUploadingPicture}
+          <div class="uploading-indicator">
+            <span>Uploading...</span>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+
+  <!-- Main fields (all text inputs) -->
+  <div class="fields-stack">
+    {#each mainFields as field (field)}
+      {@const value = metadata[field]}
+      {@const isDirty = dirtyFields.has(field)}
+      <div
+        class="field"
+        class:editing={editingFields.has(field)}
+        class:dirty={isDirty}
+      >
+        <label for={field}>
+          {getFieldLabel(field)}
+        </label>
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id={field}
+            value={metadata[field]}
+            oninput={(e) => {
+              // @ts-ignore
+              metadata[field] = e.target.value;
+              trackChange(field, metadata[field]);
+            }}
+            onfocus={() => startEditing(field)}
+            onblur={() => stopEditing(field)}
+            onkeydown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                applyToFile(field, metadata[field]);
+              }
+            }}
+            placeholder={field}
+            readonly={readOnly}
+          />
+          {#if editingFields.has(field)}
+            <div class="field-actions">
+              <!-- Delete button -->
+              {#if metadata[field]}
+                <HoldButton
+                  variant="icon"
+                  duration={800}
+                  onConfirm={() => {
+                    if (applyDeleteToFolder) {
+                      deleteFieldFromFolder(field);
+                    } else {
+                      deleteField(field);
+                    }
+                  }}
+                  title={applyDeleteToFolder
+                    ? "Hold to delete this field from all files in folder"
+                    : "Hold to delete this field from current file"}
+                  class="delete-btn"
+                >
+                  <!-- Trash can icon -->
+                  <svg
+                    width="14"
+                    height="16"
+                    viewBox="0 0 14 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </HoldButton>
+              {/if}
+              <!-- File button -->
+              <button
+                class="icon-btn"
+                title="Apply to this file only"
+                onclick={() => applyToFile(field, value)}
+              >
+                <!-- File icon SVG -->
+                <svg
+                  width="14"
+                  height="16"
+                  viewBox="0 0 14 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                    fill="currentColor"
+                    fill-opacity="0.7"
+                  />
+                  <path
+                    d="M10 1L12 3H10V1Z"
+                    fill="currentColor"
+                    fill-opacity="0.7"
+                  />
+                </svg>
+              </button>
+              <!-- Folder button -->
+              <HoldButton
+                variant="icon"
+                duration={800}
+                onConfirm={() => applyToFolder(field, metadata[field])}
+                title={applyToSubfolders
+                  ? "Hold to apply to all files in folder (including subfolders)"
+                  : "Hold to apply to all files in folder (same level only)"}
+              >
+                <!-- Folder icon SVG -->
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
+                    fill="currentColor"
+                    fill-opacity="0.9"
+                  />
+                </svg>
+              </HoldButton>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/each}
+  </div>
+
+  <!-- Lyrics action buttons -->
+  {#if !readOnly}
+    <div class="lyrics-actions">
+      <button class="action-btn" onclick={openSyncedLyricsModal}>
+        Edit synced lyrics
+      </button>
+      <button class="action-btn" onclick={openUnsyncedLyricsModal}>
+        Edit unsynced lyrics
+      </button>
+    </div>
+  {/if}
+
+  <!-- Other section (collapsible) -->
+  <div class="other-section">
+    <button
+      class="collapse-toggle"
+      onclick={() => (otherExpanded = !otherExpanded)}
+    >
+      {otherExpanded ? "X" : "▶"} Other
+    </button>
+
+    {#if otherExpanded}
+      <div class="other-fields">
+        <!-- Textarea fields (comment, description) -->
+        {#each textareaFields as field (field)}
+          {@const value = metadata[field]}
+          {@const isDirty = dirtyFields.has(field)}
+          <div
+            class="field"
+            class:editing={editingFields.has(field)}
+            class:dirty={isDirty}
+          >
+            <label for={field}>
+              {field.charAt(0).toUpperCase() + field.slice(1)}
+            </label>
+            <div class="input-wrapper">
+              <textarea
+                id={field}
+                value={metadata[field]}
+                oninput={(e) => {
+                  // @ts-ignore
+                  metadata[field] = e.target.value;
+                  trackChange(field, metadata[field]);
+                }}
+                onfocus={() => startEditing(field)}
+                onblur={() => stopEditing(field)}
+                placeholder={field}
+                rows="2"
+                readonly={readOnly}></textarea>
+              {#if editingFields.has(field)}
+                <div class="field-actions textarea-actions">
+                  <!-- Delete button -->
+                  {#if metadata[field]}
+                    <HoldButton
+                      variant="icon"
+                      duration={800}
+                      onConfirm={() => {
+                        if (applyDeleteToFolder) {
+                          deleteFieldFromFolder(field);
+                        } else {
+                          deleteField(field);
+                        }
+                      }}
+                      title={applyDeleteToFolder
+                        ? "Hold to delete this field from all files in folder"
+                        : "Hold to delete this field from current file"}
+                      class="delete-btn"
+                    >
+                      <!-- Trash can icon -->
+                      <svg
+                        width="14"
+                        height="16"
+                        viewBox="0 0 14 16"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
-                    >
+                      >
                         <path
-                            d="M15 5L5 15M5 5L15 15"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
+                          d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
                         />
+                      </svg>
+                    </HoldButton>
+                  {/if}
+                  <!-- File button -->
+                  <button
+                    class="icon-btn"
+                    onclick={() => applyToFile(field, value)}
+                  >
+                    <!-- File icon SVG -->
+                    <svg
+                      width="14"
+                      height="16"
+                      viewBox="0 0 14 16"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                        fill="currentColor"
+                        fill-opacity="0.7"
+                      />
+                      <path
+                        d="M10 1L12 3H10V1Z"
+                        fill="currentColor"
+                        fill-opacity="0.7"
+                      />
                     </svg>
-                </button>
-                <img src={metadata.picture} alt="Full size cover art" />
+                  </button>
+                  <!-- Folder button -->
+                  <HoldButton
+                    variant="icon"
+                    duration={800}
+                    onConfirm={() => applyToFolder(field, value)}
+                    title={applyToSubfolders
+                      ? "Hold to apply to all files in folder (including subfolders)"
+                      : "Hold to apply to all files in folder (same level only)"}
+                  >
+                    <!-- Folder icon SVG -->
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
+                        fill="currentColor"
+                        fill-opacity="0.9"
+                      />
+                    </svg>
+                  </HoldButton>
+                </div>
+              {/if}
             </div>
-        </div>
+          </div>
+        {/each}
+
+        <!-- Other fields from metadata.otherFields -->
+        {#each Object.entries(metadata.otherFields || {}) as [key, value] (key)}
+          {@const isDirty = dirtyFields.has(key)}
+          <div class="field" class:dirty={isDirty}>
+            <label for={key}>{key}</label>
+            <div class="input-wrapper">
+              <input
+                type="text"
+                id={key}
+                value={metadata.otherFields[key]}
+                oninput={(e) => {
+                  // @ts-ignore
+                  metadata.otherFields[key] = e.target.value;
+                  trackChange(key, metadata.otherFields[key]);
+                }}
+                onfocus={() => startEditing(key)}
+                onblur={() => stopEditing(key)}
+                onkeydown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    applyToFile(key, metadata.otherFields[key]);
+                  }
+                }}
+                readonly={readOnly}
+              />
+              {#if editingFields.has(key)}
+                <div class="field-actions">
+                  <!-- Delete button -->
+                  {#if value}
+                    <HoldButton
+                      variant="icon"
+                      duration={800}
+                      onConfirm={() => {
+                        if (applyDeleteToFolder) {
+                          deleteFieldFromFolder(key);
+                        } else {
+                          deleteField(key);
+                        }
+                      }}
+                      title={applyDeleteToFolder
+                        ? "Hold to delete this field from all files in folder"
+                        : "Hold to delete this field from current file"}
+                      class="delete-btn"
+                    >
+                      <!-- Trash can icon -->
+                      <svg
+                        width="14"
+                        height="16"
+                        viewBox="0 0 14 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M1 4H13M9 2H5M5 7V12M9 7V12M2 4L2.5 13.5C2.5 14.3284 3.17157 15 4 15H10C10.8284 15 11.5 14.3284 11.5 13.5L12 4"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </HoldButton>
+                  {/if}
+                  <!-- File button -->
+                  <button
+                    class="icon-btn"
+                    onclick={() => applyToFile(key, value)}
+                  >
+                    <!-- File icon SVG -->
+                    <svg
+                      width="14"
+                      height="16"
+                      viewBox="0 0 14 16"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                        fill="currentColor"
+                        fill-opacity="0.7"
+                      />
+                      <path
+                        d="M10 1L12 3H10V1Z"
+                        fill="currentColor"
+                        fill-opacity="0.7"
+                      />
+                    </svg>
+                  </button>
+                  <!-- Folder button -->
+                  <HoldButton
+                    variant="icon"
+                    duration={800}
+                    onConfirm={() => applyToFolder(key, value)}
+                    title={applyToSubfolders
+                      ? "Hold to apply to all files in folder (including subfolders)"
+                      : "Hold to apply to all files in folder (same level only)"}
+                  >
+                    <!-- Folder icon SVG -->
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
+                        fill="currentColor"
+                        fill-opacity="0.9"
+                      />
+                    </svg>
+                  </HoldButton>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
     {/if}
-    <div class="batch-actions">
-        <button class="batch-apply-btn" onclick={applyAllChanges}>
-            <svg
+  </div>
+
+  <!-- Add new field button -->
+  {#if !readOnly}
+    <button class="add-field-btn" onclick={addCustomField}>
+      + Add new field
+    </button>
+  {/if}
+
+  <!-- Custom fields added by user -->
+  {#each customFields as field, i (field)}
+    <div
+      class="field custom"
+      class:editing={customFieldEditing[i]}
+      onfocusin={() => (customFieldEditing[i] = true)}
+      onfocusout={(e) => {
+        // @ts-ignore
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          customFieldEditing[i] = false;
+        }
+      }}
+    >
+      <!-- Field name input -->
+      <input
+        type="text"
+        placeholder="Field name"
+        bind:value={customFields[i].name}
+      />
+
+      <!-- Value row: input and icons -->
+      <div class="value-row">
+        <input
+          type="text"
+          placeholder="Value"
+          bind:value={customFields[i].value}
+          onkeydown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              applyToFile(customFields[i].name, customFields[i].value);
+            }
+          }}
+        />
+        {#if customFieldEditing[i]}
+          <div class="field-actions" style="position: static; transform: none;">
+            <!-- File button -->
+            <button
+              class="icon-btn"
+              title="Apply to this file only"
+              onclick={() =>
+                applyToFile(customFields[i].name, customFields[i].value)}
+            >
+              <!-- File icon SVG -->
+              <svg
+                width="14"
+                height="16"
+                viewBox="0 0 14 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                  fill="currentColor"
+                  fill-opacity="0.7"
+                />
+                <path
+                  d="M10 1L12 3H10V1Z"
+                  fill="currentColor"
+                  fill-opacity="0.7"
+                />
+              </svg>
+            </button>
+            <!-- Folder button -->
+            <HoldButton
+              variant="icon"
+              duration={800}
+              onConfirm={() =>
+                applyToFolder(customFields[i].name, customFields[i].value)}
+              title={applyToSubfolders
+                ? "Hold to apply to all files in folder (including subfolders)"
+                : "Hold to apply to all files in folder (same level only)"}
+            >
+              <svg
                 width="16"
                 height="16"
                 viewBox="0 0 16 16"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
-            >
+              >
                 <path
-                    d="M13 4L6 11L3 8"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
+                  d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
+                  fill="currentColor"
+                  fill-opacity="0.9"
                 />
-            </svg>
-            Apply All Changes
-        </button>
+              </svg>
+            </HoldButton>
+          </div>
+        {/if}
+      </div>
     </div>
-    <LyricsEditorModal
-        isOpen={showSyncedLyricsModal}
-        onClose={() => (showSyncedLyricsModal = false)}
-        {filePath}
-        initialLyrics={syncedLyricsData.lyrics}
-        initialTimestamps={syncedLyricsData.timestamps}
-        trackInfo={{
-            title: metadata.title,
-            artist: metadata.artist,
-            album: metadata.album,
-        }}
-        onSave={handleSyncedLyricsSave}
-    />
+  {/each}
+
+  <!-- Lyrics Modal -->
+  {#if showUnsyncedLyricsModal}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="lyrics-modal-overlay" onclick={closeUnsyncedLyricsModal}>
+      <div class="lyrics-modal" onclick={stopPropagation}>
+        <div class="lyrics-modal-header">
+          <h3>Edit Unsynced Lyrics</h3>
+          <button
+            title="Close"
+            class="modal-close-btn"
+            onclick={closeUnsyncedLyricsModal}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 4L4 12M4 4L12 12"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div class="lyrics-modal-content">
+          <!-- svelte-ignore a11y_autofocus -->
+          <textarea
+            bind:value={lyricsModalContent}
+            placeholder="Enter unsynced lyrics here..."
+            class="lyrics-textarea"
+            autofocus></textarea>
+        </div>
+
+        <div class="lyrics-modal-footer">
+          <button class="cancel-btn" onclick={closeUnsyncedLyricsModal}>
+            Cancel
+          </button>
+          <div class="save-actions">
+            <button
+              class="save-btn"
+              onclick={saveUnsyncedLyrics}
+              title="Save to this file only"
+            >
+              <svg
+                width="14"
+                height="16"
+                viewBox="0 0 14 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                  fill="currentColor"
+                  fill-opacity="0.7"
+                />
+                <path
+                  d="M10 1L12 3H10V1Z"
+                  fill="currentColor"
+                  fill-opacity="0.7"
+                />
+              </svg>
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Full-size image modal -->
+  {#if showFullImage && metadata.picture}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div role="img" class="full-image-modal" onclick={closeFullImage}>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+        <button class="modal-close-btn" title="Close" onclick={closeFullImage}>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M15 5L5 15M5 5L15 15"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <img src={metadata.picture} alt="Full size cover art" />
+      </div>
+    </div>
+  {/if}
+  <div class="batch-actions">
+    <button class="batch-apply-btn" onclick={applyAllChanges}>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M13 4L6 11L3 8"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      Apply All Changes
+    </button>
+  </div>
+  <LyricsEditorModal
+    isOpen={showSyncedLyricsModal}
+    onClose={() => (showSyncedLyricsModal = false)}
+    {filePath}
+    initialLyrics={syncedLyricsData.lyrics}
+    initialTimestamps={syncedLyricsData.timestamps}
+    trackInfo={{
+      title: metadata.title,
+      artist: metadata.artist,
+      album: metadata.album,
+    }}
+    onSave={handleSyncedLyricsSave}
+  />
 </div>
 
 <style>
-    .metadata-editor {
-        height: 100%;
-        overflow-y: auto;
-        padding: 16px;
-        box-sizing: border-box;
-    }
-
-    input:focus,
-    textarea:focus {
-        outline: none;
-        border-color: var(
-            --color-primary
-        ) !important; /* !important to override any existing border-color */
-    }
-
-    .filename-badge {
-        font-size: 13px;
-        color: #888;
-        margin-bottom: 16px;
-        text-align: center;
-        max-width: 100%;
-        word-break: break-all;
-        white-space: normal; /* Allow wrapping */
-        overflow: visible; /* Don't truncate */
-        background: rgba(0, 0, 0, 0.03);
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-
-    /* Stack fields vertically */
-    .fields-stack {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        margin-bottom: 24px;
-    }
-
-    .field {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        width: 100%;
-        position: relative;
-        padding: 2px 0; /* Add small padding for hover area */
-    }
-
-    .field label {
-        font-size: 12px;
-        font-weight: 500;
-        color: #666;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .input-wrapper {
-        position: relative;
-        display: flex;
-        align-items: center;
-        flex: 1; /* Take remaining space */
-        min-width: 0; /* Prevent overflow */
-        width: 100%;
-    }
-
-    /* Base input styles */
-    .input-wrapper input,
-    .input-wrapper textarea,
-    .field.custom input {
-        width: 100%;
-        padding: 8px 10px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
-        background: white;
-        box-sizing: border-box;
-    }
-
-    /* Make space for icons when editing a standard field */
-    .field.editing input,
-    .field.editing textarea {
-        padding-right: 70px;
-    }
-
-    .input-wrapper textarea {
-        resize: vertical;
-        min-height: 60px;
-    }
-
-    /* Adjust padding when editing to make room for action buttons */
-    .field.editing .input-wrapper input,
-    .field.editing .input-wrapper textarea {
-        padding-right: 70px;
-    }
-
-    .field-actions {
-        position: absolute;
-        right: 4px;
-        top: 50%;
-        transform: translateY(-50%);
-        display: flex;
-        gap: 2px;
-        background: white;
-        padding: 2px;
-        border-radius: 4px;
-        z-index: 10;
-    }
-
-    /* For textareas, align icons to the top */
-    .textarea-actions {
-        top: 12px;
-        transform: none;
-    }
-
-    .icon-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 4px;
-        color: #666;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-    }
-
-    .icon-btn:hover {
-        background: rgba(0, 0, 0, 0.1);
-        color: var(--color-primary);
-    }
-
-    .other-section {
-        margin-top: 20px;
-        border-top: 1px solid #eee;
-        padding-top: 16px;
-    }
-
-    .collapse-toggle {
-        background: none;
-        border: none;
-        color: var(--color-primary);
-        font-weight: 600;
-        font-size: 14px;
-        cursor: pointer;
-        padding: 4px 0;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-
-    .other-fields {
-        margin-top: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-    }
-
-    /* Custom field container */
-    .field.custom {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-top: 16px;
-        margin-bottom: 16px;
-        width: 100%;
-    }
-
-    .add-field-btn {
-        background: transparent;
-        border: 1px dashed var(--color-primary);
-        color: var(--color-primary);
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 13px;
-        cursor: pointer;
-        margin-top: 20px;
-        width: 100%;
-    }
-
-    .add-field-btn:hover {
-        background: var(--color-primary-transparent);
-    }
-
-    /* Value row: flex container for input + icons */
-    .value-row {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        width: 100%;
-    }
-
-    /* Value input takes all available space */
-    .value-row input {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .lyrics-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 16px;
-    }
-
-    .action-btn {
-        background: transparent;
-        border: 1px solid var(--color-primary);
-        color: var(--color-primary);
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 13px;
-        cursor: pointer;
-        flex: 1;
-    }
-
-    .action-btn:hover {
-        background: var(--color-primary-transparent);
-    }
-
-    .cover-art-container {
-        position: relative;
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        max-width: 200px;
-        margin: 0 auto 20px;
-    }
-
-    .cover-art {
-        width: 100%;
-        height: 100%;
-        border-radius: 8px;
-        overflow: hidden;
-        background: #f0f0f0;
-        position: relative;
-    }
-
-    .cover-art-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 0;
-        transition: opacity 0.2s;
-        border-radius: 8px;
-    }
-
-    .cover-art:hover .cover-art-overlay,
-    .cover-art.editing .cover-art-overlay {
-        opacity: 1;
-    }
-
-    .cover-art-actions {
-        display: flex;
-        gap: 8px;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .cover-art-actions .icon-btn {
-        background: white;
-        border-radius: 4px;
-        padding: 8px;
-        color: #333;
-        border: none;
-        cursor: pointer;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-    }
-
-    .cover-art-actions .icon-btn:hover {
-        background: var(--color-primary);
-        color: white;
-    }
-
-    .cover-art-actions .icon-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .cover-art-actions .icon-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .cover-art-actions .icon-btn svg {
-        width: 14px;
-        height: 16px;
-        display: block;
-    }
-
-    .uploading-indicator {
-        color: white;
-        font-size: 14px;
-        background: rgba(0, 0, 0, 0.7);
-        padding: 8px 16px;
-        border-radius: 4px;
-    }
-
-    .editor-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 16px;
-        gap: 8px;
-    }
-
-    .filename-badge {
-        font-size: 13px;
-        color: #888;
-        text-align: center;
-        word-break: break-all;
-        white-space: normal;
-        background: rgba(0, 0, 0, 0.03);
-        padding: 4px 8px;
-        border-radius: 4px;
-        flex: 1;
-        margin-bottom: 0; /* Override the previous margin */
-    }
-
-    /* Adjust padding for 3 icons */
-    .field.editing input,
-    .field.editing textarea {
-        padding-right: 100px; /* Slightly larger for 3 icons */
-    }
-
-    /* Make space for the delete button on the left */
-    .input-wrapper input,
-    .input-wrapper textarea {
-        width: 100%;
-        padding-left: 10px; /* Normal padding */
-    }
-
-    .cover-art-expand {
-        position: absolute;
-        top: 8px;
-        left: 8px;
-        z-index: 15;
-    }
-
-    .cover-art-expand .icon-btn {
-        background: white;
-        border-radius: 4px;
-        padding: 8px;
-        color: #333;
-        border: none;
-        cursor: pointer;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: none;
-        backdrop-filter: none;
-    }
-
-    .cover-art-expand .icon-btn:hover {
-        background: var(--color-primary);
-        color: white;
-    }
-
-    .cover-art-expand .icon-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
-    .cover-art-expand .icon-btn svg {
-        width: 14px;
-        height: 16px;
-        display: block;
-    }
-
-    /* Full image modal - updated */
-    .full-image-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.95);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        cursor: pointer;
-        animation: fadeIn 0.2s ease;
-        padding-bottom: 60px; /* Move image up to avoid player */
-    }
-
-    .modal-content {
-        position: relative;
-        max-width: 90vw;
-        max-height: 85vh;
-        animation: scaleIn 0.2s ease;
-        margin-top: -20px; /* Fine-tune vertical position */
-    }
-
-    .modal-content img {
-        max-width: 100%;
-        max-height: 85vh;
-        object-fit: contain;
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    }
-
-    .modal-close-btn {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        width: 36px;
-        height: 36px;
-        transition: all 0.2s;
-        backdrop-filter: blur(4px);
-        z-index: 10001;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 4px;
-        color: #666;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-    }
-
-    .modal-close-btn:hover {
-        background: rgba(0, 0, 0, 0.1);
-        color: var(--color-primary);
-        border-color: rgba(255, 255, 255, 0.4);
-        transform: scale(1.05);
-    }
-
-    .modal-close-btn svg {
-        width: 18px;
-        height: 18px;
-        stroke: currentColor;
-        stroke-width: 2.2;
-    }
-
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-        }
-        to {
-            opacity: 1;
-        }
-    }
-
-    @keyframes scaleIn {
-        from {
-            transform: scale(0.95);
-        }
-        to {
-            transform: scale(1);
-        }
-    }
-
-    /* Lyrics Modal */
-    .lyrics-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.7);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        animation: fadeIn 0.2s ease;
-    }
-
-    .lyrics-modal {
-        background: white;
-        border-radius: 8px;
-        width: 90%;
-        max-width: 700px;
-        height: 70vh;
-        max-height: 600px;
-        display: flex;
-        flex-direction: column;
-        animation: scaleIn 0.2s ease;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .lyrics-modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px 20px;
-        border-bottom: 1px solid #eee;
-    }
-
-    .lyrics-modal-header h3 {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: #333;
-    }
-
-    .lyrics-modal-content {
-        padding: 20px;
-        overflow-y: hidden;
-        flex: 1;
-        display: flex;
-        min-height: 0; /* Critical for flex children to respect container height */
-    }
-
-    .lyrics-textarea {
-        width: 100%;
-        height: 100%; /* Take full height of parent */
-        padding: 12px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
-        font-family: inherit;
-        resize: vertical;
-        box-sizing: border-box;
-        overflow-y: auto;
-        max-height: 100%; /* Ensure it doesn't exceed parent */
-    }
-
-    .lyrics-textarea:focus {
-        outline: none;
-        border-color: var(--color-primary);
-    }
-
-    .lyrics-modal-footer {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 12px;
-        padding: 16px 20px;
-        border-top: 1px solid #eee;
-    }
-
-    .cancel-btn {
-        background: transparent;
-        border: 1px solid #ddd;
-        color: #666;
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 13px;
-        cursor: pointer;
-    }
-
-    .cancel-btn:hover {
-        background: rgba(0, 0, 0, 0.05);
-    }
-
-    .save-actions {
-        display: flex;
-        gap: 4px;
-    }
-
-    .save-btn {
-        background: transparent;
-        border: 1px solid var(--color-primary);
-        color: var(--color-primary);
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 13px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .save-btn:hover {
-        background: var(--color-primary-transparent);
-        color: var(--color-primary);
-    }
-
-    .save-btn svg {
-        width: 14px;
-        height: 16px;
-    }
-
-    .batch-actions {
-        margin-top: 24px;
-        display: flex;
-        justify-content: center;
-    }
-
-    .batch-apply-btn {
-        background: transparent;
-        border: 1px solid var(--color-primary);
-        color: var(--color-primary);
-        padding: 10px 20px;
-        border-radius: 4px;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        transition: all 0.2s;
-        width: 100%;
-    }
-
-    .batch-apply-btn:hover {
-        background: var(--color-primary-transparent);
-        transform: none;
-        box-shadow: none;
-    }
-
-    .batch-apply-btn svg {
-        stroke: var(--color-primary);
-        width: 16px;
-        height: 16px;
-    }
-
-    .operation-controls {
-        display: flex;
-        gap: 16px;
-        margin-bottom: 16px;
-        padding: 8px 12px;
-        background: rgba(0, 0, 0, 0.02);
-        border-radius: 4px;
-        border-left: 2px solid var(--color-primary);
-        flex-wrap: wrap;
-    }
-
-    .readonly-banner {
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        margin-bottom: 16px;
-        padding: 8px 12px;
-        border-radius: 4px;
-        border-left: 2px solid #d9a406;
-        background: rgba(217, 164, 6, 0.12);
-        color: #8a6d3b;
-        font-size: 12px;
-        line-height: 1.45;
-    }
-
-    .readonly-badge {
-        flex-shrink: 0;
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        padding: 2px 6px;
-        border-radius: 3px;
-        background: rgba(217, 164, 6, 0.2);
-    }
-
-    .metadata-editor.readonly .input-wrapper input,
-    .metadata-editor.readonly .input-wrapper textarea {
-        cursor: default;
-        color: #777;
-        background: rgba(0, 0, 0, 0.02);
-    }
-
-    .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        color: #666;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-
-    .checkbox-label input[type="checkbox"] {
-        margin: 0;
-        cursor: pointer;
-        accent-color: var(--color-primary-dark);
-        width: 14px;
-        height: 14px;
-    }
-
-    /* Dirty field indicator styles */
-    .field.dirty label {
-        position: relative;
-    }
-
-    .field.dirty label::after {
-        content: "●";
-        color: var(--color-primary);
-        font-size: 12px;
-        margin-left: 6px;
-        display: inline-block;
-        animation: pulse 1.5s ease-in-out;
-    }
-
-    /* Dark mode adjustments */
-    :global(body.dark) .filename-badge {
-        background: rgba(255, 255, 255, 0.1);
-        color: #ccc;
-    }
-
-    :global(body.dark) .readonly-banner {
-        background: rgba(217, 164, 6, 0.16);
-        color: #e0c168;
-    }
-
-    :global(body.dark) .readonly-badge {
-        background: rgba(217, 164, 6, 0.25);
-    }
-
-    :global(body.dark) .metadata-editor.readonly .input-wrapper input,
-    :global(body.dark) .metadata-editor.readonly .input-wrapper textarea {
-        color: #aaa;
-        background: rgba(255, 255, 255, 0.04);
-    }
-
-    :global(body.dark) .field label {
-        color: #aaa;
-    }
-
-    :global(body.dark) .input-wrapper input,
-    :global(body.dark) .input-wrapper textarea,
-    :global(body.dark) .field.custom input {
-        background: #3d3d3d;
-        border-color: #555;
-        color: #e0e0e0;
-    }
-
-    :global(body.dark) .field-actions {
-        background: #3d3d3d;
-    }
-
-    :global(body.dark) .icon-btn {
-        color: #aaa;
-    }
-
-    :global(body.dark) .icon-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .other-section {
-        border-color: #444;
-    }
-
-    :global(body.dark) .collapse-toggle {
-        color: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .add-field-btn {
-        border-color: var(--color-primary-dark);
-        color: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .add-field-btn:hover {
-        background: var(--color-primary-transparent-dark);
-    }
-
-    :global(body.dark) .action-btn {
-        border-color: var(--color-primary-dark);
-        color: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .action-btn:hover {
-        background: var(--color-primary-transparent-dark);
-    }
-
-    :global(body.dark) .cover-art-actions .icon-btn {
-        background: #3d3d3d;
-        color: #e0e0e0;
-    }
-
-    :global(body.dark) .cover-art-actions .icon-btn:hover {
-        background: var(--color-primary-dark);
-        color: white;
-    }
-
-    :global(body.dark) .cover-art-expand .icon-btn {
-        background: #3d3d3d;
-        color: #e0e0e0;
-    }
-
-    :global(body.dark) .cover-art-expand .icon-btn:hover {
-        background: var(--color-primary-dark);
-        color: white;
-    }
-
-    :global(body.dark) .lyrics-modal {
-        background: #2d2d2d;
-        border-color: #444;
-    }
-
-    :global(body.dark) .lyrics-modal-header {
-        border-color: #444;
-    }
-
-    :global(body.dark) .lyrics-modal-header h3 {
-        color: #e0e0e0;
-    }
-
-    :global(body.dark) .modal-close-btn {
-        border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    :global(body.dark) .modal-close-btn:hover {
-        background: rgba(0, 0, 0, 0.1);
-        color: var(--color-primary-dark);
-        border-color: rgba(255, 255, 255, 0.4);
-        transform: scale(1.05);
-    }
-
-    :global(body.dark) .lyrics-textarea {
-        background: #3d3d3d;
-        border-color: #555;
-        color: #e0e0e0;
-    }
-
-    :global(body.dark) .lyrics-modal-footer {
-        border-color: #444;
-    }
-
-    :global(body.dark) .cancel-btn {
-        border-color: #555;
-        color: #aaa;
-    }
-
-    :global(body.dark) .cancel-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-    }
-
-    :global(body.dark) .save-btn {
-        border-color: var(--color-primary-dark);
-        color: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .save-btn:hover {
-        background: var(--color-primary-transparent-dark);
-        color: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .batch-apply-btn {
-        border-color: var(--color-primary-dark);
-        color: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .batch-apply-btn:hover {
-        background: var(--color-primary-transparent-dark);
-    }
-
-    :global(body.dark) .batch-apply-btn svg {
-        stroke: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .operation-controls {
-        background: rgba(255, 255, 255, 0.05);
-        border-left-color: var(--color-primary-dark);
-    }
-
-    :global(body.dark) .checkbox-label {
-        color: #aaa;
-    }
+  .metadata-editor {
+    height: 100%;
+    overflow-y: auto;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  input:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(
+      --color-primary
+    ) !important; /* !important to override any existing border-color */
+  }
+
+  .filename-badge {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 16px;
+    text-align: center;
+    max-width: 100%;
+    word-break: break-all;
+    white-space: normal; /* Allow wrapping */
+    overflow: visible; /* Don't truncate */
+    background: rgba(0, 0, 0, 0.03);
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  /* Stack fields vertically */
+  .fields-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    position: relative;
+    padding: 2px 0; /* Add small padding for hover area */
+  }
+
+  .field label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1; /* Take remaining space */
+    min-width: 0; /* Prevent overflow */
+    width: 100%;
+  }
+
+  /* Base input styles */
+  .input-wrapper input,
+  .input-wrapper textarea,
+  .field.custom input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background: white;
+    box-sizing: border-box;
+  }
+
+  /* Make space for icons when editing a standard field */
+  .field.editing input,
+  .field.editing textarea {
+    padding-right: 70px;
+  }
+
+  .input-wrapper textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  /* Adjust padding when editing to make room for action buttons */
+  .field.editing .input-wrapper input,
+  .field.editing .input-wrapper textarea {
+    padding-right: 70px;
+  }
+
+  .field-actions {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 2px;
+    background: white;
+    padding: 2px;
+    border-radius: 4px;
+    z-index: 10;
+  }
+
+  /* For textareas, align icons to the top */
+  .textarea-actions {
+    top: 12px;
+    transform: none;
+  }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+
+  .icon-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--color-primary);
+  }
+
+  .other-section {
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 16px;
+  }
+
+  .collapse-toggle {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .other-fields {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Custom field container */
+  .field.custom {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    width: 100%;
+  }
+
+  .add-field-btn {
+    background: transparent;
+    border: 1px dashed var(--color-primary);
+    color: var(--color-primary);
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 20px;
+    width: 100%;
+  }
+
+  .add-field-btn:hover {
+    background: var(--color-primary-transparent);
+  }
+
+  /* Value row: flex container for input + icons */
+  .value-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+  }
+
+  /* Value input takes all available space */
+  .value-row input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .lyrics-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .action-btn {
+    background: transparent;
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    flex: 1;
+  }
+
+  .action-btn:hover {
+    background: var(--color-primary-transparent);
+  }
+
+  .cover-art-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-width: 200px;
+    margin: 0 auto 20px;
+  }
+
+  .cover-art {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f0f0f0;
+    position: relative;
+  }
+
+  .cover-art-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    border-radius: 8px;
+  }
+
+  .cover-art:hover .cover-art-overlay,
+  .cover-art.editing .cover-art-overlay {
+    opacity: 1;
+  }
+
+  .cover-art-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .cover-art-actions .icon-btn {
+    background: white;
+    border-radius: 4px;
+    padding: 8px;
+    color: #333;
+    border: none;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .cover-art-actions .icon-btn:hover {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .cover-art-actions .icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .cover-art-actions .icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .cover-art-actions .icon-btn svg {
+    width: 14px;
+    height: 16px;
+    display: block;
+  }
+
+  .uploading-indicator {
+    color: white;
+    font-size: 14px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 16px;
+    border-radius: 4px;
+  }
+
+  .editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 8px;
+  }
+
+  .filename-badge {
+    font-size: 13px;
+    color: #888;
+    text-align: center;
+    word-break: break-all;
+    white-space: normal;
+    background: rgba(0, 0, 0, 0.03);
+    padding: 4px 8px;
+    border-radius: 4px;
+    flex: 1;
+    margin-bottom: 0; /* Override the previous margin */
+  }
+
+  /* Adjust padding for 3 icons */
+  .field.editing input,
+  .field.editing textarea {
+    padding-right: 100px; /* Slightly larger for 3 icons */
+  }
+
+  /* Make space for the delete button on the left */
+  .input-wrapper input,
+  .input-wrapper textarea {
+    width: 100%;
+    padding-left: 10px; /* Normal padding */
+  }
+
+  .cover-art-expand {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 15;
+  }
+
+  .cover-art-expand .icon-btn {
+    background: white;
+    border-radius: 4px;
+    padding: 8px;
+    color: #333;
+    border: none;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .cover-art-expand .icon-btn:hover {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .cover-art-expand .icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .cover-art-expand .icon-btn svg {
+    width: 14px;
+    height: 16px;
+    display: block;
+  }
+
+  /* Full image modal - updated */
+  .full-image-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    cursor: pointer;
+    animation: fadeIn 0.2s ease;
+    padding-bottom: 60px; /* Move image up to avoid player */
+  }
+
+  .modal-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 85vh;
+    animation: scaleIn 0.2s ease;
+    margin-top: -20px; /* Fine-tune vertical position */
+  }
+
+  .modal-content img {
+    max-width: 100%;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .modal-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    transition: all 0.2s;
+    backdrop-filter: blur(4px);
+    z-index: 10001;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+
+  .modal-close-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--color-primary);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+  }
+
+  .modal-close-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    stroke-width: 2.2;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      transform: scale(0.95);
+    }
+    to {
+      transform: scale(1);
+    }
+  }
+
+  /* Lyrics Modal */
+  .lyrics-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .lyrics-modal {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 700px;
+    height: 70vh;
+    max-height: 600px;
+    display: flex;
+    flex-direction: column;
+    animation: scaleIn 0.2s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .lyrics-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #eee;
+  }
+
+  .lyrics-modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .lyrics-modal-content {
+    padding: 20px;
+    overflow-y: hidden;
+    flex: 1;
+    display: flex;
+    min-height: 0; /* Critical for flex children to respect container height */
+  }
+
+  .lyrics-textarea {
+    width: 100%;
+    height: 100%; /* Take full height of parent */
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+    overflow-y: auto;
+    max-height: 100%; /* Ensure it doesn't exceed parent */
+  }
+
+  .lyrics-textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .lyrics-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid #eee;
+  }
+
+  .cancel-btn {
+    background: transparent;
+    border: 1px solid #ddd;
+    color: #666;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .cancel-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  .save-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .save-btn {
+    background: transparent;
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .save-btn:hover {
+    background: var(--color-primary-transparent);
+    color: var(--color-primary);
+  }
+
+  .save-btn svg {
+    width: 14px;
+    height: 16px;
+  }
+
+  .batch-actions {
+    margin-top: 24px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .batch-apply-btn {
+    background: transparent;
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    width: 100%;
+  }
+
+  .batch-apply-btn:hover {
+    background: var(--color-primary-transparent);
+    transform: none;
+    box-shadow: none;
+  }
+
+  .batch-apply-btn svg {
+    stroke: var(--color-primary);
+    width: 16px;
+    height: 16px;
+  }
+
+  .operation-controls {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 4px;
+    border-left: 2px solid var(--color-primary);
+    flex-wrap: wrap;
+  }
+
+  .readonly-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border-left: 2px solid #d9a406;
+    background: rgba(217, 164, 6, 0.12);
+    color: #8a6d3b;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .readonly-badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(217, 164, 6, 0.2);
+  }
+
+  .metadata-editor.readonly .input-wrapper input,
+  .metadata-editor.readonly .input-wrapper textarea {
+    cursor: default;
+    color: #777;
+    background: rgba(0, 0, 0, 0.02);
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--color-primary-dark);
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Dirty field indicator styles */
+  .field.dirty label {
+    position: relative;
+  }
+
+  .field.dirty label::after {
+    content: "●";
+    color: var(--color-primary);
+    font-size: 12px;
+    margin-left: 6px;
+    display: inline-block;
+    animation: pulse 1.5s ease-in-out;
+  }
+
+  /* Dark mode adjustments */
+  :global(body.dark) .filename-badge {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+  }
+
+  :global(body.dark) .readonly-banner {
+    background: rgba(217, 164, 6, 0.16);
+    color: #e0c168;
+  }
+
+  :global(body.dark) .readonly-badge {
+    background: rgba(217, 164, 6, 0.25);
+  }
+
+  :global(body.dark) .metadata-editor.readonly .input-wrapper input,
+  :global(body.dark) .metadata-editor.readonly .input-wrapper textarea {
+    color: #aaa;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  :global(body.dark) .field label {
+    color: #aaa;
+  }
+
+  :global(body.dark) .input-wrapper input,
+  :global(body.dark) .input-wrapper textarea,
+  :global(body.dark) .field.custom input {
+    background: #3d3d3d;
+    border-color: #555;
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .field-actions {
+    background: #3d3d3d;
+  }
+
+  :global(body.dark) .icon-btn {
+    color: #aaa;
+  }
+
+  :global(body.dark) .icon-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .other-section {
+    border-color: #444;
+  }
+
+  :global(body.dark) .collapse-toggle {
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .add-field-btn {
+    border-color: var(--color-primary-dark);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .add-field-btn:hover {
+    background: var(--color-primary-transparent-dark);
+  }
+
+  :global(body.dark) .action-btn {
+    border-color: var(--color-primary-dark);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .action-btn:hover {
+    background: var(--color-primary-transparent-dark);
+  }
+
+  :global(body.dark) .cover-art-actions .icon-btn {
+    background: #3d3d3d;
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .cover-art-actions .icon-btn:hover {
+    background: var(--color-primary-dark);
+    color: white;
+  }
+
+  :global(body.dark) .cover-art-expand .icon-btn {
+    background: #3d3d3d;
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .cover-art-expand .icon-btn:hover {
+    background: var(--color-primary-dark);
+    color: white;
+  }
+
+  :global(body.dark) .lyrics-modal {
+    background: #2d2d2d;
+    border-color: #444;
+  }
+
+  :global(body.dark) .lyrics-modal-header {
+    border-color: #444;
+  }
+
+  :global(body.dark) .lyrics-modal-header h3 {
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .modal-close-btn {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  :global(body.dark) .modal-close-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--color-primary-dark);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+  }
+
+  :global(body.dark) .lyrics-textarea {
+    background: #3d3d3d;
+    border-color: #555;
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .lyrics-modal-footer {
+    border-color: #444;
+  }
+
+  :global(body.dark) .cancel-btn {
+    border-color: #555;
+    color: #aaa;
+  }
+
+  :global(body.dark) .cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  :global(body.dark) .save-btn {
+    border-color: var(--color-primary-dark);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .save-btn:hover {
+    background: var(--color-primary-transparent-dark);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .batch-apply-btn {
+    border-color: var(--color-primary-dark);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .batch-apply-btn:hover {
+    background: var(--color-primary-transparent-dark);
+  }
+
+  :global(body.dark) .batch-apply-btn svg {
+    stroke: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .operation-controls {
+    background: rgba(255, 255, 255, 0.05);
+    border-left-color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .checkbox-label {
+    color: #aaa;
+  }
 </style>
