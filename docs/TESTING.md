@@ -144,7 +144,7 @@ test. `src/test/setup.js` clears `localStorage` after every test.
 Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
 components in `src/components/__tests__/`, stores in `src/stores/__tests__/`
 and the app shell in `src/__tests__/`. As of 2026-10-27 the suite has 41 files
-and 394 tests.
+and 399 tests.
 
 `npm run test:coverage` runs the suite with `@vitest/coverage-v8` and writes a
 text summary plus HTML and LCOV reports to `frontend/coverage/`. Coverage
@@ -189,8 +189,9 @@ Covered areas:
   failed/retry states), search and clearing, file-type routing in the right
   panel, the folder overview toggle, root folder creation, keyboard rename and
   delete, logout/re-login, tree refresh events, drag-and-drop and folder-picker
-  uploads (including wheel scrolling during an internal drag), the upload
-  progress bar and the disabled-player path.
+  uploads (including wheel scrolling and edge auto-scroll during an internal
+  pointer drag, dropping on the File Browser header to move to the root, and
+  same-item drops), the upload progress bar and the disabled-player path.
 - Components: `Toast` and `ToastContainer` rendering, type styling, manual
   dismiss, auto-dismiss and store updates; `SortButton` menu, selection and
   direction; the `Login` form states, backend error and theme toggle;

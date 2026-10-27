@@ -213,23 +213,6 @@
     renamingPath.set(null);
   }
 
-  /**
-   * @param {DragEvent} e
-   */
-  function handleDragStart(e) {
-    // Store item info for internal move
-    const itemData = {
-      path: item.path,
-      type: item.type,
-      name: item.name,
-    };
-    e.dataTransfer?.setData(
-      "application/x-music-player-item",
-      JSON.stringify(itemData),
-    );
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-  }
-
   $effect(() => {
     if ($renamingPath === item.path) {
       newName = item.name;
@@ -540,9 +523,6 @@
         handleContextMenu(e);
       }}
       data-folder-path={item.path}
-      draggable={$renamingPath !== item.path}
-      // Disable dragging when renaming
-      ondragstart={handleDragStart}
     >
       <span class="toggle">
         {#if expanded.has(item.path)}
@@ -730,9 +710,6 @@
       }}
       data-file-path={item.path}
       data-folder-path={item.path.substring(0, item.path.lastIndexOf("/"))}
-      draggable={$renamingPath !== item.path}
-      // Disable dragging when renaming
-      ondragstart={handleDragStart}
     >
       <span class="file-icon">
         <!-- File icon - same for both, just different color maybe -->

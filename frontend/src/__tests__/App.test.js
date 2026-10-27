@@ -237,6 +237,9 @@ function stubApi() {
     if (url === "/api/delete") {
       return Promise.resolve(makeResponse({ success: true }));
     }
+    if (url === "/api/move") {
+      return Promise.resolve(makeResponse({ success: true }));
+    }
 
     return Promise.resolve(
       makeResponse({ error: "Not found" }, { status: 404 }),
@@ -313,8 +316,7 @@ describe("App", () => {
     isAuthenticated.set(true);
     const view = await renderAuthenticated();
     // The scroll container is the panel itself; .file-tree-container has no
-    // overflow. This is the regression check for binding the handler to the
-    // wrong element.
+    // overflow.
     const container = /** @type {HTMLElement} */ (
       view.container.querySelector(".file-tree-panel")
     );
@@ -326,31 +328,290 @@ describe("App", () => {
         scrollTop = value;
       },
     });
+    Object.defineProperty(container, "clientHeight", {
+      configurable: true,
+      value: 400,
+    });
+    Object.defineProperty(container, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
 
     // Without a drag the page keeps its normal scrolling behaviour.
     await fireEvent.wheel(container, { deltaY: 120 });
     expect(container.scrollTop).toBe(0);
 
-    const dataTransfer = {
-      // Firefox does not always expose the custom type here, so this also
-      // covers detection from the dragged tree element.
-      types: [],
-      setData: vi.fn(),
-      getData: vi.fn(() => ""),
-      effectAllowed: "",
-    };
-    await fireEvent.dragStart(node(view, "loose.flac"), { dataTransfer });
-    // A stray pointer event from the browser must not cancel the internal drag
-    // and make the wheel work only intermittently.
-    await fireEvent.pointerMove(window, { buttons: 0 });
-    await fireEvent.wheel(container, { deltaY: 120 });
+    // Internal moves are pointer-driven so the browser never enters a native
+    // drag session (Firefox drops wheel events for the whole session).
+    await fireEvent.pointerDown(node(view, "loose.flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 20,
+      clientY: 30,
+    });
+    expect(document.querySelector(".tree-drag-ghost")).not.toBeNull();
 
+    // The wheel can be dispatched at any element while the item is held; the
+    // window-level handler takes over and scrolls the tree.
+    await fireEvent.wheel(window, { deltaY: 120 });
     expect(container.scrollTop).toBe(120);
 
-    await fireEvent.dragEnd(document);
-    await fireEvent.wheel(container, { deltaY: 40 });
+    await fireEvent.wheel(container, { deltaY: 60 });
+    expect(container.scrollTop).toBe(180);
 
-    expect(container.scrollTop).toBe(120);
+    await fireEvent.pointerUp(container, {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 30,
+    });
+    expect(document.querySelector(".tree-drag-ghost")).toBeNull();
+    await fireEvent.wheel(window, { deltaY: 40 });
+
+    expect(container.scrollTop).toBe(180);
+  });
+
+  it("moves a tree item onto a folder with a pointer drag", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+
+    await fireEvent.pointerDown(node(view, "loose.flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    await fireEvent.pointerMove(node(view, "Albums"), {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 60,
+      clientY: 60,
+    });
+    await fireEvent.pointerUp(node(view, "Albums"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 60,
+      clientY: 60,
+    });
+
+    await waitFor(() => expect(callsTo("/api/move")).toHaveLength(1));
+    expect(callsTo("/api/move")[0][1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ source: "loose.flac", destination: "Albums" }),
+    });
+  });
+
+  it("warns instead of moving when an item is dropped on itself", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    const file = node(view, "loose.flac");
+
+    await fireEvent.pointerDown(file, {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    await fireEvent.pointerMove(file, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerUp(file, {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+
+    expect(
+      await screen.findByText("Cannot move an item into itself"),
+    ).toBeTruthy();
+    expect(callsTo("/api/move")).toHaveLength(0);
+  });
+
+  it("moves an item to the root when dropped on the File Browser header", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    await fireEvent.click(node(view, "Albums"));
+    const song = await waitFor(() => node(view, "Albums/song.mp3"));
+    const header = /** @type {HTMLElement} */ (
+      view.container.querySelector(".panel-header")
+    );
+
+    await fireEvent.pointerDown(song, {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 40,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 50,
+    });
+    await fireEvent.pointerMove(header, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 60,
+      clientY: 10,
+    });
+    await fireEvent.pointerUp(header, {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 60,
+      clientY: 10,
+    });
+
+    await waitFor(() => expect(callsTo("/api/move")).toHaveLength(1));
+    expect(callsTo("/api/move")[0][1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ source: "Albums/song.mp3", destination: "" }),
+    });
+  });
+
+  it("auto-scrolls the tree when a dragged item nears the bottom edge", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    const container = /** @type {HTMLElement} */ (
+      view.container.querySelector(".file-tree-panel")
+    );
+    let scrollTop = 200;
+    Object.defineProperty(container, "scrollTop", {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value) => {
+        scrollTop = value;
+      },
+    });
+    Object.defineProperty(container, "clientHeight", {
+      configurable: true,
+      value: 400,
+    });
+    Object.defineProperty(container, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    Object.defineProperty(container, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        top: 0,
+        bottom: 400,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 400,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    });
+
+    await fireEvent.pointerDown(node(view, "loose.flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 395,
+    });
+
+    await waitFor(() => expect(container.scrollTop).toBeGreaterThan(200));
+
+    await fireEvent.pointerUp(window, {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 30,
+      clientY: 395,
+    });
+  });
+
+  it("leaves the wheel alone when the tree cannot scroll", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    const container = /** @type {HTMLElement} */ (
+      view.container.querySelector(".file-tree-panel")
+    );
+    Object.defineProperty(container, "clientHeight", {
+      configurable: true,
+      value: 400,
+    });
+    Object.defineProperty(container, "scrollHeight", {
+      configurable: true,
+      value: 400,
+    });
+
+    await fireEvent.pointerDown(node(view, "loose.flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 20,
+      clientY: 30,
+    });
+    const wheel = new WheelEvent("wheel", {
+      deltaY: 120,
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(wheel);
+
+    expect(wheel.defaultPrevented).toBe(false);
   });
 
   it("shows an empty library state", async () => {
