@@ -131,7 +131,7 @@ export function parseLrc(text) {
 /**
  * Process edited text to extract timestamps and clean lyrics
  * @param {string} text - Raw lyrics text with optional timestamps
- * @returns {Object} { text: string, timestamps: string[] }
+ * @returns {{ text: string, timestamps: string[] }}
  */
 export function processEditedLyrics(text) {
   const { text: processedText, timestamps } = parseLrc(text);
@@ -211,7 +211,7 @@ export function shiftTimestamps(timestamps, offsetSeconds) {
  *
  * @param {string[]} lines - Lyric lines
  * @param {string[]} timestamps - Timestamps matching the lines
- * @param {Record<string, string>} headers
+ * @param {Record<string, string | undefined>} headers
  * @returns {string}
  */
 export function buildLrc(lines, timestamps = [], headers = {}) {

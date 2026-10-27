@@ -1,5 +1,6 @@
 <!-- src/components/LRCEditor.svelte -->
 <script>
+  // @ts-check
   import { onMount, tick } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import {
@@ -21,7 +22,26 @@
   import TimestampEditModal from "./TimestampEditModal.svelte";
   import EditModal from "./EditModal.svelte";
 
+  /**
+   * @typedef {Object} TrackInfo
+   * @property {string} [title]
+   * @property {string} [artist]
+   * @property {string} [album]
+   */
+
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [isOpen]
+   * @property {() => void} [onClose]
+   * @property {string | null} [filePath]
+   * @property {string} [initialLyrics]
+   * @property {string[]} [initialTimestamps]
+   * @property {TrackInfo} [trackInfo]
+   * @property {(payload: { lyrics: string, timestamps: string[], synchronizedLyrics: string | null, hasTimestamps: boolean }) => void} [onSave]
+   */
+
   // Props
+  /** @type {Props} */
   let {
     isOpen = false,
     onClose = () => {},
@@ -34,15 +54,15 @@
 
   // ========== STATE VARIABLES ==========
   let USLT = $state("");
-  let timestamps = $state([]);
+  let timestamps = $state(/** @type {string[]} */ ([]));
   let synchronizedLyricsText = $state("");
   let currentActiveLine = $state(-1);
 
   let currentPlaybackTime = $state(0);
 
   // Bulk timestamp tools
-  let shiftAmount = $state(0.5);
-  let lrcFileInput = $state(null);
+  let shiftAmount = $state(/** @type {number | string} */ (0.5));
+  let lrcFileInput = $state(/** @type {HTMLInputElement | null} */ (null));
 
   // For the old timestamp edit modal
   let showTimestampModal = $state(false);
@@ -57,12 +77,15 @@
   let hasInitialized = $state(false);
 
   // Track line heights for equalization
+  /** @type {SvelteMap<number, number>} */
   let lineHeights = new SvelteMap();
+  /** @type {SvelteMap<string, ResizeObserver>} */
   let resizeObservers = new SvelteMap();
 
   // ========== INITIALIZATION ==========
   function initializeFromLyrics() {
     let newUSLT = "";
+    /** @type {string[]} */
     let newTimestamps = [];
 
     if (initialLyrics && initialLyrics.trim() !== "") {
@@ -126,6 +149,9 @@
     synchronizedLyricsText = buildLrc(lines, timestamps);
   }
 
+  /**
+   * @param {number} lineIndex
+   */
   function handleLineClick(lineIndex) {
     const timestamp = timestamps[lineIndex];
     if (timestamp === "[--:--.--]") return;
@@ -138,6 +164,9 @@
     window.dispatchEvent(event);
   }
 
+  /**
+   * @param {number} currentTime
+   */
   function updateActiveLine(currentTime) {
     if (timestamps.length === 0) {
       currentActiveLine = -1;
@@ -199,9 +228,12 @@
     const lines = USLT.split("\n");
     if (lines.length === 0) return;
 
-    const debouncedEqualizeLineHeight = debounce((lineIndex) => {
-      equalizeLineHeight(lineIndex);
-    }, 50);
+    const debouncedEqualizeLineHeight = debounce(
+      (/** @type {number} */ lineIndex) => {
+        equalizeLineHeight(lineIndex);
+      },
+      50,
+    );
 
     for (let i = 0; i < lines.length; i++) {
       const timestampLine = document.getElementById(`modal-timestamp-${i}`);
@@ -220,12 +252,15 @@
     }
   }
 
+  /**
+   * @param {number} lineIndex
+   */
   function equalizeLineHeight(lineIndex) {
     const lines = [
       document.getElementById(`modal-timestamp-${lineIndex}`),
       document.getElementById(`modal-line-${lineIndex}`),
       document.getElementById(`modal-synced-${lineIndex}`),
-    ];
+    ].filter((line) => line !== null);
     const maxHeight = equalizeElementHeights(lines);
     if (maxHeight > 0) {
       const storedHeight = lineHeights.get(lineIndex) || 0;
@@ -244,7 +279,7 @@
         document.getElementById(`modal-timestamp-${i}`),
         document.getElementById(`modal-line-${i}`),
         document.getElementById(`modal-synced-${i}`),
-      ].filter(Boolean);
+      ].filter((line) => line !== null);
 
       linesToReset.forEach((line) => {
         line.style.minHeight = "";
@@ -258,13 +293,16 @@
   }
 
   // ========== TIMESTAMP EDITING USING OLD MODAL ==========
+  /**
+   * @param {number} lineIndex
+   */
   function openTimestampEditor(lineIndex) {
     const currentTimestamp = timestamps[lineIndex];
     if (currentTimestamp === "[--:--.--]") {
       // Get current playback time from player
       const event = new CustomEvent("get-current-time", {
         detail: {
-          callback: (time) => {
+          callback: (/** @type {number} */ time) => {
             editingTimestampValue = secondsToTimestamp(time).slice(1, -1);
           },
         },
@@ -283,6 +321,10 @@
     editingTimestampValue = "";
   }
 
+  /**
+   * @param {number} index
+   * @param {string} value
+   */
   function saveTimestampFromModal(index, value) {
     const newTimestamp = `[${value}]`;
     const newTimestampSeconds = parseTimestampToSeconds(newTimestamp);
@@ -354,7 +396,7 @@
 
     const event = new CustomEvent("get-current-time", {
       detail: {
-        callback: (time) => {
+        callback: (/** @type {number} */ time) => {
           const lines = USLT.split("\n");
           if (lines.length === 0) return;
 
@@ -440,7 +482,11 @@
       toast.success("Lyrics copied to clipboard");
     } catch (err) {
       console.error("Failed to copy text: ", err);
-      toast.error(`Failed to copy text: ${err.message}`);
+      toast.error(
+        `Failed to copy text: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 
@@ -462,6 +508,9 @@
     onClose();
   }
 
+  /**
+   * @param {Event} e
+   */
   function stopPropagation(e) {
     e.stopPropagation();
   }
@@ -498,6 +547,9 @@
     });
   }
 
+  /**
+   * @param {number} direction
+   */
   function applyTimestampShift(direction) {
     const amount = Math.abs(Number(shiftAmount));
     if (!Number.isFinite(amount) || amount === 0) {
@@ -532,8 +584,12 @@
     lrcFileInput?.click();
   }
 
+  /**
+   * @param {Event} event
+   */
   function handleShiftAmountInput(event) {
-    const raw = event.target.value;
+    const target = /** @type {HTMLInputElement} */ (event.target);
+    const raw = target.value;
     // Keep digits and a single decimal separator, normalise "," to "."
     const [whole, ...decimals] = raw
       .replace(/,/g, ".")
@@ -542,8 +598,8 @@
     const cleaned =
       decimals.length > 0 ? `${whole}.${decimals.join("")}` : whole;
 
-    if (event.target.value !== cleaned) {
-      event.target.value = cleaned;
+    if (target.value !== cleaned) {
+      target.value = cleaned;
     }
     shiftAmount = cleaned;
   }
@@ -553,10 +609,14 @@
     shiftAmount = Number.isFinite(value) ? value : 0;
   }
 
+  /**
+   * @param {Event} event
+   */
   async function handleLrcFileSelected(event) {
-    const file = event.target.files?.[0];
+    const target = /** @type {HTMLInputElement} */ (event.target);
+    const file = target.files?.[0];
     // Reset so selecting the same file again still fires onchange
-    event.target.value = "";
+    target.value = "";
     if (!file) return;
 
     try {
@@ -585,7 +645,9 @@
       }
     } catch (err) {
       console.error("Failed to import LRC file:", err);
-      toast.error(`Import failed: ${err.message}`);
+      toast.error(
+        `Import failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -593,10 +655,7 @@
     const title = (trackInfo?.title || "").trim();
     const artist = (trackInfo?.artist || "").trim();
     const fallback = filePath
-      ? filePath
-          .split(/[\\/]/)
-          .pop()
-          .replace(/\.[^.]+$/, "")
+      ? (filePath.split(/[\\/]/).pop() ?? filePath).replace(/\.[^.]+$/, "")
       : "lyrics";
 
     const base = title ? (artist ? `${artist} - ${title}` : title) : fallback;
@@ -646,14 +705,19 @@
       toast.success("Unsynced lyrics copied to clipboard");
     } catch (err) {
       console.error("Failed to copy text: ", err);
-      toast.error(`Failed to copy: ${err.message}`);
+      toast.error(
+        `Failed to copy: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
   // Key binds
+  /**
+   * @param {KeyboardEvent} e
+   */
   function handleKeydown(e) {
     // Ignore if focus is inside an input/textarea or content-editable
-    const target = e.target;
+    const target = /** @type {HTMLElement} */ (e.target);
     if (
       target.tagName === "INPUT" ||
       target.tagName === "TEXTAREA" ||
@@ -712,10 +776,13 @@
 
   // Listen for player time updates - using the existing player events
   onMount(() => {
+    /**
+     * @param {Event} e
+     */
     const handleTimeUpdate = (e) => {
-      const time = e.detail.time;
+      const { time } = /** @type {CustomEvent<{ time: number }>} */ (e).detail;
       currentPlaybackTime = time; // Store the current timeF
-      updateActiveLine(e.detail.time);
+      updateActiveLine(time);
     };
 
     window.addEventListener("player-time-update", handleTimeUpdate);
@@ -1134,7 +1201,6 @@
     currentValue={editingTimestampValue}
     currentTime={currentPlaybackTime}
     {timestamps}
-    {USLT}
     onClose={closeTimestampModal}
     onSave={saveTimestampFromModal}
   />
