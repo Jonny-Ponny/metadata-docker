@@ -135,11 +135,14 @@ opt-in. Components annotate their `$props()` destructuring with a JSDoc
 boundaries. Prefer annotating or narrowing a value over suppressing the error.
 
 `frontend/vitest.config.js` uses a jsdom environment, picks up
-`src/**/*.test.js`, and registers the Svelte plugin for the component tests that
-come next. `src/test/setup.js` clears `localStorage` after every test.
+`src/**/*.test.js`, and registers the Svelte plugin plus
+`@testing-library/svelte`'s `svelteTesting()` plugin for the component tests.
+The plugin resolves Svelte's browser build and runs the DOM cleanup after every
+test. `src/test/setup.js` clears `localStorage` after every test.
 
-Tests live next to the code they cover in `src/utils/__tests__/`. There is no
-frontend coverage report yet.
+Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
+components in `src/components/__tests__/`. There is no frontend coverage report
+yet.
 
 Covered areas:
 
@@ -152,10 +155,18 @@ Covered areas:
   free-space preflight, byte/duration formatting and the XHR upload request
   (progress, success, HTTP/network/timeout/abort failures).
 - API error parsing and the cached `/api/version` request.
+- Components: `Toast` rendering, type styling, manual dismiss and the
+  auto-dismiss timer.
 
 Conventions:
 
-- Import the utility directly; do not go through the `utils/index.js` barrel.
+- Import the utility or component directly; do not go through the
+  `utils/index.js` barrel.
+- Render components with `render(Component, { props })` from
+  `@testing-library/svelte` and query by role or label, not by CSS class,
+  unless the class is the behaviour under test.
+- Use fake timers for components that schedule work in `onMount`; advance them
+  with `await vi.advanceTimersByTimeAsync()` so Svelte flushes the update.
 - Stub browser globals with `vi.stubGlobal()` and restore them in `afterEach`.
 - Reset modules with `vi.resetModules()` before testing module-level caches
   such as `version.utils.js`.

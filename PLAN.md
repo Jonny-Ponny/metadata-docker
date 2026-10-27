@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-03`, `B-32`. Next:
-  `T-04`, `B-33`.
+- IDs are permanent and never reused. Last used: `T-04`, `B-32`. Next:
+  `T-05`, `B-33`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -105,8 +105,9 @@ The frontend has a Vitest suite over the first pure utilities, ESLint,
 Prettier and `svelte-check` with full `checkJs` type checking in CI. Remaining,
 in this order:
 
-- Component tests for the editor, upload tray and context menu once the
-  utilities are covered, and coverage for the remaining stores and utilities.
+- **T-04 (P2)** - Component tests for the editor, upload tray and context menu
+  once the utilities are covered, and coverage for the remaining stores and
+  utilities. Started with the test harness and the `Toast` component.
 - A UI bug pass once the checks and tests exist, so fixes can be pinned by a
   regression test.
 
