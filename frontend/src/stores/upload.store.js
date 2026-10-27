@@ -1,3 +1,4 @@
+// @ts-check
 // src/stores/upload.store.js
 
 // Upload queue for drag-and-drop and the folder picker.
@@ -27,6 +28,7 @@ import {
   uploadWithProgress,
 } from "../utils/upload.utils.js";
 
+/** @type {UploadState} */
 const initialState = {
   // idle | preparing (reading the drop) | blocked | running | cancelling
   // | refreshing (reloading the tree after the bytes are saved) | done
@@ -53,18 +55,97 @@ const initialState = {
   conflict: UPLOAD_CONFLICT_SKIP_IDENTICAL,
 };
 
+/**
+ * @typedef {"idle" | "preparing" | "blocked" | "running" | "cancelling" | "refreshing" | "done"} UploadPhase
+ */
+
+/**
+ * @typedef {Object} SpaceProblem
+ * @property {string} target
+ * @property {number} needed
+ * @property {number} free
+ * @property {string} message
+ */
+
+/**
+ * @typedef {Object} UploadFailure
+ * @property {string} name
+ * @property {string} reason
+ * @property {boolean} retryable
+ * @property {File} file
+ * @property {string} relativePath
+ * @property {string} targetPath
+ */
+
+/**
+ * @typedef {Object} UploadItem
+ * @property {File} file
+ * @property {string} relativePath
+ * @property {string} targetPath
+ */
+
+/**
+ * @typedef {Object} UploadState
+ * @property {UploadPhase} phase
+ * @property {number} totalBytes
+ * @property {number} doneBytes
+ * @property {number} totalFiles
+ * @property {number} doneFiles
+ * @property {number} scanFiles
+ * @property {number} scanBytes
+ * @property {number} uploaded
+ * @property {number} skipped
+ * @property {number} failed
+ * @property {number} queued
+ * @property {string} currentName
+ * @property {UploadFailure[]} failures
+ * @property {{ problems: SpaceProblem[] } | null} blocked
+ * @property {string} message
+ * @property {number} bytesPerSecond
+ * @property {boolean} fatal
+ * @property {string} conflict
+ */
+
+/**
+ * One queued drop, before it is split into items and failures.
+ * @typedef {Object} BatchOptions
+ * @property {FileSystemEntry[]} [entries]
+ * @property {File[]} [files]
+ * @property {string} [targetPath]
+ * @property {Map<string, number | undefined>} [existing]
+ * @property {string} [conflict]
+ * @property {(() => Promise<void>) | null} [onComplete]
+ */
+
+/**
+ * A started drop, kept while the free-space prompt is open.
+ * @typedef {Object} Batch
+ * @property {UploadItem[]} items
+ * @property {string} conflict
+ * @property {number} skipped
+ * @property {number} totalBytes
+ * @property {UploadFailure[]} failures
+ */
+
 export const upload = writable({ ...initialState });
 
 // ========== MODULE-LEVEL RUNTIME ==========
 let running = false;
 let cancelled = false;
 let fatal = false;
+/** @type {Map<string, Promise<string>>} */
 let ensuredDirs = new Map();
+/** @type {AbortController | null} */
 let activeController = null;
+/** @type {AbortController | null} */
 let scanController = null;
+/** @type {BatchOptions[]} */
 let queuedBatches = [];
+/** @type {Batch | null} */
 let pendingBlock = null;
+/** @type {(() => Promise<void>) | null} */
 let lastOnComplete = null;
+/** @type {ReturnType<typeof setInterval> | null} */
 let speedTimer = null;
 let lastSample = { bytes: 0, time: 0 };
 let lastScanReport = 0;
@@ -81,6 +162,9 @@ export async function loadUploadLimit() {
   return maxUploadBytes;
 }
 
+/**
+ * @param {Partial<UploadState>} patch
+ */
 function updateState(patch) {
   upload.update((state) => ({ ...state, ...patch }));
 }
@@ -88,6 +172,8 @@ function updateState(patch) {
 /**
  * Queue a drop. Additional drops while an upload is running are queued and
  * started once the current batch finishes.
+ *
+ * @param {BatchOptions} [options]
  */
 export async function startDrop({
   entries = [],
@@ -115,6 +201,9 @@ export async function startDrop({
   await runBatch(options);
 }
 
+/**
+ * @param {BatchOptions} options
+ */
 async function runBatch(options) {
   running = true;
   cancelled = false;
@@ -122,7 +211,7 @@ async function runBatch(options) {
   sessionExpired = false;
   ensuredDirs = new Map();
   pendingBlock = null;
-  lastOnComplete = options.onComplete;
+  lastOnComplete = options.onComplete ?? null;
 
   const {
     entries = [],
@@ -160,7 +249,8 @@ async function runBatch(options) {
         updateState({ scanFiles: found, scanBytes: bytes });
       },
     });
-  } catch (error) {
+  } catch (caught) {
+    const error = asUploadError(caught);
     scanController = null;
     if (cancelled || error.name === "AbortError") {
       await finishBatch("Upload cancelled.");
@@ -183,7 +273,9 @@ async function runBatch(options) {
 
   // Split the drop into files to send, identical files to skip and files that
   // can never succeed because they exceed the per-request limit.
+  /** @type {UploadItem[]} */
   const items = [];
+  /** @type {UploadFailure[]} */
   const failures = [];
   let skipped = 0;
   let totalBytes = 0;
@@ -289,6 +381,9 @@ export async function proceedAnyway() {
   await continueBatch(batch);
 }
 
+/**
+ * @param {Batch} batch
+ */
 async function continueBatch({
   items,
   conflict,
@@ -329,15 +424,29 @@ function uploadState() {
   return get(upload);
 }
 
+/**
+ * @param {unknown} error
+ * @returns {import("../utils/upload.utils.js").UploadError}
+ */
+function asUploadError(error) {
+  return /** @type {import("../utils/upload.utils.js").UploadError} */ (error);
+}
+
+/**
+ * @param {UploadItem[]} items
+ * @param {string} conflict
+ */
 async function runQueue(items, conflict) {
   const queue = items.slice();
   // Per-file high-water marks. Bytes are never removed, so the bar cannot
   // jump back when a file completes (its partial is replaced by its final
   // size) or when a retry restarts the request from zero.
+  /** @type {Map<UploadItem, number>} */
   const itemBytes = new Map();
   let peakDoneBytes = 0;
 
-  activeController = new AbortController();
+  const controller = new AbortController();
+  activeController = controller;
 
   const publishProgress = () => {
     let processed = 0;
@@ -351,6 +460,11 @@ async function runQueue(items, conflict) {
     updateState({ doneBytes });
   };
 
+  /**
+   * @param {UploadItem} item
+   * @param {string} reason
+   * @param {boolean} retryable
+   */
   const recordFailure = (item, reason, retryable) => {
     // Keep the bytes this file already transmitted. The bar tracks processed
     // bytes, so a failed file must not pull it backwards; the failure itself
@@ -374,6 +488,9 @@ async function runQueue(items, conflict) {
     }));
   };
 
+  /**
+   * @param {UploadItem} item
+   */
   const uploadOne = async (item) => {
     const directory = dirnameUploadPath(item.relativePath);
     const destination = joinUploadPath(item.targetPath, directory);
@@ -384,7 +501,7 @@ async function runQueue(items, conflict) {
       let ensuring = ensuredDirs.get(destination);
       if (!ensuring) {
         ensuring = ensureDirectory(destination, {
-          signal: activeController.signal,
+          signal: controller.signal,
         });
         ensuredDirs.set(destination, ensuring);
         ensuring.catch(() => {
@@ -395,7 +512,8 @@ async function runQueue(items, conflict) {
       }
       try {
         await ensuring;
-      } catch (error) {
+      } catch (caught) {
+        const error = asUploadError(caught);
         if (cancelled || error.name === "AbortError") return;
         recordFailure(item, `Could not create folder: ${error.message}`, false);
         return;
@@ -406,7 +524,7 @@ async function runQueue(items, conflict) {
       uploadWithProgress(item.file, {
         targetPath: destination,
         conflict,
-        signal: activeController.signal,
+        signal: controller.signal,
         onProgress: (loaded, total) => {
           if (!total) return;
           const ratio = Math.min(loaded / total, 1);
@@ -437,7 +555,8 @@ async function runQueue(items, conflict) {
           currentName: item.relativePath,
         }));
         return;
-      } catch (error) {
+      } catch (caught) {
+        const error = asUploadError(caught);
         if (error.aborted || cancelled || error.status === 401) {
           if (error.status === 401) {
             cancelled = true;
@@ -446,7 +565,7 @@ async function runQueue(items, conflict) {
               phase: "cancelling",
               message: "Session expired. Please log in again.",
             });
-            activeController.abort();
+            controller.abort();
             logout();
           }
           return;
@@ -465,7 +584,7 @@ async function runQueue(items, conflict) {
             phase: "cancelling",
             message: "Upload stopped: the server is out of disk space.",
           });
-          activeController.abort();
+          controller.abort();
           return;
         }
 
@@ -483,11 +602,13 @@ async function runQueue(items, conflict) {
   const worker = async () => {
     while (queue.length && !cancelled) {
       const item = queue.shift();
+      if (!item) return;
 
       await uploadOne(item);
     }
   };
 
+  /** @type {Promise<void>[]} */
   const workers = [];
   const workerCount = Math.min(UPLOAD_CONCURRENCY, queue.length);
   for (let index = 0; index < workerCount; index += 1) {
@@ -498,6 +619,10 @@ async function runQueue(items, conflict) {
   activeController = null;
 }
 
+/**
+ * @param {unknown} message
+ * @returns {boolean}
+ */
 function isOutOfSpace(message) {
   return /out of disk space/i.test(String(message || ""));
 }
@@ -532,6 +657,9 @@ function stopSpeedSampler() {
   }
 }
 
+/**
+ * @param {string} message
+ */
 async function finishBatch(message) {
   stopSpeedSampler();
   scanController = null;
@@ -550,7 +678,7 @@ async function finishBatch(message) {
     bytesPerSecond: 0,
   });
 
-  if (refresh) {
+  if (refresh && lastOnComplete) {
     try {
       await lastOnComplete();
     } catch (error) {
@@ -571,7 +699,7 @@ async function finishBatch(message) {
   if (queuedBatches.length) {
     const next = queuedBatches.shift();
     updateState({ queued: queuedBatches.length });
-    await runBatch(next);
+    if (next) await runBatch(next);
   }
 }
 
