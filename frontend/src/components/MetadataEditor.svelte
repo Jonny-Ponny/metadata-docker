@@ -1,19 +1,51 @@
 <!-- src/components/MetadataEditor.svelte -->
 <script>
+  // @ts-check
   import HoldButton from "./HoldButton.svelte";
   import LyricsEditorModal from "./LRCEditor.svelte";
   import { SvelteSet } from "svelte/reactivity";
 
   import { toast, processEditedLyrics, getFieldLabel } from "../utils/index.js";
 
-  // Props
+  /**
+   * @typedef {Object} MetadataFields
+   * @property {string} title
+   * @property {string} album
+   * @property {string} artist
+   * @property {string} albumArtist
+   * @property {string} trackNumber
+   * @property {string} diskNumber
+   * @property {string} date
+   * @property {string} genre
+   * @property {string} comment
+   * @property {string} description
+   * @property {string} lyrics
+   * @property {string} unsyncedLyrics
+   * @property {Record<string, string>} otherFields
+   * @property {string | null} picture
+   */
+
+  /**
+   * @typedef {Object} CustomField
+   * @property {string} name
+   * @property {string} value
+   */
+
+  /**
+   * @typedef {Object} Props
+   * @property {string} filePath
+   */
+
+  /** @type {Props} */
   let { filePath } = $props();
 
   // Reactive state for metadata
+  /** @type {MetadataFields & Record<string, any>} */
   let metadata = $state({
     title: "",
     album: "",
     artist: "",
+    albumArtist: "",
     trackNumber: "",
     diskNumber: "",
     date: "",
@@ -31,7 +63,9 @@
 
   // UI state
   let otherExpanded = $state(false);
-  let customFields = $state([]); // { name: '', value: '' }
+  let customFields = $state(/** @type {CustomField[]} */ ([]));
+
+  // Track which custom field row is being edited.
 
   // Unsupported files are listed in the tree for inspection only. The API
   // returns ``readOnly`` for them, which disables every editing control.
@@ -39,9 +73,10 @@
   let readOnlyFormat = $state("");
 
   // Track which field is being edited (by field name)
+  /** @type {SvelteSet<string>} */
   let editingFields = new SvelteSet();
 
-  let customFieldEditing = $state([]);
+  let customFieldEditing = $state(/** @type {boolean[]} */ ([]));
 
   let applyToSubfolders = $state(false); // false = current folder only, true = include subfolders
 
@@ -49,7 +84,7 @@
   let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
 
   let pictureEditing = $state(false);
-  let pictureFileInput = $state(null);
+  let pictureFileInput = $state(/** @type {HTMLInputElement | null} */ (null));
   let isUploadingPicture = $state(false);
 
   let showFullImage = $state(false);
@@ -62,13 +97,21 @@
   // Separate modals for synced and unsynced lyrics
   let showSyncedLyricsModal = $state(false);
   let showUnsyncedLyricsModal = $state(false);
-  let syncedLyricsData = $state({ lyrics: "", timestamps: [] });
+  let syncedLyricsData = $state(
+    /** @type {{ lyrics: string, timestamps: string[] }} */ ({
+      lyrics: "",
+      timestamps: [],
+    }),
+  );
 
   // Track fields that have been edited but not saved
+  /** @type {SvelteSet<string>} */
   let dirtyFields = new SvelteSet();
 
   // Track original values
-  let originalMetadata = $state(null);
+  let originalMetadata = $state(
+    /** @type {(MetadataFields & Record<string, any>) | null} */ (null),
+  );
 
   // Field definitions for main and always‑visible other fields
   const mainFields = [
@@ -84,11 +127,17 @@
 
   const textareaFields = ["comment", "description"];
 
+  /**
+   * @param {string} fieldName
+   */
   function startEditing(fieldName) {
     if (readOnly) return;
     editingFields.add(fieldName);
   }
 
+  /**
+   * @param {string} fieldName
+   */
   function stopEditing(fieldName) {
     // Small delay to allow clicking the icon before blur removes it
     setTimeout(() => {
@@ -104,6 +153,11 @@
     customFieldEditing = [...customFieldEditing, false];
   }
 
+  /**
+   * @param {string} field
+   * @param {string} value
+   * @param {boolean} [showToast]
+   */
   async function applyToFile(field, value, showToast = true) {
     if (!filePath || readOnly) return;
 
@@ -139,10 +193,16 @@
       await fetchMetadata(filePath);
     } catch (error) {
       console.error("Error updating metadata:", error);
-      toast.error(`Failed to update: ${error.message}`);
+      toast.error(
+        `Failed to update: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
+  /**
+   * @param {string} field
+   * @param {string} value
+   */
   async function applyToFolder(field, value) {
     if (!filePath || readOnly) return;
 
@@ -180,10 +240,15 @@
       await fetchMetadata(filePath);
     } catch (error) {
       console.error("Error updating folder:", error);
-      toast.error(`Failed to update folder: ${error.message}`);
+      toast.error(
+        `Failed to update folder: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
+  /**
+   * @param {string} path
+   */
   async function fetchMetadata(path) {
     if (!path) return;
 
@@ -232,6 +297,7 @@
       ];
 
       // Start with an empty otherFields object
+      /** @type {Record<string, string>} */
       let other = {};
 
       // Add any top‑level fields that are not in excludeFields (e.g. composer, publisher)
@@ -302,13 +368,16 @@
         unsyncedLyrics: data.unsyncedLyrics || "",
         otherFields: { ...other },
         customFields: [...customFields],
+        picture: data.picture || null,
       };
 
       // Clear dirty fields when new metadata loads
       dirtyFields.clear();
     } catch (error) {
       console.error("Error fetching metadata:", error);
-      toast.error(`Failed to load metadata: ${error.message}`);
+      toast.error(
+        `Failed to load metadata: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -318,6 +387,11 @@
     }
   });
 
+  /**
+   * @param {File} file
+   * @param {boolean} [applyToFolder]
+   * @param {boolean} [showToast]
+   */
   async function handlePictureUpload(
     file,
     applyToFolder = false,
@@ -381,7 +455,9 @@
       await fetchMetadata(filePath);
     } catch (error) {
       console.error("Error uploading picture:", error);
-      toast.error(`Failed to upload picture: ${error.message}`);
+      toast.error(
+        `Failed to upload picture: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       isUploadingPicture = false;
       pictureEditing = false;
@@ -392,35 +468,33 @@
     }
   }
 
+  /**
+   * @param {boolean} [applyToFolder]
+   */
   function triggerPictureUpload(applyToFolder = false) {
     if (readOnly) return;
-    // Create hidden file input if it doesn't exist
-    if (!pictureFileInput) {
-      pictureFileInput = document.createElement("input");
-      pictureFileInput.type = "file";
-      pictureFileInput.accept = "image/*";
-      pictureFileInput.style.display = "none";
-      document.body.appendChild(pictureFileInput);
+    // Reuse the hidden file input, creating it on first use.
+    const input = pictureFileInput ?? document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.style.display = "none";
+    if (!input.isConnected) document.body.appendChild(input);
 
-      pictureFileInput.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          handlePictureUpload(file, applyToFolder);
-        }
-      };
-    } else {
-      // Update the applyToFolder flag for the change handler
-      pictureFileInput.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          handlePictureUpload(file, applyToFolder);
-        }
-      };
-    }
+    /** @param {Event} e */
+    input.onchange = (e) => {
+      const file = /** @type {HTMLInputElement} */ (e.target).files?.[0];
+      if (file) {
+        handlePictureUpload(file, applyToFolder);
+      }
+    };
+    pictureFileInput = input;
 
-    pictureFileInput.click();
+    input.click();
   }
 
+  /**
+   * @param {string} field
+   */
   async function deleteField(field) {
     if (!filePath || !field || readOnly) return;
 
@@ -455,7 +529,9 @@
       }
     } catch (error) {
       console.error("Error deleting field:", error);
-      toast.error(`Failed to delete: ${error.message}`);
+      toast.error(
+        `Failed to delete: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -487,7 +563,9 @@
       await fetchMetadata(filePath);
     } catch (error) {
       console.error("Error deleting cover art:", error);
-      toast.error(`Failed to delete cover art: ${error.message}`);
+      toast.error(
+        `Failed to delete cover art: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -530,7 +608,9 @@
       window.dispatchEvent(event);
     } catch (error) {
       console.error("Error saving cover art:", error);
-      toast.error(`Failed to save: ${error.message}`);
+      toast.error(
+        `Failed to save: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -574,13 +654,17 @@
   }
 
   // Handle save from synced lyrics modal
+  /**
+   * @param {{ lyrics: string, timestamps: string[], synchronizedLyrics: string | null, hasTimestamps: boolean }} data
+   */
   async function handleSyncedLyricsSave(data) {
     const field = "lyrics";
 
     // If nothing was actually synced, write the plain text
     // (FLAC/OGG/Opus/M4A lyrics fields accept both LRC and plain text).
     // Otherwise write the LRC-formatted string.
-    const value = data.hasTimestamps ? data.synchronizedLyrics : data.lyrics;
+    const value =
+      (data.hasTimestamps ? data.synchronizedLyrics : data.lyrics) ?? "";
 
     metadata.lyrics = value;
     // Save to file
@@ -590,6 +674,9 @@
     showSyncedLyricsModal = false;
   }
 
+  /**
+   * @param {Event} e
+   */
   function stopPropagation(e) {
     e.stopPropagation();
   }
@@ -659,10 +746,15 @@
       toast.success("All changes applied successfully");
     } catch (error) {
       console.error("Error applying all changes:", error);
-      toast.error(`Failed to apply all changes: ${error.message}`);
+      toast.error(
+        `Failed to apply all changes: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
+  /**
+   * @param {string} field
+   */
   async function deleteFieldFromFolder(field) {
     if (!filePath || !field || readOnly) return;
 
@@ -704,11 +796,17 @@
       }
     } catch (error) {
       console.error("Error deleting field from folder:", error);
-      toast.error(`Failed to delete from folder: ${error.message}`);
+      toast.error(
+        `Failed to delete from folder: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
   // Mark field as dirty by comparing with original value
+  /**
+   * @param {string} fieldName
+   * @param {string} newValue
+   */
   function trackChange(fieldName, newValue) {
     if (!originalMetadata) return;
     // Get the original value
@@ -732,6 +830,9 @@
   }
 
   // Clear dirty status after saving
+  /**
+   * @param {string} fieldName
+   */
   function markFieldClean(fieldName) {
     dirtyFields.delete(fieldName);
   }
@@ -741,8 +842,12 @@
     dirtyFields.clear();
   }
 
+  /**
+   * @param {Event} e
+   */
   function handleRefreshMetadata(e) {
-    const refreshedPath = e.detail?.path;
+    const refreshedPath = /** @type {CustomEvent<{ path?: string }>} */ (e)
+      .detail?.path;
     if (!refreshedPath || !filePath) {
       fetchMetadata(filePath);
       return;
