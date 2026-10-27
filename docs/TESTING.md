@@ -144,7 +144,7 @@ test. `src/test/setup.js` clears `localStorage` after every test.
 Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
 components in `src/components/__tests__/`, stores in `src/stores/__tests__/`
 and the app shell in `src/__tests__/`. As of 2026-10-27 the suite has 41 files
-and 387 tests.
+and 393 tests.
 
 `npm run test:coverage` runs the suite with `@vitest/coverage-v8` and writes a
 text summary plus HTML and LCOV reports to `frontend/coverage/`. Coverage
@@ -178,8 +178,8 @@ Covered areas:
   folder summaries and byte formatting, colour theme generation, DOM helpers
   (debounce, scroll, text download, height equalisation), favicon accents,
   remote cover previews (caching, deduplication, eviction and failure
-  reporting), settings migration/persistence/theme application/smart rename,
-  and the hold-to-confirm action.
+  reporting), settings migration/persistence/theme application/smart rename and
+  hold-duration sanitization, and the hold-to-confirm action.
 - Stores: auth session restore, login, logout and authorization headers; the
   context-menu and rename targets; toast creation, removal and timing; theme
   preference, toggling and transition suppression; and the upload queue
@@ -189,14 +189,16 @@ Covered areas:
   failed/retry states), search and clearing, file-type routing in the right
   panel, the folder overview toggle, root folder creation, keyboard rename and
   delete, logout/re-login, tree refresh events, drag-and-drop and folder-picker
-  uploads, the upload progress bar and the disabled-player path.
+  uploads (including wheel scrolling during an internal drag), the upload
+  progress bar and the disabled-player path.
 - Components: `Toast` and `ToastContainer` rendering, type styling, manual
   dismiss, auto-dismiss and store updates; `SortButton` menu, selection and
   direction; the `Login` form states, backend error and theme toggle;
-  `CoverPreview` data/remote/placeholder/failure rendering; `HoldButton` hold,
-  cancel and disabled states; `MetadataEditor` loading, read-only mode, dirty
-  tracking and file saves; `UploadTray` phases, progress, failure details and
-  auto-hide; `TreeNode` selection, context-menu actions and inline rename;
+  `CoverPreview` data/remote/placeholder/failure rendering and its resolution
+  tooltip; `HoldButton` hold, cancel and disabled states; `MetadataEditor`
+  loading, read-only mode, dirty tracking and file saves; `UploadTray` phases,
+  progress, failure details and auto-hide; `TreeNode` selection, context-menu
+  actions, inline rename and the configured delete hold time;
   `TextEditor` load, save and clipboard; `EditModal` save and close paths;
   `FolderOverview` missing-field reports; `ImageViewer` loading, retry and the
   full-size view; `TimestampEditModal` validation, range hints and keyboard
@@ -205,7 +207,8 @@ Covered areas:
   filtering, clearing, export and auto-refresh; `LRCEditor` columns, timestamp
   editing, import/export, shifting and keyboard shortcuts; `MetadataFetcher`
   addon loading, search, song/album previews and batch apply; `SettingsModal`
-  addon list, scheme previews, overview fields and save/cancel.
+  addon list, scheme previews, overview fields, hold durations and
+  save/cancel.
 
 Conventions:
 

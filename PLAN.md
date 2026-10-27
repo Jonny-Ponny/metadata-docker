@@ -39,7 +39,7 @@ image build. What remains is optional hardening and new features.
   `npm run build` are a separate CI job that gates the image build.
 - **Frontend component, store and utility tests (T-04).** Complete: every
   component including `App.svelte`, every store and the remaining utilities
-  have Vitest coverage. The suite runs 41 files / 387 tests and includes the
+  have Vitest coverage. The suite runs 41 files / 393 tests and includes the
   regression tests for B-33 to B-35.
 - **Frontend coverage and CI parity (T-05).** Complete: `npm run test:coverage`
   uses `@vitest/coverage-v8` to print a summary and write HTML/LCOV reports.
@@ -62,26 +62,7 @@ image build. What remains is optional hardening and new features.
 
 ### Known issues and small fixes
 
-- **T-06 (P3) - `PGID=0` does not disable addon dependency installation.**
-  `entrypoint.sh` sets `RUN_AS_ROOT` from `PUID` alone, so `PUID=1000, PGID=0`
-  still runs `pip install --user` for addon requirements and starts the app
-  with primary group `root`. Treat `PGID=0` as root (or reject it) so root-like
-  configurations consistently skip runtime dependency installation. Related
-  compose hardening is listed under "Optional security hardening".
-- **T-07 (P2) - Show image resolution in fetcher previews.** `CoverPreview`
-  sets `title` to the remote URL only. After the image loads, append its natural
-  width x height to the tooltip (for example `600x600 - <url>`) so addon covers
-  can be judged before they are applied.
-- **T-08 (P2) - Configurable hold-button durations.** Hold times are hardcoded:
-  800 ms for tag and cover actions in `MetadataEditor.svelte` and file delete,
-  1500 ms for folder delete in `TreeNode.svelte`. Expose separate settings for
-  album/folder apply, tag delete and file/folder delete so users can trade
-  speed against accidental triggers.
-- **T-09 (P3) - Mouse-wheel scrolling does not work while dragging in the file
-  tree.** Edge auto-scroll and hover-to-expand already work, but the
-  wheel is ignored while an item is held, so reaching an off-screen folder
-  requires hovering the top or bottom edge first. Add a wheel handler while a
-  drag is active that scrolls the tree's scroll container.
+No open items.
 
 ### Optional security hardening
 
