@@ -99,8 +99,9 @@ trust.
 - `*requirements.txt` installs run as the unprivileged `PUID`/`PGID` user into
   `/app/.local`, never as root.
 - Application code in `/app` is not recursively chowned.
-- Running with `PUID=0` disables runtime dependency installation; preinstall
-  addon dependencies in a custom image instead.
+- Running with `PUID=0` and `PGID=0` disables runtime dependency installation;
+  preinstall addon dependencies in a custom image instead. A mixed pair (only
+  one of the two is `0`) is rejected at startup.
 - A broken addon is skipped with a logged error and does not stop the app.
 
 See [docs/ADDONS.md](docs/ADDONS.md) for the addon interface.

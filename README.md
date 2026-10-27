@@ -67,7 +67,9 @@ container logs (`docker compose logs app`) at startup; they change on every
 restart.
 
 Set `PUID`/`PGID` to the owner of your music folder, or both to `0` to run as
-root (not recommended). The compose port is bound to `127.0.0.1`; to reach the
+root (not recommended). A mixed pair such as `PUID=1000, PGID=0` is rejected at
+startup: it would leave the app user in the root group without the root-mode
+safeguards. The compose port is bound to `127.0.0.1`; to reach the
 app from other machines, put a TLS-terminating reverse proxy in front of it -
 never expose plain HTTP to the internet. See
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full environment reference,
