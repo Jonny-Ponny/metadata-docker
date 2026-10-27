@@ -54,10 +54,11 @@ image build. What remains is optional hardening and new features.
 
 ### Optional security hardening
 
-- Build hygiene: add `.dockerignore`, build the frontend with `npm ci`, pin the
-  remaining direct Python requirements, optionally pin base images by digest
-  and Actions by commit SHA with an update bot. Run `pip-audit`/`npm audit`
-  periodically or as a non-blocking CI job.
+- Build hygiene: pin the remaining direct Python requirements, optionally pin
+  base images by digest and Actions by commit SHA with an update bot. Run
+  `pip-audit`/`npm audit` periodically or as a non-blocking CI job. The
+  `.dockerignore` and the frontend's `npm ci` install are done, and the
+  frontend builder is pinned to Node 22 because Node 24+ has no armv7 image.
 - Compose hardening: `no-new-privileges`, `pids_limit`, memory/CPU limits and
   `tmpfs: /tmp`; an opt-in `CHOWN_MUSIC` flag instead of the recursive chown;
   document the `PUID=0` trade-off clearly. `read_only` and `cap_drop: ALL` only

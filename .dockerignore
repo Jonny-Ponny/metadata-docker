@@ -1,0 +1,60 @@
+# Keep the build context to what the Dockerfile actually copies. The image
+# needs Dockerfile, entrypoint.sh, backend/ and frontend/ (without the build
+# artifacts and installed modules).
+
+# Version control and hosting
+.git
+.gitignore
+.gitattributes
+.github
+
+# Docs, plans and repo metadata (already excluded: README.md, *.md below)
+docs/
+*.md
+LICENSE
+
+# Containers and CI config not used inside the build
+docker-compose*.yml
+.dockerignore
+
+# Python caches and local test output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Backend build output and runtime data (static/ is produced in the image)
+backend/static/
+backend/instance/
+backend/.env
+backend/*.log
+
+# Frontend dependencies and build output (dist/ is produced in the image)
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/coverage/
+frontend/.svelte-kit/
+frontend/.vite/
+frontend/*.log
+
+# Tests and dev-only requirements
+tests/
+requirements-dev.txt
+
+# Local environment overrides and media/log mounts
+.env
+.env.*
+logs/
+music/
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
