@@ -82,5 +82,22 @@ jobs:
       - name: Run frontend tests
         run: npm test
 
+      # Coverage is informational: a failure here does not block the job and no
+      # threshold is enforced. The suite runs again so a coverage problem can
+      # never turn a passing test run into a failing required check.
+      - name: Coverage report (non-blocking)
+        continue-on-error: true
+        run: npm run test:coverage
+
+      - name: Upload frontend coverage (non-blocking)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Build frontend
         run: npm run build
