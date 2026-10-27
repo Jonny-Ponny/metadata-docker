@@ -48,10 +48,12 @@ image build. What remains is optional hardening and new features.
 ### Known issues and small fixes
 
 - `T-03 (P3)` - Finish enabling `checkJs` for `svelte-check`. Every
-  `src/utils/*.js` file now starts with `// @ts-check` and is clean, so
-  `npm run check` type-checks them in CI. Still unchecked: `src/stores/`, the
-  components (including `App.svelte`), `src/utils/__tests__/` and the global
-  `checkJs` flag, which can flip once those are clean.
+  `src/utils/*.js` and `src/stores/*.js` file starts with `// @ts-check` and is
+  clean, as does `src/components/CoverPreview.svelte` (the pragma goes at the
+  top of `<script>`), so `npm run check` type-checks them in CI. Still
+  unchecked: the other components (including `App.svelte`),
+  `src/utils/__tests__/` and the global `checkJs` flag, which can flip once
+  those are clean.
 
 ### Optional security hardening
 
