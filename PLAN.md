@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-03`, `B-32`. Next:
-  `T-04`, `B-33`.
+- IDs are permanent and never reused. Last used: `T-09`, `B-35`. Next:
+  `T-10`, `B-36`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -37,6 +37,15 @@ image build. What remains is optional hardening and new features.
 - **Frontend tests (start).** Vitest + jsdom over the pure timestamp, lyrics,
   sort, upload, API-error and version-cache utilities. `npm test` and
   `npm run build` are a separate CI job that gates the image build.
+- **Frontend component, store and utility tests (T-04).** Complete: every
+  component including `App.svelte`, every store and the remaining utilities
+  have Vitest coverage. The suite runs 41 files / 387 tests and includes the
+  regression tests for B-33 to B-35.
+- **Frontend coverage and CI parity (T-05).** Complete: `npm run test:coverage`
+  uses `@vitest/coverage-v8` to print a summary and write HTML/LCOV reports.
+  The pull-request and main-branch `frontend` job runs the report in a
+  non-blocking step and uploads it as an artifact, matching the existing
+  non-blocking backend coverage step.
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are
@@ -53,7 +62,26 @@ image build. What remains is optional hardening and new features.
 
 ### Known issues and small fixes
 
-No open items.
+- **T-06 (P3) - `PGID=0` does not disable addon dependency installation.**
+  `entrypoint.sh` sets `RUN_AS_ROOT` from `PUID` alone, so `PUID=1000, PGID=0`
+  still runs `pip install --user` for addon requirements and starts the app
+  with primary group `root`. Treat `PGID=0` as root (or reject it) so root-like
+  configurations consistently skip runtime dependency installation. Related
+  compose hardening is listed under "Optional security hardening".
+- **T-07 (P2) - Show image resolution in fetcher previews.** `CoverPreview`
+  sets `title` to the remote URL only. After the image loads, append its natural
+  width x height to the tooltip (for example `600x600 - <url>`) so addon covers
+  can be judged before they are applied.
+- **T-08 (P2) - Configurable hold-button durations.** Hold times are hardcoded:
+  800 ms for tag and cover actions in `MetadataEditor.svelte` and file delete,
+  1500 ms for folder delete in `TreeNode.svelte`. Expose separate settings for
+  album/folder apply, tag delete and file/folder delete so users can trade
+  speed against accidental triggers.
+- **T-09 (P3) - Mouse-wheel scrolling does not work while dragging in the file
+  tree.** Edge auto-scroll and hover-to-expand already work, but the
+  wheel is ignored while an item is held, so reaching an off-screen folder
+  requires hovering the top or bottom edge first. Add a wheel handler while a
+  drag is active that scrolls the tree's scroll container.
 
 ### Optional security hardening
 
@@ -81,9 +109,6 @@ No open items.
 - **Library-wide tag search** - replace the client-side filename filter with an
   mtime-invalidated tag index, and reuse it for reports (missing fields, missing
   covers, duplicate artist/title).
-- **Streaming and playback** - stream audio with Range requests using the
-  download-token pattern, then add a play queue, next/prev, shuffle/repeat and
-  Media Session support.
 - **Multi-select** in the tree with batch actions, plus copy/paste tags from one
   file onto a selection.
 - **UX and performance** - lazy per-directory tree loading, a smart-rename
@@ -101,16 +126,18 @@ No open items.
 
 ### Frontend checks and tests
 
-The frontend has a Vitest suite over the first pure utilities, ESLint,
-Prettier and `svelte-check` with full `checkJs` type checking in CI. Remaining,
-in this order:
+The frontend has a Vitest suite over the utilities, stores and components, plus
+ESLint, Prettier and `svelte-check` with full `checkJs` type checking in CI.
+Remaining:
 
-- Component tests for the editor, upload tray and context menu once the
-  utilities are covered, and coverage for the remaining stores and utilities.
-- A UI bug pass once the checks and tests exist, so fixes can be pinned by a
+- A UI bug pass now that the tests exist, so fixes can be pinned by a
   regression test.
 
 ## Out of scope
 
 - Multi-user authentication or per-user libraries.
 - Container/runtime hardening beyond the items above.
+- Playback and streaming features beyond the existing single-file player:
+  Range-based streaming, a play queue, next/prev navigation, shuffle/repeat and
+  Media Session. Main goal is library management, not playing or
+  streaming a library.

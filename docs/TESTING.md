@@ -29,25 +29,25 @@ pip install -r requirements-dev.txt
 python -m pytest -q --cov=backend --cov-report=term-missing
 ```
 
-| Measurement | Tests | Line coverage | Statements | Missed |
-|---|---:|---:|---:|---:|
-| Baseline before the coverage work | 616 | 83% | 2583 | 437 |
-| Current (2026-10-25) | 848 | 92% | 2591 | 206 |
+| Measurement                       | Tests | Line coverage | Statements | Missed |
+| --------------------------------- | ----: | ------------: | ---------: | -----: |
+| Baseline before the coverage work |   616 |           83% |       2583 |    437 |
+| Current (2026-10-25)              |   848 |           92% |       2591 |    206 |
 
 `config.py` is under-reported because its tests import the app in a subprocess.
 
 Lowest-covered areas:
 
-| Area | Cover | Main gap |
-|---|---:|---|
-| `config.py` | 55% | parsed in a subprocess, so coverage cannot see it |
-| `routes/tags.py` | 83% | per-endpoint validation and generic error exits |
-| `logger_config.py` | 85% | fallback/error branches |
-| `paths.py` | 90% | symlink and `commonpath` edge cases |
-| `routes/text.py` | 91% | stat and temp-file cleanup races |
-| `routes/logs.py` | 91% | empty and undecodable log lines |
-| `renaming.py` | 91% | remaining filename edge cases |
-| everything else | 92-100% | |
+| Area               |   Cover | Main gap                                          |
+| ------------------ | ------: | ------------------------------------------------- |
+| `config.py`        |     55% | parsed in a subprocess, so coverage cannot see it |
+| `routes/tags.py`   |     83% | per-endpoint validation and generic error exits   |
+| `logger_config.py` |     85% | fallback/error branches                           |
+| `paths.py`         |     90% | symlink and `commonpath` edge cases               |
+| `routes/text.py`   |     91% | stat and temp-file cleanup races                  |
+| `routes/logs.py`   |     91% | empty and undecodable log lines                   |
+| `renaming.py`      |     91% | remaining filename edge cases                     |
+| everything else    | 92-100% |                                                   |
 
 ## Backend coverage backlog
 
@@ -114,6 +114,7 @@ npm run lint          # ESLint
 npm run format:check  # Prettier, no writes
 npm run check         # svelte-check
 npm test              # vitest run
+npm run test:coverage # Vitest + v8 coverage report
 npm run build
 ```
 
@@ -135,11 +136,32 @@ opt-in. Components annotate their `$props()` destructuring with a JSDoc
 boundaries. Prefer annotating or narrowing a value over suppressing the error.
 
 `frontend/vitest.config.js` uses a jsdom environment, picks up
-`src/**/*.test.js`, and registers the Svelte plugin for the component tests that
-come next. `src/test/setup.js` clears `localStorage` after every test.
+`src/**/*.test.js`, and registers the Svelte plugin plus
+`@testing-library/svelte`'s `svelteTesting()` plugin for the component tests.
+The plugin resolves Svelte's browser build and runs the DOM cleanup after every
+test. `src/test/setup.js` clears `localStorage` after every test.
 
-Tests live next to the code they cover in `src/utils/__tests__/`. There is no
-frontend coverage report yet.
+Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
+components in `src/components/__tests__/`, stores in `src/stores/__tests__/`
+and the app shell in `src/__tests__/`. As of 2026-10-27 the suite has 41 files
+and 387 tests.
+
+`npm run test:coverage` runs the suite with `@vitest/coverage-v8` and writes a
+text summary plus HTML and LCOV reports to `frontend/coverage/`. Coverage
+covers `src/**/*.{js,svelte}` except the test files, the Vitest setup and the
+`src/main.js` bootstrap. CI runs it in a non-blocking step after `npm test` and
+uploads the report as the `frontend-coverage` artifact for seven days. No
+threshold is enforced.
+
+Snapshot from 2026-10-27:
+
+| Area       | Lines | Statements | Main gap                                                   |
+| ---------- | ----: | ---------: | ---------------------------------------------------------- |
+| `App`      |   61% |        63% | drag/drop branches, resize and player paths                |
+| components |   74% |        77% | `MetadataEditor` save/cover paths, `TreeNode` context menu |
+| stores     |   90% |        87% | upload retry and session branches                          |
+| utils      |   99% |        98% | defensive branches                                         |
+| all files  |   77% |        78% | branch coverage is 62%                                     |
 
 Covered areas:
 
@@ -152,19 +174,68 @@ Covered areas:
   free-space preflight, byte/duration formatting and the XHR upload request
   (progress, success, HTTP/network/timeout/abort failures).
 - API error parsing and the cached `/api/version` request.
+- Remaining utilities: audio format labels and detection, field metadata,
+  folder summaries and byte formatting, colour theme generation, DOM helpers
+  (debounce, scroll, text download, height equalisation), favicon accents,
+  remote cover previews (caching, deduplication, eviction and failure
+  reporting), settings migration/persistence/theme application/smart rename,
+  and the hold-to-confirm action.
+- Stores: auth session restore, login, logout and authorization headers; the
+  context-menu and rename targets; toast creation, removal and timing; theme
+  preference, toggling and transition suppression; and the upload queue
+  (preflight blocking, duplicate skipping, size limits, queued batches,
+  cancellation, retry, 401/413/ENOSPC handling and dismissal).
+- `App.svelte`: the login gate, tree loading (including the empty and
+  failed/retry states), search and clearing, file-type routing in the right
+  panel, the folder overview toggle, root folder creation, keyboard rename and
+  delete, logout/re-login, tree refresh events, drag-and-drop and folder-picker
+  uploads, the upload progress bar and the disabled-player path.
+- Components: `Toast` and `ToastContainer` rendering, type styling, manual
+  dismiss, auto-dismiss and store updates; `SortButton` menu, selection and
+  direction; the `Login` form states, backend error and theme toggle;
+  `CoverPreview` data/remote/placeholder/failure rendering; `HoldButton` hold,
+  cancel and disabled states; `MetadataEditor` loading, read-only mode, dirty
+  tracking and file saves; `UploadTray` phases, progress, failure details and
+  auto-hide; `TreeNode` selection, context-menu actions and inline rename;
+  `TextEditor` load, save and clipboard; `EditModal` save and close paths;
+  `FolderOverview` missing-field reports; `ImageViewer` loading, retry and the
+  full-size view; `TimestampEditModal` validation, range hints and keyboard
+  shortcuts; `Player` playback, seeking, clock, volume and disabled state;
+  `HelpModal` tabs, version footer and close paths; `LogViewer` loading,
+  filtering, clearing, export and auto-refresh; `LRCEditor` columns, timestamp
+  editing, import/export, shifting and keyboard shortcuts; `MetadataFetcher`
+  addon loading, search, song/album previews and batch apply; `SettingsModal`
+  addon list, scheme previews, overview fields and save/cancel.
 
 Conventions:
 
-- Import the utility directly; do not go through the `utils/index.js` barrel.
+- Import the utility or component directly; do not go through the
+  `utils/index.js` barrel.
+- Render components with `render(Component, { props })` from
+  `@testing-library/svelte` and query by role or label, not by CSS class,
+  unless the class is the behaviour under test.
+- Use fake timers for components that schedule work in `onMount`; advance them
+  with `await vi.advanceTimersByTimeAsync()` so Svelte flushes the update.
+- Store updates made after `render()` and input events need `await tick()`
+  from `svelte` before asserting on the DOM.
 - Stub browser globals with `vi.stubGlobal()` and restore them in `afterEach`.
 - Reset modules with `vi.resetModules()` before testing module-level caches
-  such as `version.utils.js`.
+  such as `version.utils.js` and the upload store's queue runtime.
+- Mock a module's dependencies with `vi.hoisted()` plus `vi.mock()`; the
+  upload-store test replaces `upload.utils.js` this way.
+- Stub `URL.createObjectURL`/`revokeObjectURL` with
+  `Object.defineProperty()` instead of replacing the `URL` constructor.
 - Mock `fetch`/`XMLHttpRequest`; the suite must not contact the network.
+- Keep jsdom prototype stubs such as `scrollIntoView` and
+  `HTMLMediaElement.pause` installed for the whole test file; deleting them in
+  `afterEach` breaks the component teardown that runs afterwards.
 - Add a regression test for every frontend bug, as for the backend.
 
-CI runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test` and
-`npm run build` in the `frontend` job of `.github/workflows/tests.yml`; a
-failure blocks image publication.
+CI runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test`,
+the non-blocking `npm run test:coverage` report and `npm run build` in the
+`frontend` job of `.github/workflows/tests.yml`. The `pytest` and `frontend`
+jobs both run on pull requests and on pushes to `main`, `master` and the phase
+branches; a failing required step blocks image publication.
 
 ## Maintaining this guide
 

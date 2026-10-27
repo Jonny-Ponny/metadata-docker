@@ -44,7 +44,9 @@
   let addons = $state(/** @type {AddonInfo[]} */ ([]));
   let addonsLoading = $state(false);
   let addonsError = $state(/** @type {string | null} */ (null));
-  let addonsFetched = $state(false);
+  // Tracks an attempt, successful or not. Retrying from the open effect on
+  // failure looped forever and hammered /api/addons.
+  let addonsAttempted = $state(false);
 
   // Mock data for preview
   const mockMetadata = {
@@ -212,7 +214,8 @@
   };
 
   async function fetchAddons() {
-    if (addonsFetched || addonsLoading) return;
+    if (addonsAttempted || addonsLoading) return;
+    addonsAttempted = true;
     addonsLoading = true;
     addonsError = null;
     try {
@@ -221,7 +224,6 @@
         throw new Error(`Failed to fetch addons (${response.status})`);
       const data = await response.json();
       addons = data.fetchers || [];
-      addonsFetched = true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       addonsError = message;
@@ -243,8 +245,13 @@
 
   // Trigger fetch when modal opens
   $effect(() => {
-    if (isOpen && !addonsFetched && !addonsLoading) {
+    if (isOpen && !addonsAttempted) {
       fetchAddons();
+    }
+    if (!isOpen) {
+      // Allow a fresh attempt the next time the modal opens.
+      addonsAttempted = false;
+      addonsError = null;
     }
   });
 
