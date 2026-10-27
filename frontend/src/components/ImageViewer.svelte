@@ -2,11 +2,17 @@
 <script>
   import { toast } from "../utils/index.js";
 
+  /**
+   * @typedef {Object} Props
+   * @property {string} [filePath]
+   */
+
+  /** @type {Props} */
   let { filePath } = $props();
 
-  let imageUrl = $state(null);
+  let imageUrl = $state(/** @type {string | null} */ (null));
   let isLoading = $state(true);
-  let error = $state(null);
+  let error = $state(/** @type {string | null} */ (null));
   let showFullImage = $state(false);
 
   let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
@@ -43,8 +49,9 @@
       }
       imageUrl = URL.createObjectURL(blob);
     } catch (err) {
-      error = err.message;
-      toast.error(`Failed to load image: ${err.message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      error = message;
+      toast.error(`Failed to load image: ${message}`);
     } finally {
       isLoading = false;
     }

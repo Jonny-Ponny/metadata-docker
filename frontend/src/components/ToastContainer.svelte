@@ -3,7 +3,9 @@
   import Toast from "./Toast.svelte";
   import { toast } from "../utils/index.js";
 
-  let toasts = $state([]);
+  let toasts = $state(
+    /** @type {import("../stores/toast.store.js").ToastItem[]} */ ([]),
+  );
 
   // Subscribe to toast store
   toast.subscribe((value) => {
@@ -11,22 +13,48 @@
   });
 
   // Expose methods for backward compatibility if needed
+  /**
+   * @param {string} message
+   * @param {import("../stores/toast.store.js").ToastType} [type]
+   * @param {number} [duration]
+   * @returns {string}
+   */
   export function show(message, type = "info", duration = 5000) {
     return toast.show(message, type, duration);
   }
 
+  /**
+   * @param {string} message
+   * @param {number} [duration]
+   * @returns {string}
+   */
   export function success(message, duration = 5000) {
     return toast.success(message, duration);
   }
 
+  /**
+   * @param {string} message
+   * @param {number} [duration]
+   * @returns {string}
+   */
   export function error(message, duration = 5000) {
     return toast.error(message, duration);
   }
 
+  /**
+   * @param {string} message
+   * @param {number} [duration]
+   * @returns {string}
+   */
   export function warning(message, duration = 5000) {
     return toast.warning(message, duration);
   }
 
+  /**
+   * @param {string} message
+   * @param {number} [duration]
+   * @returns {string}
+   */
   export function info(message, duration = 5000) {
     return toast.info(message, duration);
   }

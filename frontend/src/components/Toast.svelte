@@ -20,6 +20,15 @@ toast.show("This will stay longer", "info", 10000); -->
 <script>
   import { onMount } from "svelte";
 
+  /**
+   * @typedef {Object} Props
+   * @property {string} [message]
+   * @property {"info" | "success" | "error" | "warning"} [type]
+   * @property {number} [duration]
+   * @property {() => void} [onDismiss]
+   */
+
+  /** @type {Props} */
   let {
     message = "",
     type = "info",
@@ -29,7 +38,9 @@ toast.show("This will stay longer", "info", 10000); -->
 
   let visible = $state(true);
   let progress = $state(100);
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
   let timeoutId;
+  /** @type {ReturnType<typeof setInterval> | undefined} */
   let progressInterval;
 
   onMount(() => {

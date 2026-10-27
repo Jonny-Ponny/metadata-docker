@@ -3,6 +3,7 @@
 // Keep this list in sync with backend/formats.py. The backend is the source of
 // truth for which files appear in the tree; this helper is for UI filtering and
 // labels where a synchronous check is needed.
+/** @type {Record<string, string>} */
 export const AUDIO_FORMAT_LABELS = {
   mp3: "MP3",
   wav: "WAV",

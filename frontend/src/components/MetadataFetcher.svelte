@@ -10,39 +10,87 @@
   import CoverPreview from "./CoverPreview.svelte";
   import { SvelteSet } from "svelte/reactivity";
 
+  /**
+   * @typedef {Object} AddonInfo
+   * @property {string} id
+   * @property {string} name
+   * @property {string[]} [methods]
+   */
+
+  /** @typedef {Record<string, any>} Metadata */
+
+  /**
+   * @typedef {Object} FolderFile
+   * @property {string} path
+   * @property {string} name
+   */
+
+  /**
+   * @typedef {Object} FileAssignment
+   * @property {number} fileIndex
+   * @property {number | null} trackIndex
+   */
+
+  /**
+   * @typedef {Object} TreeItem
+   * @property {string} path
+   * @property {string} [type]
+   * @property {string} [name]
+   * @property {string} [file_type]
+   * @property {TreeItem[]} [children]
+   */
+
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [isOpen]
+   * @property {() => void} onClose
+   * @property {string} mode
+   * @property {string} targetPath
+   * @property {boolean} [isFolder]
+   */
+
+  /** @type {Props} */
   let { isOpen, onClose, mode, targetPath, isFolder = false } = $props();
 
   // ---------- State ----------
-  let addons = $state([]);
+  let addons = $state(/** @type {AddonInfo[]} */ ([]));
   let selectedAddonId = $state("");
   let query = $state("");
   let limit = $state(5);
   let isSearching = $state(false);
-  let searchResults = $state([]);
-  let selectedResultId = $state(null);
+  let searchResults = $state(/** @type {Metadata[]} */ ([]));
+  let selectedResultId = $state(/** @type {string | null} */ (null));
 
-  let fetchedTracks = $state([]);
+  let fetchedTracks = $state(/** @type {Metadata[]} */ ([]));
   let selectedTrackIndex = $state(0);
+  /** @type {SvelteSet<string>} */
   let singleFileFields = new SvelteSet();
 
-  let folderFiles = $state([]);
-  let fileAssignments = $state([]);
-  let fileEnabled = $state([]);
-  let fileFieldSets = $state([]);
+  let folderFiles = $state(/** @type {FolderFile[]} */ ([]));
+  let fileAssignments = $state(/** @type {FileAssignment[]} */ ([]));
+  let fileEnabled = $state(/** @type {boolean[]} */ ([]));
+  let fileFieldSets = $state(/** @type {SvelteSet<string>[]} */ ([]));
 
-  let fetchedSong = $state(null);
+  let fetchedSong = $state(/** @type {Metadata | null} */ (null));
+  /** @type {SvelteSet<string>} */
   let songFields = new SvelteSet();
 
   let isFetching = $state(false);
   let isApplying = $state(false);
-  let queryInput = $state(null);
+  let queryInput = $state(/** @type {HTMLInputElement | null} */ (null));
 
+  /** @type {SvelteSet<string>} */
   let allFields = new SvelteSet(); // all available fields
+  /** @type {SvelteSet<string>} */
   let globalSelectedFields = new SvelteSet(); // which fields are selected globally
 
   let globalFieldsExpanded = $state(true);
 
-  /** Replace a reactive set in place so SvelteSet updates the UI. */
+  /** Replace a reactive set in place so SvelteSet updates the UI.
+   * @template T
+   * @param {SvelteSet<T>} target
+   * @param {Iterable<T>} values
+   */
   function replaceSet(target, values) {
     target.clear();
     for (const value of values) target.add(value);
@@ -80,10 +128,18 @@
   const EXTRA_INFO_FIELD = "extraInfo";
 
   // ---------- Helper functions ----------
+  /**
+   * @param {string} key
+   * @returns {boolean}
+   */
   function isExtraInfoKey(key) {
     return key === EXTRA_INFO_FIELD || key === "extra_info";
   }
 
+  /**
+   * @param {Metadata | null | undefined} metadata
+   * @returns {string}
+   */
   function getExtraInfo(metadata) {
     if (!metadata) return "";
     const value = metadata[EXTRA_INFO_FIELD] ?? metadata.extra_info;
@@ -92,22 +148,39 @@
     return String(value).trim();
   }
 
+  /**
+   * @param {Metadata | null | undefined} metadata
+   * @returns {string[]}
+   */
   function selectableFields(metadata) {
     return Object.keys(metadata || {}).filter((key) => !isExtraInfoKey(key));
   }
 
+  /**
+   * @param {Metadata | null | undefined} metadata
+   * @returns {[string, any][]}
+   */
   function metadataEntries(metadata) {
     return Object.entries(metadata || {}).filter(
       ([key]) => !isExtraInfoKey(key),
     );
   }
 
+  /**
+   * @param {string} folderPath
+   * @returns {Promise<FolderFile[]>}
+   */
   async function getAudioFilesInFolder(folderPath) {
     try {
       const res = await fetch("/api/files");
       if (!res.ok) throw new Error("Failed to fetch file tree");
       const tree = await res.json();
 
+      /**
+       * @param {TreeItem} node
+       * @param {string} path
+       * @returns {TreeItem | null}
+       */
       function findFolder(node, path) {
         if (node.path === path && node.type === "directory") return node;
         if (node.children) {
@@ -121,12 +194,15 @@
 
       const folderNode = findFolder({ path: "", children: tree }, folderPath);
       if (!folderNode) return [];
-      const audioFiles = folderNode.children.filter(
-        (f) => f.type === "file" && isAudioFile(f.name, f.file_type),
+      const audioFiles = (folderNode.children ?? []).filter(
+        (f) => f.type === "file" && isAudioFile(f.name ?? "", f.file_type),
       );
-      return audioFiles.map((f) => ({ path: f.path, name: f.name }));
+      return audioFiles.map((f) => ({ path: f.path, name: f.name ?? "" }));
     } catch (e) {
-      toast.error("Failed to list folder files: " + e.message);
+      toast.error(
+        "Failed to list folder files: " +
+          (e instanceof Error ? e.message : String(e)),
+      );
       return [];
     }
   }
@@ -136,7 +212,7 @@
       const res = await fetch("/api/addons");
       if (!res.ok) throw new Error("Failed to load addons");
       const data = await res.json();
-      const all = data.fetchers || [];
+      const all = /** @type {AddonInfo[]} */ (data.fetchers || []);
       const method = mode === "song" ? "search_songs" : "search_albums";
       addons = all.filter((a) => a.methods && a.methods.includes(method));
 
@@ -152,7 +228,9 @@
         toast.warning(`No addon supports ${method}`);
       }
     } catch (e) {
-      toast.error(`Failed to load addons: ${e.message}`);
+      toast.error(
+        `Failed to load addons: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
@@ -181,12 +259,12 @@
       if (!res.ok) throw new Error("Failed to fetch metadata");
       const data = await res.json();
       if (mode === "song") {
-        query = data.title || data.filename || filePath.split("/").pop();
+        query = data.title || data.filename || filePath.split("/").pop() || "";
       } else {
-        query = data.album || data.filename || filePath.split("/").pop();
+        query = data.album || data.filename || filePath.split("/").pop() || "";
       }
     } catch {
-      query = filePath.split("/").pop();
+      query = filePath.split("/").pop() ?? "";
     }
   }
 
@@ -239,12 +317,17 @@
         toast.error(data.error || "Search error");
       }
     } catch (e) {
-      toast.error(`Search error: ${e.message}`);
+      toast.error(
+        `Search error: ${e instanceof Error ? e.message : String(e)}`,
+      );
     } finally {
       isSearching = false;
     }
   }
 
+  /**
+   * @param {string} resultId
+   */
   async function selectResult(resultId) {
     selectedResultId = resultId;
     isFetching = true;
@@ -265,7 +348,7 @@
           fetchedSong = data.metadata;
           replaceSet(songFields, selectableFields(fetchedSong));
         } else {
-          const tracks = data.metadata || [];
+          const tracks = /** @type {Metadata[]} */ (data.metadata || []);
           fetchedTracks = tracks;
           if (tracks.length === 0) {
             toast.warning("No tracks found in album");
@@ -312,16 +395,23 @@
         toast.error(data.error || "Failed to fetch metadata");
       }
     } catch (e) {
-      toast.error(`Fetch error: ${e.message}`);
+      toast.error(`Fetch error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       isFetching = false;
     }
   }
 
+  /**
+   * @param {Metadata} track
+   * @returns {any}
+   */
   function getTrackNumber(track) {
     return track.trackNumber ?? track.track;
   }
 
+  /**
+   * @param {Metadata[]} tracks
+   */
   function autoMatchFilesToTracks(tracks) {
     if (!folderFiles.length || !tracks.length) {
       fileAssignments = [];
@@ -339,11 +429,18 @@
     fileAssignments = mapping;
   }
 
+  /**
+   * @param {number} index
+   */
   function toggleFileEnabled(index) {
     fileEnabled[index] = !fileEnabled[index];
     fileEnabled = [...fileEnabled];
   }
 
+  /**
+   * @param {number} fileIndex
+   * @param {string | number} trackIndex
+   */
   function updateFileTrack(fileIndex, trackIndex) {
     const newAssign = fileAssignments.map((a) =>
       a.fileIndex === fileIndex
@@ -365,6 +462,10 @@
     fileFieldSets = [...fileFieldSets];
   }
 
+  /**
+   * @param {number} fileIndex
+   * @param {string} field
+   */
   function toggleFileField(fileIndex, field) {
     const set = fileFieldSets[fileIndex];
     if (set.has(field)) set.delete(field);
@@ -372,6 +473,9 @@
     fileFieldSets = [...fileFieldSets];
   }
 
+  /**
+   * @param {string} field
+   */
   function toggleSingleField(field) {
     if (mode === "song") {
       if (songFields.has(field)) songFields.delete(field);
@@ -457,12 +561,19 @@
       );
       onClose();
     } catch (e) {
-      toast.error(`Apply failed: ${e.message}`);
+      toast.error(
+        `Apply failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     } finally {
       isApplying = false;
     }
   }
 
+  /**
+   * @param {string} filePath
+   * @param {string} field
+   * @param {string} value
+   */
   async function updateSingleFile(filePath, field, value) {
     const res = await fetch("/api/metadata/file", {
       method: "POST",
@@ -474,6 +585,10 @@
     }
   }
 
+  /**
+   * @param {string} filePath
+   * @param {string} pictureData
+   */
   async function uploadCoverArt(filePath, pictureData) {
     // 1. If it's a Base64 data URL, convert and upload as file
     if (pictureData.startsWith("data:")) {
@@ -508,6 +623,10 @@
     toast.error("Unsupported image format");
   }
 
+  /**
+   * @param {unknown} value
+   * @returns {string}
+   */
   function displayValue(value) {
     if (
       typeof value === "string" &&
@@ -518,15 +637,23 @@
     return String(value);
   }
 
+  /**
+   * @param {string} key
+   * @param {unknown} value
+   * @returns {boolean}
+   */
   function isPictureField(key, value) {
     return (
       key === "picture" &&
-      value &&
       typeof value === "string" &&
       (value.startsWith("data:image") || isImageUrl(value))
     );
   }
 
+  /**
+   * @param {unknown} value
+   * @returns {boolean}
+   */
   function isImageUrl(value) {
     return (
       typeof value === "string" &&
@@ -534,6 +661,9 @@
     );
   }
 
+  /**
+   * @param {string} field
+   */
   function toggleGlobalField(field) {
     if (globalSelectedFields.has(field)) {
       globalSelectedFields.delete(field);
@@ -551,6 +681,9 @@
     globalFieldsExpanded = !globalFieldsExpanded;
   }
 
+  /**
+   * @param {{ label: string, fields: string[] }} preset
+   */
   function applyPreset(preset) {
     let fields;
     if (preset.label === "All") {
@@ -569,6 +702,9 @@
     fileFieldSets = [...fileFieldSets];
   }
 
+  /**
+   * @param {{ label: string, fields: string[] }} preset
+   */
   function applySongPreset(preset) {
     if (!fetchedSong) return;
     let fields;
@@ -587,6 +723,9 @@
     replaceSet(songFields, fields);
   }
 
+  /**
+   * @param {{ label: string, fields: string[] }} preset
+   */
   function applySingleTrackPreset(preset) {
     const track = fetchedTracks[selectedTrackIndex];
     if (!track) return;
@@ -800,7 +939,10 @@
                       <select
                         value={trackIndex ?? ""}
                         onchange={(e) =>
-                          updateFileTrack(fileIndex, e.target.value)}
+                          updateFileTrack(
+                            fileIndex,
+                            /** @type {HTMLSelectElement} */ (e.target).value,
+                          )}
                         disabled={!enabled}
                       >
                         <option value="">Skip</option>

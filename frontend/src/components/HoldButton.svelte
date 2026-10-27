@@ -1,6 +1,18 @@
 <script>
   import { holdToConfirm } from "../utils/index.js";
 
+  /**
+   * @typedef {Object} Props
+   * @property {(event: Event) => void} [onConfirm]
+   * @property {number} [duration]
+   * @property {"icon" | "menu" | "text"} [variant]
+   * @property {string} [title]
+   * @property {boolean} [disabled]
+   * @property {string} [class]
+   * @property {import("svelte").Snippet} children
+   */
+
+  /** @type {Props} */
   let {
     onConfirm = () => {},
     duration = 800,
@@ -13,8 +25,11 @@
 
   let progress = $state(0);
   let isHolding = $state(false);
-  let buttonRef = $state(null);
+  let buttonRef = $state(/** @type {HTMLDivElement | null} */ (null));
 
+  /**
+   * @param {Event} e
+   */
   function handleConfirm(e) {
     // Blur any active element before calling onConfirm
     if (
@@ -35,6 +50,9 @@
     progress = 0;
   }
 
+  /**
+   * @param {number} p
+   */
   function handleProgress(p) {
     progress = p;
   }

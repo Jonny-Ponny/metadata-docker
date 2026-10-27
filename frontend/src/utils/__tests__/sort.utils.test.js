@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { sortItems } from "../sort.utils.js";
 
+/**
+ * @param {string} name
+ * @param {Record<string, any>} [extra]
+ */
 const directory = (name, extra = {}) => ({
   type: "directory",
   name,
   ...extra,
 });
 
+/**
+ * @param {string} name
+ * @param {Record<string, any>} [extra]
+ */
 const file = (name, extra = {}) => ({
   type: "file",
   name,
@@ -15,9 +23,10 @@ const file = (name, extra = {}) => ({
 
 describe("sortItems", () => {
   it("returns empty and missing input unchanged", () => {
+    /** @type {any[]} */
     const items = [];
     expect(sortItems(items, "name", "asc")).toBe(items);
-    expect(sortItems(null, "name", "asc")).toBeNull();
+    expect(sortItems(/** @type {any} */ (null), "name", "asc")).toBeNull();
   });
 
   it("sorts directories before files", () => {

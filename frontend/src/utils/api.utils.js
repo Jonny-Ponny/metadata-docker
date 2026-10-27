@@ -2,6 +2,11 @@
 
 const MAX_PLAIN_TEXT_LENGTH = 200;
 
+/**
+ * @param {string} fallback
+ * @param {number} [status]
+ * @returns {string}
+ */
 function withStatus(fallback, status) {
   return status ? `${fallback} (HTTP ${status})` : fallback;
 }
@@ -12,9 +17,12 @@ function withStatus(fallback, status) {
  * The backend normally answers with JSON such as `{"error": "Invalid new name"}`.
  * Proxies and crashes can still return HTML or plain text, so markup and
  * oversized bodies are ignored in favour of the caller's fallback.
+ *
+ * @param {unknown} body
+ * @returns {string}
  */
 export function messageFromBody(body) {
-  const text = (body || "").trim();
+  const text = typeof body === "string" ? body.trim() : "";
   if (!text) return "";
 
   if (text.startsWith("{")) {
@@ -45,6 +53,11 @@ export function messageFromBody(body) {
  *
  * XHR responses do not produce a `Response` object, so uploads need the same
  * parsing that `readApiError` applies to fetch responses.
+ *
+ * @param {unknown} body
+ * @param {string} [fallback]
+ * @param {number} [status]
+ * @returns {string}
  */
 export function formatApiErrorMessage(
   body,
@@ -60,6 +73,10 @@ export function formatApiErrorMessage(
  * The body is consumed exactly once, so call this only when `response.ok` is
  * false. Returns the backend's `error`/`message` when present, a short plain
  * text body otherwise, and always appends the HTTP status to the fallback.
+ *
+ * @param {Response} response
+ * @param {string} [fallback]
+ * @returns {Promise<string>}
  */
 export async function readApiError(response, fallback = "Request failed") {
   const status = response?.status;
@@ -76,6 +93,10 @@ export async function readApiError(response, fallback = "Request failed") {
 
 /**
  * Parse a JSON response body, converting malformed JSON into a readable error.
+ *
+ * @param {Response} response
+ * @param {string} [fallback]
+ * @returns {Promise<any>}
  */
 export async function readJsonResponse(
   response,

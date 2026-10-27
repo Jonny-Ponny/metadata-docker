@@ -65,18 +65,30 @@ describe("formatApiErrorMessage", () => {
   });
 });
 
+/**
+ * Minimal Response stub: the code under test only reads `status` and `text()`.
+ * @param {number} status
+ * @param {() => Promise<string>} text
+ * @returns {Response}
+ */
+const asResponse = (status, text) =>
+  /** @type {Response} */ (/** @type {unknown} */ ({ status, text }));
+
 describe("readApiError", () => {
-  const response = (body, status = 400, throws = false) => ({
-    status,
-    text: async () => {
+  /**
+   * @param {string} body
+   * @param {number} [status]
+   * @param {boolean} [throws]
+   */
+  const response = (body, status = 400, throws = false) =>
+    asResponse(status, async () => {
       if (throws) throw new Error("stream failed");
       return body;
-    },
-  });
+    });
 
   it("reads the body once and returns the backend message", async () => {
     const text = vi.fn(async () => '{"error":"Nope"}');
-    const result = await readApiError({ status: 400, text }, "Fallback");
+    const result = await readApiError(asResponse(400, text), "Fallback");
 
     expect(result).toBe("Nope");
     expect(text).toHaveBeenCalledTimes(1);
@@ -97,24 +109,23 @@ describe("readApiError", () => {
 
 describe("readJsonResponse", () => {
   it("parses JSON", async () => {
-    const result = await readJsonResponse({
-      status: 200,
-      text: async () => '{"ok":true}',
-    });
+    const result = await readJsonResponse(
+      asResponse(200, async () => '{"ok":true}'),
+    );
 
     expect(result).toEqual({ ok: true });
   });
 
   it("returns an empty object for an empty body", async () => {
     await expect(
-      readJsonResponse({ status: 204, text: async () => "" }),
+      readJsonResponse(asResponse(204, async () => "")),
     ).resolves.toEqual({});
   });
 
   it("throws with the status for malformed JSON", async () => {
     await expect(
       readJsonResponse(
-        { status: 502, text: async () => "<html>" },
+        asResponse(502, async () => "<html>"),
         "Bad response",
       ),
     ).rejects.toThrow("Bad response (HTTP 502)");

@@ -51,7 +51,7 @@ function takeLeadingTimestamp(value) {
  * Handles BOM/CRLF, ID tags, comma decimals, 1-3 decimal digits and lines
  * with multiple timestamps (expanded into one entry per timestamp).
  *
- * @param {string} text - Raw lyrics text
+ * @param {string | null} text - Raw lyrics text
  * @returns {{
  *   text: string,
  *   timestamps: string[],
@@ -62,6 +62,7 @@ function takeLeadingTimestamp(value) {
 export function parseLrc(text) {
   const lines = [];
   const timestamps = [];
+  /** @type {Record<string, string>} */
   const headers = {};
   let hasOffset = false;
 
@@ -129,7 +130,7 @@ export function parseLrc(text) {
 /**
  * Process edited text to extract timestamps and clean lyrics
  * @param {string} text - Raw lyrics text with optional timestamps
- * @returns {Object} { text: string, timestamps: string[] }
+ * @returns {{ text: string, timestamps: string[] }}
  */
 export function processEditedLyrics(text) {
   const { text: processedText, timestamps } = parseLrc(text);
@@ -209,7 +210,7 @@ export function shiftTimestamps(timestamps, offsetSeconds) {
  *
  * @param {string[]} lines - Lyric lines
  * @param {string[]} timestamps - Timestamps matching the lines
- * @param {{ title?: string, artist?: string, album?: string }} headers
+ * @param {Record<string, string | undefined>} headers
  * @returns {string}
  */
 export function buildLrc(lines, timestamps = [], headers = {}) {

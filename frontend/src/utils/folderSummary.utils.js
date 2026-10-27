@@ -1,9 +1,27 @@
 // src/utils/folderSummary.utils.js
 
 /**
+ * Tree node fields the summary reads; the real tree adds more.
+ * @typedef {Object} TreeEntry
+ * @property {string} name
+ * @property {string} type
+ * @property {number} [size]
+ * @property {TreeEntry[]} [children]
+ */
+
+/**
+ * @typedef {Object} FolderSummary
+ * @property {number} folderCount
+ * @property {number} fileCount
+ * @property {number} totalSize
+ * @property {Record<string, number>} formatCounts
+ * @property {number} totalItems
+ */
+
+/**
  * Recursively count folders, files, and calculate total size
- * @param {Object} folderNode - The folder node from treeData
- * @returns {Object} Summary object with counts and total size
+ * @param {TreeEntry} [folderNode] - The folder node from treeData
+ * @returns {FolderSummary | null} Summary object with counts and total size
  */
 export function getFolderSummary(folderNode) {
   // Safety check - make sure we have a valid folder
@@ -14,9 +32,13 @@ export function getFolderSummary(folderNode) {
   let totalSize = 0; // Total size in bytes
   let folderCount = 0; // Number of subfolders
   let fileCount = 0; // Number of files
+  /** @type {Record<string, number>} */
   let formatCounts = {}; // Object to track file formats (e.g., {mp3: 5, flac: 3})
 
   // Recursive function to traverse folder tree
+  /**
+   * @param {TreeEntry} node
+   */
   function traverse(node) {
     if (node.type === "directory") {
       // Found a subfolder

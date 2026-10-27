@@ -33,6 +33,7 @@ export const OVERVIEW_FIELD_NAMES = [
 ];
 
 // Color theme defaults
+/** @type {Record<string, string>} */
 export const defaultColors = {
   "color-primary": "#fd7d05",
   "color-badge-audio": "#fd7d05",
@@ -62,15 +63,16 @@ function loadSettings() {
       const parsed = JSON.parse(saved);
       // Migrate old overview field names to the renamed fields.
       if (Array.isArray(parsed.overviewFields)) {
+        /** @type {Record<string, string>} */
         const renames = {
           year: "date",
           track: "trackNumber",
           disk: "diskNumber",
         };
+        /** @type {string[]} */
+        const fields = parsed.overviewFields;
         parsed.overviewFields = [
-          ...new Set(
-            parsed.overviewFields.map((field) => renames[field] || field),
-          ),
+          ...new Set(fields.map((field) => renames[field] || field)),
         ];
       }
       // Merge with defaults to ensure all fields exist
@@ -89,6 +91,9 @@ function loadSettings() {
 export const settings = writable(loadSettings());
 
 // Save settings to localStorage
+/**
+ * @param {Record<string, any>} newSettings
+ */
 export function saveSettings(newSettings) {
   try {
     localStorage.setItem("appSettings", JSON.stringify(newSettings));
@@ -100,6 +105,13 @@ export function saveSettings(newSettings) {
 }
 
 // Updated to accept options parameter
+/**
+ * @param {string} scheme
+ * @param {string} path
+ * @param {boolean} [isFolder]
+ * @param {{ replaceSpaces?: boolean }} [options]
+ * @returns {Promise<any>}
+ */
 export async function applyRenamingScheme(
   scheme,
   path,
@@ -129,12 +141,16 @@ export async function applyRenamingScheme(
 
     return result;
   } catch (error) {
-    throw new Error(`Failed to apply renaming scheme: ${error.message}`, {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to apply renaming scheme: ${message}`, {
       cause: error,
     });
   }
 }
 
+/**
+ * @param {Record<string, any>} settingsObj
+ */
 export function applyThemeFromSettings(settingsObj) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;

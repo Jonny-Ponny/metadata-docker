@@ -8,6 +8,18 @@
   } from "../utils/index.js";
 
   // Svelte 5: Use $props() instead of export let
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [show]
+   * @property {number} [lineIndex]
+   * @property {string} [currentValue]
+   * @property {number} [currentTime]
+   * @property {string[]} [timestamps]
+   * @property {() => void} [onClose]
+   * @property {(index: number, value: string) => void} [onSave]
+   */
+
+  /** @type {Props} */
   let {
     show = false,
     lineIndex = -1,
@@ -115,6 +127,9 @@
       timestampError = "";
 
       // Add event listener to prevent keyboard events from bubbling
+      /**
+       * @param {KeyboardEvent} e
+       */
       const handleKeyDown = (e) => {
         // Stop propagation for all keyboard events when modal is open
         e.stopPropagation();
@@ -131,6 +146,10 @@
   // Input formatting
   // =======================
   // Add these functions to your script section
+  /**
+   * @param {string} value
+   * @returns {string}
+   */
   function formatTimestampInput(value) {
     // Remove all non-digit characters
     const digits = value.replace(/\D/g, "");
@@ -167,8 +186,11 @@
     }
   }
 
+  /**
+   * @param {Event} e
+   */
   function handleTimestampInput(e) {
-    const input = e.target;
+    const input = /** @type {HTMLInputElement} */ (e.target);
     const rawValue = input.value;
     const cursorPos = input.selectionStart;
 
@@ -203,6 +225,9 @@
     }
   }
 
+  /**
+   * @param {KeyboardEvent} e
+   */
   function handleTimestampKeydown(e) {
     // Stop propagation to prevent App from handling Delete key
     e.stopPropagation();

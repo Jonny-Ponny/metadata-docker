@@ -1,5 +1,14 @@
 <!-- src/components/EditModal.svelte -->
 <script>
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [show]
+   * @property {string} editingText
+   * @property {() => void} [onClose]
+   * @property {(text: string) => void} [onSave]
+   */
+
+  /** @type {Props} */
   let {
     show = false,
     editingText = $bindable(), // Mark as bindable for two-way binding
@@ -7,7 +16,9 @@
     onSave = () => {},
   } = $props();
 
-  let textareaElement = $state(null);
+  let textareaElement = $state(
+    /** @type {HTMLTextAreaElement | null} */ (null),
+  );
 
   function handleClose() {
     onClose();
@@ -20,9 +31,10 @@
   // Focus textarea when modal opens
   $effect(() => {
     if (show && textareaElement) {
+      const element = textareaElement;
       // Small delay to ensure the DOM is fully rendered
       setTimeout(() => {
-        textareaElement.focus();
+        element.focus();
       }, 100);
     }
   });
@@ -30,6 +42,9 @@
   // Add event listener to prevent keyboard events from bubbling
   $effect(() => {
     if (show) {
+      /**
+       * @param {KeyboardEvent} e
+       */
       const handleKeyDown = (e) => {
         // Stop propagation for all keyboard events when modal is open
         e.stopPropagation();

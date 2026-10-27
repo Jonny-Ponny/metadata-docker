@@ -1,5 +1,6 @@
 // src/utils/fieldMetadata.utils.js
 
+/** @type {Record<string, { label: string, description: string }>} */
 export const FIELD_METADATA = {
   title: {
     label: "Title",
@@ -52,11 +53,19 @@ export const FIELD_METADATA = {
 };
 
 // Helper to get label for a field key
+/**
+ * @param {string} key
+ * @returns {string}
+ */
 export function getFieldLabel(key) {
   return FIELD_METADATA[key]?.label || key;
 }
 
 // Helper to get description for a field key
+/**
+ * @param {string} key
+ * @returns {string}
+ */
 export function getFieldDescription(key) {
   return FIELD_METADATA[key]?.description || "";
 }

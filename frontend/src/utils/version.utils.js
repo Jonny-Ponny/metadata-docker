@@ -9,6 +9,7 @@ import { readApiError, readJsonResponse } from "./api.utils.js";
 
 const VERSION_FALLBACK = "Could not read the version information";
 
+/** @type {Promise<any> | null} */
 let versionRequest = null;
 
 /**

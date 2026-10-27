@@ -4,7 +4,7 @@
   import { sortConfig } from "../utils/index.js";
 
   let isOpen = $state(false);
-  let buttonRef = $state(null);
+  let buttonRef = $state(/** @type {HTMLDivElement | null} */ (null));
 
   const sortOptions = [
     { value: "name", label: "Name" },
@@ -16,6 +16,9 @@
     isOpen = !isOpen;
   }
 
+  /**
+   * @param {string} option
+   */
   function setSort(option) {
     $sortConfig = {
       ...$sortConfig,
@@ -32,8 +35,15 @@
   }
 
   // Close menu when clicking outside
+  /**
+   * @param {MouseEvent} e
+   */
   function handleClickOutside(e) {
-    if (buttonRef && !buttonRef.contains(e.target)) {
+    if (
+      buttonRef &&
+      e.target instanceof Node &&
+      !buttonRef.contains(e.target)
+    ) {
       isOpen = false;
     }
   }

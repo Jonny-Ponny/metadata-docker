@@ -2,12 +2,28 @@
 
 import { writable } from "svelte/store";
 
+/**
+ * Minimal shape the sorter reads; tree nodes carry many more fields.
+ * @typedef {Object} SortableItem
+ * @property {string} name
+ * @property {string} [type]
+ * @property {string | number} [created]
+ * @property {string | number} [modified]
+ */
+
 export const sortConfig = writable({
   by: "name", // 'name', 'created', 'modified'
   direction: "asc", // 'asc' or 'desc'
 });
 
 // Helper function to sort items
+/**
+ * @template {SortableItem} T
+ * @param {T[]} items
+ * @param {string} sortBy
+ * @param {string} direction
+ * @returns {T[]}
+ */
 export function sortItems(items, sortBy, direction) {
   if (!items || items.length === 0) return items;
 
@@ -16,6 +32,11 @@ export function sortItems(items, sortBy, direction) {
   const files = items.filter((item) => item.type === "file");
 
   // Sort function
+  /**
+   * @param {SortableItem} a
+   * @param {SortableItem} b
+   * @returns {number}
+   */
   const sorter = (a, b) => {
     let aVal, bVal;
 

@@ -2,6 +2,12 @@
 <script>
   import { toast } from "../utils/index.js";
 
+  /**
+   * @typedef {Object} Props
+   * @property {string} filePath
+   */
+
+  /** @type {Props} */
   let { filePath } = $props();
 
   let content = $state("");
@@ -21,7 +27,7 @@
       const data = await res.json();
       content = data.content || "";
     } catch (e) {
-      error = e.message;
+      error = e instanceof Error ? e.message : String(e);
       toast.error(error);
     } finally {
       isLoading = false;
@@ -42,7 +48,8 @@
       }
       toast.success("Text saved");
     } catch (e) {
-      toast.error(`Save error: ${e.message}`);
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error(`Save error: ${message}`);
     } finally {
       isSaving = false;
     }

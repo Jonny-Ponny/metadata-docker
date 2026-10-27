@@ -3,8 +3,24 @@
   import { onMount } from "svelte";
   import { formatTimeDisplay, settings } from "../utils/index.js";
 
+  /**
+   * @typedef {Object} AudioFile
+   * @property {string} url
+   * @property {string} [name]
+   * @property {string} [originalName]
+   * @property {string} [type]
+   */
+
+  /**
+   * @typedef {Object} Props
+   * @property {AudioFile | null} [audioFile]
+   * @property {(time: number) => void} [ontimeupdate]
+   */
+
+  /** @type {Props} */
   let { audioFile, ontimeupdate } = $props();
 
+  /** @type {HTMLAudioElement | null} */
   let audio = null;
   let playing = $state(false);
   let currentTime = $state(0);
@@ -33,6 +49,9 @@
   }
 
   // Helper function to save volume
+  /**
+   * @param {number} vol
+   */
   function saveVolume(vol) {
     try {
       localStorage.setItem(VOLUME_STORAGE_KEY, vol.toString());
@@ -42,6 +61,10 @@
   }
 
   // Helper to resolve a URL to an absolute string
+  /**
+   * @param {string} url
+   * @returns {string}
+   */
   function resolveUrl(url) {
     try {
       return new URL(url, window.location.href).href;
@@ -52,11 +75,12 @@
 
   onMount(() => {
     volume = loadSavedVolume();
-    audio = new Audio();
-    audio.volume = volume;
+    const player = new Audio();
+    audio = player;
+    player.volume = volume;
 
-    audio.addEventListener("timeupdate", () => {
-      currentTime = audio.currentTime;
+    player.addEventListener("timeupdate", () => {
+      currentTime = player.currentTime;
       if (ontimeupdate) ontimeupdate(currentTime);
 
       // Dispatch event for lyrics editor
@@ -66,16 +90,16 @@
       window.dispatchEvent(event);
     });
 
-    audio.addEventListener("loadedmetadata", () => {
-      duration = audio.duration;
+    player.addEventListener("loadedmetadata", () => {
+      duration = player.duration;
       waitingForMetadata = false;
       if (shouldAutoPlay) {
-        audio
+        player
           .play()
           .then(() => {
             playing = true;
           })
-          .catch((err) => {
+          .catch((/** @type {unknown} */ err) => {
             console.error("[Player] Auto-play failed:", err);
             playing = false;
           });
@@ -83,29 +107,37 @@
       }
     });
 
-    audio.addEventListener("ended", () => {
+    player.addEventListener("ended", () => {
       playing = false;
     });
 
-    audio.addEventListener("error", () => {
-      console.error("[Player] Audio error:", audio.error);
+    player.addEventListener("error", () => {
+      console.error("[Player] Audio error:", player.error);
     });
 
-    audio.addEventListener("seeked", () => {});
+    player.addEventListener("seeked", () => {});
 
-    audio.addEventListener("canplay", () => {});
+    player.addEventListener("canplay", () => {});
 
-    audio.addEventListener("waiting", () => {});
+    player.addEventListener("waiting", () => {});
 
     // Listen for lyrics-seek events (when user clicks on a timestamp/lyric line)
+    /**
+     * @param {Event} e
+     */
     const handleLyricsSeek = (e) => {
-      const time = e.detail.time;
+      const { time } = /** @type {CustomEvent<{ time: number }>} */ (e).detail;
       seekToTime(time);
     };
 
     // Listen for get-current-time events (when sync button is pressed)
+    /**
+     * @param {Event} e
+     */
     const handleGetCurrentTime = (e) => {
-      const callback = e.detail.callback;
+      const { callback } =
+        /** @type {CustomEvent<{ callback?: (time: number) => void }>} */ (e)
+          .detail;
       if (callback && typeof callback === "function") {
         callback(currentTime);
       }
@@ -115,10 +147,8 @@
     window.addEventListener("get-current-time", handleGetCurrentTime);
 
     return () => {
-      if (audio) {
-        audio.pause();
-        audio.src = "";
-      }
+      player.pause();
+      player.src = "";
       window.removeEventListener("lyrics-seek", handleLyricsSeek);
       window.removeEventListener("get-current-time", handleGetCurrentTime);
     };
@@ -129,16 +159,17 @@
       return;
     }
 
-    if (!audio.src) {
-      audio.src = audioFile.url;
+    const player = audio;
+    if (!player.src) {
+      player.src = audioFile.url;
     }
 
     if (playing) {
-      audio.pause();
+      player.pause();
       playing = false;
     } else {
       try {
-        await audio.play();
+        await player.play();
         playing = true;
       } catch (err) {
         console.error("[Player] Playback failed:", err);
@@ -147,45 +178,59 @@
     }
   }
 
+  /**
+   * @param {MouseEvent} e
+   */
   function seek(e) {
     if (!audio || !duration) {
       return;
     }
-    const rect = e.currentTarget.getBoundingClientRect();
+    const player = audio;
+    const target = /** @type {HTMLElement} */ (e.currentTarget);
+    const rect = target.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
     const time = percent * duration;
-    audio.currentTime = time;
+    player.currentTime = time;
     if (ontimeupdate) ontimeupdate(time);
   }
 
+  /**
+   * @param {Event} e
+   */
   function setVolume(e) {
-    volume = parseFloat(e.target.value);
+    const input = /** @type {HTMLInputElement} */ (e.target);
+    volume = parseFloat(input.value);
     if (audio) audio.volume = volume;
-    e.target.style.setProperty("--fill-percent", `${volume * 100}%`);
+    input.style.setProperty("--fill-percent", `${volume * 100}%`);
 
     // Save to localStorage
     saveVolume(volume);
   }
 
+  /**
+   * @param {number} timeInSeconds
+   * @returns {boolean}
+   */
   function seekToTime(timeInSeconds) {
     if (!audio || !audioFile) {
       return false;
     }
-    if (!audio.src) {
-      audio.src = audioFile.url;
+    const player = audio;
+    if (!player.src) {
+      player.src = audioFile.url;
     }
 
     const doSeekAndPlay = () => {
       const targetTime = Math.max(
         0,
-        Math.min(timeInSeconds, audio.duration || 0),
+        Math.min(timeInSeconds, player.duration || 0),
       );
-      audio.currentTime = targetTime;
-      if (ontimeupdate) ontimeupdate(audio.currentTime);
+      player.currentTime = targetTime;
+      if (ontimeupdate) ontimeupdate(player.currentTime);
 
       if (!playing) {
         playing = true; // <-- optimistic update
-        audio.play().catch((err) => {
+        player.play().catch((/** @type {unknown} */ err) => {
           console.error("[Player] Playback failed in seekToTime:", err);
           playing = false; // revert on failure
         });
@@ -193,16 +238,16 @@
     };
 
     // If duration isn't known yet, wait for metadata
-    if (!duration && audio.readyState < 1) {
+    if (!duration && player.readyState < 1) {
       waitingForMetadata = true;
       const onLoaded = () => {
-        audio.removeEventListener("loadedmetadata", onLoaded);
+        player.removeEventListener("loadedmetadata", onLoaded);
         if (waitingForMetadata) {
           doSeekAndPlay();
           waitingForMetadata = false;
         }
       };
-      audio.addEventListener("loadedmetadata", onLoaded);
+      player.addEventListener("loadedmetadata", onLoaded);
     } else {
       doSeekAndPlay();
     }
@@ -211,9 +256,10 @@
 
   function stop() {
     if (audio) {
-      audio.pause();
-      audio.src = "";
-      audio.load();
+      const player = audio;
+      player.pause();
+      player.src = "";
+      player.load();
       playing = false;
       currentTime = 0;
       duration = 0;
@@ -224,12 +270,13 @@
   $effect(() => {
     if (!audioFile?.url || !audio) return;
 
+    const player = audio;
     const newUrl = resolveUrl(audioFile.url);
-    const currentUrl = resolveUrl(audio.src || "");
+    const currentUrl = resolveUrl(player.src || "");
     if (currentUrl === newUrl) return;
 
     const wasPlaying = playing;
-    audio.src = audioFile.url; // set with original string (browser will resolve)
+    player.src = audioFile.url; // set with original string (browser will resolve)
     playing = false;
     currentTime = 0;
     duration = 0;
@@ -245,6 +292,9 @@
     return currentTime;
   }
 
+  /**
+   * @param {WheelEvent} e
+   */
   function handleVolumeScroll(e) {
     if (!$settings.enablePlayer) return;
 
@@ -262,8 +312,8 @@
       if (audio) audio.volume = volume;
 
       // Update the input element's value and style
-      const volumeInput = e.currentTarget;
-      volumeInput.value = volume;
+      const volumeInput = /** @type {HTMLInputElement} */ (e.currentTarget);
+      volumeInput.value = String(volume);
       volumeInput.style.setProperty("--volume-percent", `${volume * 100}`);
 
       // Save to localStorage

@@ -29,6 +29,7 @@ describe("fetchVersionInfo", () => {
   });
 
   it("shares one request between concurrent callers", async () => {
+    /** @type {((value: any) => void) | undefined} */
     let resolveFetch;
     const fetchMock = vi.fn(
       () =>
@@ -45,6 +46,7 @@ describe("fetchVersionInfo", () => {
     expect(first).toBe(second);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
+    if (!resolveFetch) throw new Error("fetch was not called");
     resolveFetch({
       ok: true,
       status: 200,

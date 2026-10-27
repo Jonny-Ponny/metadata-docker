@@ -23,25 +23,63 @@ import {
   uploadWithProgress,
 } from "../upload.utils.js";
 
+/**
+ * Enough of XMLHttpRequest for the upload helper: the properties it assigns and
+ * the events it fires back.
+ */
 class FakeXHR {
+  /** @type {FakeXHR[]} */
   static instances = [];
 
+  /** @type {{ onprogress: (event: any) => void }} */
+  upload = { onprogress: () => {} };
+  /** @type {Record<string, string>} */
+  headers = {};
+  /** @type {boolean} */
+  sent = false;
+  /** @type {string} */
+  method = "";
+  /** @type {string} */
+  url = "";
+  /** @type {any} */
+  body;
+  /** @type {boolean} */
+  aborted = false;
+  /** @type {number} */
+  status = 0;
+  /** @type {string} */
+  responseText = "";
+  /** @type {() => void} */
+  onabort = () => {};
+  /** @type {() => void} */
+  onload = () => {};
+  /** @type {() => void} */
+  onerror = () => {};
+  /** @type {() => void} */
+  ontimeout = () => {};
+
   constructor() {
-    this.upload = {};
-    this.headers = {};
-    this.sent = false;
     FakeXHR.instances.push(this);
   }
 
+  /**
+   * @param {string} method
+   * @param {string} url
+   */
   open(method, url) {
     this.method = method;
     this.url = url;
   }
 
+  /**
+   * @param {string} name
+   * @param {string} value
+   */
   setRequestHeader(name, value) {
     this.headers[name] = value;
   }
 
+  /** @param {any} body */
   send(body) {
     this.body = body;
     this.sent = true;
@@ -52,6 +90,10 @@ class FakeXHR {
     this.onabort?.();
   }
 
+  /**
+   * @param {number} status
+   * @param {string} text
+   */
   respond(status, text) {
     this.status = status;
     this.responseText = text;
@@ -59,29 +101,78 @@ class FakeXHR {
   }
 }
 
-const fileEntry = (name, file) => ({
-  name,
-  isFile: true,
-  isDirectory: false,
-  file: (resolve) => resolve({ name, size: 1, ...file }),
+/** @returns {FakeXHR} */
+function lastXHR() {
+  const xhr = FakeXHR.instances.at(-1);
+  if (!xhr) throw new Error("No XMLHttpRequest was created");
+  return xhr;
+}
+
+/**
+ * Minimal Response stub for the fetch mocks.
+ * @param {number} status
+ * @param {string} text
+ * @param {boolean} [ok]
+ */
+const jsonResponse = (status, text, ok = true) => ({
+  ok,
+  status,
+  text: async () => text,
 });
 
+/**
+ * The upload helpers only read `name`, `size` and `webkitRelativePath`, so the
+ * tests use plain objects and cast them at the boundary.
+ * @param {Array<{ name: string, size: number, webkitRelativePath?: string }>} items
+ * @returns {File[]}
+ */
+const asFiles = (items) =>
+  /** @type {File[]} */ (/** @type {unknown} */ (items));
+
+/**
+ * @param {string} name
+ * @param {Record<string, any>} [file]
+ * @returns {FileSystemFileEntry}
+ */
+const fileEntry = (name, file = {}) =>
+  /** @type {FileSystemFileEntry} */ (
+    /** @type {unknown} */ ({
+      name,
+      isFile: true,
+      isDirectory: false,
+      file: (/** @type {(value: any) => void} */ resolve) =>
+        resolve({ name, size: 1, ...file }),
+    })
+  );
+
+/**
+ * @param {string} name
+ * @param {FileSystemEntry[][]} batches
+ * @returns {FileSystemDirectoryEntry}
+ */
 const directoryEntry = (name, batches) => {
   let batchIndex = 0;
-  return {
-    name,
-    isFile: false,
-    isDirectory: true,
-    createReader() {
-      return {
-        readEntries: (resolve) => {
-          const batch = batches[batchIndex] ?? [];
-          batchIndex += 1;
-          resolve(batch);
-        },
-      };
-    },
-  };
+  return /** @type {FileSystemDirectoryEntry} */ (
+    /** @type {unknown} */ ({
+      name,
+      isFile: false,
+      isDirectory: true,
+      createReader() {
+        return /** @type {FileSystemDirectoryReader} */ (
+          /** @type {unknown} */ ({
+            /**
+             * @param {(value: FileSystemEntry[]) => void} resolve
+             */
+            readEntries: (resolve) => {
+              const batch = batches[batchIndex] ?? [];
+              batchIndex += 1;
+              resolve(batch);
+            },
+          })
+        );
+      },
+    })
+  );
 };
 
 beforeEach(() => {
@@ -150,7 +241,7 @@ describe("buildExistingIndex", () => {
       null,
     ];
 
-    expect([...buildExistingIndex(tree)]).toEqual([
+    expect([...buildExistingIndex(/** @type {any} */ (tree))]).toEqual([
       ["Album/one.mp3", 1],
       ["Album/CD2/two.flac", 2],
       ["loose.wav", 3],
@@ -167,7 +258,7 @@ describe("collectDropFiles", () => {
       { name: "two.flac", size: 20, webkitRelativePath: "Album/two.flac" },
     ];
 
-    const result = await collectDropFiles([], files, { onProgress });
+    const result = await collectDropFiles([], asFiles(files), { onProgress });
 
     expect(result.map((entry) => entry.relativePath)).toEqual([
       "Album/one.mp3",
@@ -179,10 +270,10 @@ describe("collectDropFiles", () => {
   it("uses file names when there is no relative path", async () => {
     const result = await collectDropFiles(
       [],
-      [
+      asFiles([
         { name: "one.mp3", size: 10 },
         { name: "._one.mp3", size: 1 },
-      ],
+      ]),
     );
 
     expect(result).toEqual([
@@ -223,15 +314,17 @@ describe("collectDropFiles", () => {
     const controller = new AbortController();
     const root = directoryEntry("Album", [
       [
-        {
-          name: "slow.mp3",
-          isFile: true,
-          isDirectory: false,
-          file: (resolve) => {
-            controller.abort();
-            resolve({ name: "slow.mp3", size: 1 });
-          },
-        },
+        /** @type {FileSystemFileEntry} */ (
+          /** @type {unknown} */ ({
+            name: "slow.mp3",
+            isFile: true,
+            isDirectory: false,
+            file: (/** @type {(value: any) => void} */ resolve) => {
+              controller.abort();
+              resolve({ name: "slow.mp3", size: 1 });
+            },
+          })
+        ),
       ],
       [],
     ]);
@@ -244,11 +337,10 @@ describe("collectDropFiles", () => {
 
 describe("ensureDirectory", () => {
   it("creates a folder with the merge policy", async () => {
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ path: "Album/CD1" }),
-    }));
+    const fetchMock = vi.fn(
+      async (/** @type {string} */ _url, /** @type {any} */ _options) =>
+        jsonResponse(200, JSON.stringify({ path: "Album/CD1" })),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(ensureDirectory("Album/CD1")).resolves.toBe("Album/CD1");
@@ -339,16 +431,16 @@ describe("fetchStorage", () => {
 
 describe("fetchUploadLimit", () => {
   it("reads max_upload_bytes from the version payload", async () => {
-    fetchVersionInfo.mockResolvedValue({ max_upload_bytes: 1024 });
+    vi.mocked(fetchVersionInfo).mockResolvedValue({ max_upload_bytes: 1024 });
 
     await expect(fetchUploadLimit()).resolves.toBe(1024);
   });
 
   it("falls back to 0 for a missing or invalid value", async () => {
-    fetchVersionInfo.mockResolvedValue({});
+    vi.mocked(fetchVersionInfo).mockResolvedValue({});
     await expect(fetchUploadLimit()).resolves.toBe(0);
 
-    fetchVersionInfo.mockResolvedValue({ max_upload_bytes: "nope" });
+    vi.mocked(fetchVersionInfo).mockResolvedValue({ max_upload_bytes: "nope" });
     await expect(fetchUploadLimit()).resolves.toBe(0);
   });
 });
@@ -364,7 +456,7 @@ describe("uploadWithProgress", () => {
       conflict: UPLOAD_CONFLICT_KEEP_BOTH,
       onProgress,
     });
-    const xhr = FakeXHR.instances.at(-1);
+    const xhr = lastXHR();
 
     expect(xhr.method).toBe("POST");
     expect(xhr.url).toBe("/api/upload");
@@ -388,7 +480,7 @@ describe("uploadWithProgress", () => {
 
   it("defaults to the skip-identical conflict policy", async () => {
     const promise = uploadWithProgress(makeFile());
-    const xhr = FakeXHR.instances.at(-1);
+    const xhr = lastXHR();
 
     expect(xhr.body.get("conflict")).toBe(UPLOAD_CONFLICT_SKIP_IDENTICAL);
 
@@ -398,16 +490,17 @@ describe("uploadWithProgress", () => {
 
   it("resolves with an empty object for an empty success body", async () => {
     const promise = uploadWithProgress(makeFile());
-    FakeXHR.instances.at(-1).respond(204, "");
+    lastXHR().respond(204, "");
 
     await expect(promise).resolves.toEqual({});
   });
 
   it("uses the backend error message for a rejected upload", async () => {
     const promise = uploadWithProgress(makeFile());
-    FakeXHR.instances
-      .at(-1)
-      .respond(400, JSON.stringify({ error: "File type is not supported" }));
+    lastXHR().respond(
+      400,
+      JSON.stringify({ error: "File type is not supported" }),
+    );
 
     await expect(promise).rejects.toMatchObject({
       message: "File type is not supported",
@@ -418,7 +511,7 @@ describe("uploadWithProgress", () => {
 
   it("marks 5xx responses as retryable", async () => {
     const promise = uploadWithProgress(makeFile());
-    FakeXHR.instances.at(-1).respond(503, "");
+    lastXHR().respond(503, "");
 
     await expect(promise).rejects.toMatchObject({
       message: "Upload failed (HTTP 503)",
@@ -429,14 +522,14 @@ describe("uploadWithProgress", () => {
 
   it("marks network failures and timeouts as retryable", async () => {
     const network = uploadWithProgress(makeFile());
-    FakeXHR.instances.at(-1).onerror();
+    lastXHR().onerror();
     await expect(network).rejects.toMatchObject({
       status: 0,
       retryable: true,
     });
 
     const timeout = uploadWithProgress(makeFile());
-    FakeXHR.instances.at(-1).ontimeout();
+    lastXHR().ontimeout();
     await expect(timeout).rejects.toMatchObject({
       message: "The upload timed out.",
       status: 0,
@@ -449,7 +542,7 @@ describe("uploadWithProgress", () => {
     const promise = uploadWithProgress(makeFile(), {
       signal: controller.signal,
     });
-    const xhr = FakeXHR.instances.at(-1);
+    const xhr = lastXHR();
 
     controller.abort();
 
@@ -467,7 +560,7 @@ describe("uploadWithProgress", () => {
     const promise = uploadWithProgress(makeFile(), {
       signal: controller.signal,
     });
-    const xhr = FakeXHR.instances.at(-1);
+    const xhr = lastXHR();
 
     expect(xhr.sent).toBe(false);
     await expect(promise).rejects.toMatchObject({ aborted: true });
@@ -475,6 +568,11 @@ describe("uploadWithProgress", () => {
 });
 
 describe("checkSpace", () => {
+  /**
+   * @param {number} musicFree
+   * @param {number} tempFree
+   * @param {number} [headroom]
+   */
   const storage = (musicFree, tempFree, headroom = 1024 * 1024) => ({
     headroom,
     music: { free: musicFree },

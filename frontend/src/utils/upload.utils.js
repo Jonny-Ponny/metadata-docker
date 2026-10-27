@@ -38,7 +38,67 @@ const JUNK_DIR_NAMES = new Set([
   ".fseventsd",
 ]);
 
-/** True for OS metadata files that are never wanted in a music library. */
+/**
+ * A dropped file plus its path relative to the drop root.
+ * @typedef {Object} DroppedFile
+ * @property {File} file
+ * @property {string} relativePath
+ */
+
+/**
+ * @typedef {Object} ScanProgress
+ * @property {number} files
+ * @property {number} bytes
+ */
+
+/**
+ * @typedef {Object} CollectDropOptions
+ * @property {AbortSignal} [signal]
+ * @property {(progress: ScanProgress) => void} [onProgress]
+ */
+
+/**
+ * @typedef {Object} ScanContext
+ * @property {AbortSignal} [signal]
+ * @property {DroppedFile[]} collected
+ * @property {number} count
+ * @property {number} bytes
+ * @property {(count: number, bytes: number) => void} report
+ */
+
+/**
+ * @typedef {Object} UploadOptions
+ * @property {string} [targetPath]
+ * @property {string} [conflict]
+ * @property {(loaded: number, total: number) => void} [onProgress]
+ * @property {AbortSignal} [signal]
+ */
+
+/**
+ * @typedef {Error & { status?: number, retryable?: boolean, aborted?: boolean }} UploadError
+ */
+
+/**
+ * File/folder node fields the existing-file index reads.
+ * @typedef {Object} TreeNode
+ * @property {string} type
+ * @property {string} path
+ * @property {number} [size]
+ * @property {TreeNode[]} [children]
+ */
+
+/**
+ * @typedef {Object} StorageInfo
+ * @property {number} [headroom]
+ * @property {{ free?: number }} [music]
+ * @property {{ free?: number }} [temp]
+ */
+
+/**
+ * True for OS metadata files that are never wanted in a music library.
+ * @param {string | null} [relativePath]
+ * @returns {boolean}
+ */
 export function isJunkPath(relativePath) {
   const segments = String(relativePath || "")
     .split("/")
@@ -64,6 +124,11 @@ export function isJunkPath(relativePath) {
  * `signal` makes the walk cancellable (the scan of a large folder is the
  * slowest part before the first byte is sent) and `onProgress` reports how
  * many files / bytes have been found so far, for the tray.
+ *
+ * @param {FileSystemEntry[]} [entries]
+ * @param {File[]} [files]
+ * @param {CollectDropOptions} [options]
+ * @returns {Promise<DroppedFile[]>}
  */
 export async function collectDropFiles(
   entries = [],
@@ -73,6 +138,10 @@ export async function collectDropFiles(
   throwIfAborted(signal);
 
   const fileList = Array.from(files || []);
+  /**
+   * @param {number} count
+   * @param {number} bytes
+   */
   const report = (count, bytes) => onProgress?.({ files: count, bytes });
 
   if (fileList.some((file) => file.webkitRelativePath)) {
@@ -91,6 +160,7 @@ export async function collectDropFiles(
 
   const topLevelEntries = Array.from(entries || []).filter(Boolean);
   if (topLevelEntries.some((entry) => entry.isDirectory)) {
+    /** @type {ScanContext} */
     const context = {
       signal,
       collected: [],
@@ -120,6 +190,9 @@ export async function collectDropFiles(
 // browser's filesystem queue busy without opening thousands of handles.
 const SCAN_CONCURRENCY = 32;
 
+/**
+ * @param {AbortSignal} [signal]
+ */
 function throwIfAborted(signal) {
   if (!signal?.aborted) return;
   const error = new Error("Upload cancelled.");
@@ -127,14 +200,27 @@ function throwIfAborted(signal) {
   throw error;
 }
 
+/**
+ * @param {FileSystemFileEntry} entry
+ * @returns {Promise<File>}
+ */
 function readFileEntry(entry) {
   return new Promise((resolve, reject) => entry.file(resolve, reject));
 }
 
+/**
+ * @param {FileSystemDirectoryReader} reader
+ * @returns {Promise<FileSystemEntry[]>}
+ */
 function readEntryBatch(reader) {
   return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
 }
 
+/**
+ * @param {FileSystemEntry} entry
+ * @param {string} parentPath
+ * @param {ScanContext} context
+ */
 async function walkEntry(entry, parentPath, context) {
   throwIfAborted(context.signal);
 
@@ -142,7 +228,9 @@ async function walkEntry(entry, parentPath, context) {
 
   if (entry.isFile) {
     if (isJunkPath(relativePath)) return;
-    const file = await readFileEntry(entry);
+    const file = await readFileEntry(
+      /** @type {FileSystemFileEntry} */ (entry),
+    );
     throwIfAborted(context.signal);
     context.collected.push({ file, relativePath });
     context.count += 1;
@@ -154,7 +242,7 @@ async function walkEntry(entry, parentPath, context) {
   if (!entry.isDirectory) return;
   if (JUNK_DIR_NAMES.has(entry.name) || isJunkPath(relativePath)) return;
 
-  const reader = entry.createReader();
+  const reader = /** @type {FileSystemDirectoryEntry} */ (entry).createReader();
   // readEntries() returns at most 100 entries per call, so drain it instead of
   // assuming a single call sees the whole directory.
   while (true) {
@@ -167,6 +255,13 @@ async function walkEntry(entry, parentPath, context) {
   }
 }
 
+/**
+ * @template T
+ * @param {T[]} items
+ * @param {number} limit
+ * @param {(item: T) => Promise<void>} run
+ * @returns {Promise<void>}
+ */
 async function mapLimit(items, limit, run) {
   let next = 0;
   const workers = Array.from(
@@ -185,7 +280,12 @@ async function mapLimit(items, limit, run) {
   await Promise.all(workers);
 }
 
-/** Map relative library path -> file size, from the already loaded tree. */
+/**
+ * Map relative library path -> file size, from the already loaded tree.
+ * @param {TreeNode[]} [nodes]
+ * @param {Map<string, number | undefined>} [index]
+ * @returns {Map<string, number | undefined>}
+ */
 export function buildExistingIndex(nodes, index = new Map()) {
   for (const node of nodes || []) {
     if (!node) continue;
@@ -198,19 +298,32 @@ export function buildExistingIndex(nodes, index = new Map()) {
   return index;
 }
 
+/**
+ * @param {...(string | null | undefined)} parts
+ * @returns {string}
+ */
 export function joinUploadPath(...parts) {
   return parts
     .filter((part) => part !== undefined && part !== null && part !== "")
     .join("/");
 }
 
+/**
+ * @param {string | null} [relativePath]
+ * @returns {string}
+ */
 export function dirnameUploadPath(relativePath) {
   const parts = String(relativePath || "").split("/");
   parts.pop();
   return parts.join("/");
 }
 
-/** Create a folder, merging into it when it already exists. */
+/**
+ * Create a folder, merging into it when it already exists.
+ * @param {string} relativePath
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<string>}
+ */
 export async function ensureDirectory(relativePath, { signal } = {}) {
   const response = await fetch("/api/mkdir", {
     method: "POST",
@@ -223,6 +336,7 @@ export async function ensureDirectory(relativePath, { signal } = {}) {
   });
 
   const text = await response.text();
+  /** @type {Record<string, any>} */
   let data = {};
   if (text) {
     try {
@@ -245,8 +359,14 @@ export async function ensureDirectory(relativePath, { signal } = {}) {
   return data.path ?? relativePath;
 }
 
+/**
+ * @param {Response} response
+ * @param {string} fallback
+ * @returns {Promise<Record<string, any>>}
+ */
 async function readJsonBody(response, fallback) {
   const text = await response.text();
+  /** @type {Record<string, any>} */
   let data = {};
   if (text) {
     try {
@@ -279,6 +399,10 @@ export async function fetchUploadLimit() {
  * Resolves with the parsed JSON response. Rejections carry `status`,
  * `retryable` and `aborted` so the queue can decide between retrying,
  * reporting and stopping.
+ *
+ * @param {File} file
+ * @param {UploadOptions} [options]
+ * @returns {Promise<any>}
  */
 export function uploadWithProgress(
   file,
@@ -299,8 +423,13 @@ export function uploadWithProgress(
       xhr.setRequestHeader(name, value);
     }
 
+    /**
+     * @param {string} message
+     * @param {number} status
+     * @param {Partial<UploadError>} [extra]
+     */
     const fail = (message, status, extra = {}) => {
-      const error = new Error(message);
+      const error = /** @type {UploadError} */ (new Error(message));
       error.status = status;
       error.retryable =
         status === 0 || status === 408 || status === 429 || status >= 500;
@@ -313,6 +442,7 @@ export function uploadWithProgress(
     };
 
     xhr.onload = () => {
+      /** @type {any} */
       let data = {};
       if (xhr.responseText) {
         try {
@@ -357,7 +487,13 @@ export function uploadWithProgress(
   });
 }
 
-/** Check the preflight conditions for a batch of files. */
+/**
+ * Check the preflight conditions for a batch of files.
+ * @param {StorageInfo | undefined} storage
+ * @param {number} totalBytes
+ * @param {number} tempPeakBytes
+ * @returns {{ target: string, needed: number, free: number, message: string }[]}
+ */
 export function checkSpace(storage, totalBytes, tempPeakBytes) {
   const problems = [];
   const headroom = Number(storage?.headroom) || 0;
@@ -398,6 +534,10 @@ export function checkSpace(storage, totalBytes, tempPeakBytes) {
   return problems;
 }
 
+/**
+ * @param {unknown} bytes
+ * @returns {string}
+ */
 export function formatBytes(bytes) {
   const value = Number(bytes) || 0;
   if (value < 1024) return `${value} B`;
@@ -411,8 +551,13 @@ export function formatBytes(bytes) {
   return `${size >= 100 ? size.toFixed(0) : size.toFixed(1)} ${units[unit]}`;
 }
 
+/**
+ * @param {number | undefined} seconds
+ * @returns {string}
+ */
 export function formatDuration(seconds) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0)
+    return "";
   if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`;
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} min`;

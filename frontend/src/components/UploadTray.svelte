@@ -47,7 +47,7 @@
 
   let hasError = $derived(
     $upload.failed > 0 ||
-      ($isWarning &&
+      (isWarning &&
         Boolean($upload.message) &&
         !$upload.message.startsWith("Everything") &&
         !$upload.message.startsWith("Nothing") &&
