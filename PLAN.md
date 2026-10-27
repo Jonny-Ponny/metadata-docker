@@ -109,9 +109,9 @@ in this order:
   once the utilities are covered, and coverage for the remaining stores and
   utilities. The harness and tests for `Toast`, `ToastContainer`, `SortButton`,
   `Login`, `CoverPreview`, `HoldButton`, `MetadataEditor`, `UploadTray`,
-  `TreeNode`, `TextEditor`, `EditModal`, `FolderOverview`, `ImageViewer` and
-  `TimestampEditModal` are in place; the remaining stores and utilities are
-  still open.
+  `TreeNode`, `TextEditor`, `EditModal`, `FolderOverview`, `ImageViewer`,
+  `TimestampEditModal` and `Player` are in place; the remaining stores and
+  utilities are still open.
 - A UI bug pass once the checks and tests exist, so fixes can be pinned by a
   regression test.
 

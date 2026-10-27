@@ -165,7 +165,7 @@ Covered areas:
   `TextEditor` load, save and clipboard; `EditModal` save and close paths;
   `FolderOverview` missing-field reports; `ImageViewer` loading, retry and the
   full-size view; `TimestampEditModal` validation, range hints and keyboard
-  shortcuts.
+  shortcuts; `Player` playback, seeking, clock, volume and disabled state.
 
 Conventions:
 
