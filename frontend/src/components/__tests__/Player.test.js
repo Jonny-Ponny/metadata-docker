@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { get } from "svelte/store";
 
 import Player from "../Player.svelte";
@@ -18,6 +19,8 @@ class FakeAudio {
     this.duration = 0;
     this.volume = 1;
     this.readyState = 0;
+    /** @type {{ code: number } | null} */
+    this.error = null;
     this.play = vi.fn().mockResolvedValue(undefined);
     this.pause = vi.fn();
     this.load = vi.fn();
@@ -73,6 +76,7 @@ describe("Player", () => {
   afterEach(() => {
     settings.set(originalSettings);
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   /**
@@ -188,5 +192,283 @@ describe("Player", () => {
     expect(
       /** @type {HTMLInputElement} */ (screen.getByRole("slider")).disabled,
     ).toBe(true);
+  });
+
+  it("falls back to the default volume for saved invalid values", () => {
+    for (const saved of ["loud", "-0.5", "1.5"]) {
+      localStorage.setItem("player-volume", saved);
+      const { unmount } = render(Player, { props: { audioFile } });
+      expect(currentAudio().volume).toBeCloseTo(0.05);
+      unmount();
+      FakeAudio.instances = [];
+    }
+  });
+
+  it("logs when the saved volume cannot be read", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+
+    render(Player, { props: { audioFile } });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[Player] Failed to load volume from localStorage:",
+      expect.any(Error),
+    );
+    expect(currentAudio().volume).toBeCloseTo(0.05);
+  });
+
+  it("logs when the volume cannot be saved", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(Player, { props: { audioFile } });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("full");
+    });
+
+    await fireEvent.input(screen.getByRole("slider"), {
+      target: { value: "0.4" },
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[Player] Failed to save volume to localStorage:",
+      expect.any(Error),
+    );
+  });
+
+  it("changes the volume with the wheel and clamps it", async () => {
+    render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+    const slider = /** @type {HTMLInputElement} */ (screen.getByRole("slider"));
+
+    await fireEvent.wheel(slider, { deltaY: -100 });
+
+    expect(audio.volume).toBeCloseTo(0.1);
+    expect(slider.value).toBe("0.1");
+    expect(localStorage.getItem("player-volume")).toBe("0.1");
+
+    await fireEvent.wheel(slider, { deltaY: 100 });
+    await fireEvent.wheel(slider, { deltaY: 100 });
+
+    expect(audio.volume).toBe(0);
+    expect(slider.value).toBe("0");
+
+    await fireEvent.input(slider, { target: { value: "0.98" } });
+    await fireEvent.wheel(slider, { deltaY: -100 });
+    await fireEvent.wheel(slider, { deltaY: -100 });
+
+    expect(audio.volume).toBe(1);
+  });
+
+  it("ignores the volume wheel while the player is disabled", async () => {
+    settings.set({ ...originalSettings, enablePlayer: false });
+    render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+
+    await fireEvent.wheel(screen.getByRole("slider"), { deltaY: -100 });
+
+    expect(audio.volume).toBeCloseTo(0.05);
+    expect(localStorage.getItem("player-volume")).toBeNull();
+  });
+
+  it("reports a playback failure and stays paused", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+    audio.play.mockRejectedValueOnce(new Error("blocked"));
+
+    await fireEvent.click(screen.getByTitle("Play"));
+
+    await waitFor(() =>
+      expect(consoleSpy).toHaveBeenCalledWith(
+        "[Player] Playback failed:",
+        expect.any(Error),
+      ),
+    );
+    expect(screen.getByTitle("Play")).toBeTruthy();
+  });
+
+  it("auto-plays the next file after a track change while playing", async () => {
+    const { rerender } = render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+
+    await fireEvent.click(screen.getByTitle("Play"));
+    await waitFor(() => expect(screen.getByTitle("Pause")).toBeTruthy());
+
+    await rerender({
+      audioFile: {
+        ...audioFile,
+        url: "/api/audio?token=next",
+        name: "next.mp3",
+      },
+    });
+    audio.emit("loadedmetadata");
+
+    await waitFor(() => expect(screen.getByTitle("Pause")).toBeTruthy());
+    expect(audio.src).toBe("/api/audio?token=next");
+    expect(audio.play).toHaveBeenCalledTimes(2);
+  });
+
+  it("logs a failed auto-play after a track change", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { rerender } = render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+
+    await fireEvent.click(screen.getByTitle("Play"));
+    audio.play.mockRejectedValueOnce(new Error("blocked"));
+    await rerender({
+      audioFile: {
+        ...audioFile,
+        url: "/api/audio?token=next",
+        name: "next.mp3",
+      },
+    });
+    audio.emit("loadedmetadata");
+
+    await waitFor(() =>
+      expect(consoleSpy).toHaveBeenCalledWith(
+        "[Player] Auto-play failed:",
+        expect.any(Error),
+      ),
+    );
+    expect(screen.getByTitle("Play")).toBeTruthy();
+  });
+
+  it("does not auto-play a track change while paused", async () => {
+    const { rerender } = render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+
+    await rerender({
+      audioFile: {
+        ...audioFile,
+        url: "/api/audio?token=next",
+        name: "next.mp3",
+      },
+    });
+    audio.emit("loadedmetadata");
+
+    expect(audio.play).not.toHaveBeenCalled();
+    expect(screen.getByTitle("Play")).toBeTruthy();
+  });
+
+  it("resets the clock after the track ends", async () => {
+    render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+    await fireEvent.click(screen.getByTitle("Play"));
+    await waitFor(() => expect(screen.getByTitle("Pause")).toBeTruthy());
+    audio.duration = 100;
+    audio.emit("loadedmetadata");
+
+    audio.emit("ended");
+
+    await waitFor(() => expect(screen.getByTitle("Play")).toBeTruthy());
+  });
+
+  it("logs an audio element error", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+    audio.error = { code: 4 };
+
+    audio.emit("error");
+
+    expect(consoleSpy).toHaveBeenCalledWith("[Player] Audio error:", {
+      code: 4,
+    });
+  });
+
+  it("broadcasts time updates and answers get-current-time", async () => {
+    render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+    const timeListener = vi.fn();
+    const timeCallback = vi.fn();
+    window.addEventListener("player-time-update", timeListener);
+
+    audio.currentTime = 12.5;
+    audio.emit("timeupdate");
+    window.dispatchEvent(
+      new CustomEvent("get-current-time", {
+        detail: { callback: timeCallback },
+      }),
+    );
+    await tick();
+
+    expect(timeListener).toHaveBeenCalled();
+    expect(
+      /** @type {CustomEvent<{time: number}>} */ (timeListener.mock.calls[0][0])
+        .detail.time,
+    ).toBe(12.5);
+    expect(timeCallback).toHaveBeenCalledWith(12.5);
+    window.removeEventListener("player-time-update", timeListener);
+  });
+
+  it("clamps a seek to the track duration", () => {
+    const ontimeupdate = vi.fn();
+    const { component } = render(Player, {
+      props: { audioFile, ontimeupdate },
+    });
+    const audio = currentAudio();
+    audio.duration = 100;
+    audio.emit("loadedmetadata");
+
+    component.seekToTime(999);
+
+    expect(audio.currentTime).toBe(100);
+    expect(ontimeupdate).toHaveBeenCalledWith(100);
+  });
+
+  it("refuses to seek without a file", () => {
+    const { component } = render(Player, { props: { audioFile: null } });
+
+    expect(component.seekToTime(10)).toBe(false);
+  });
+
+  it("stops playback and clears the track", async () => {
+    const { component } = render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+    await fireEvent.click(screen.getByTitle("Play"));
+    audio.currentTime = 40;
+    audio.duration = 100;
+    audio.emit("timeupdate");
+
+    component.stop();
+
+    expect(audio.pause).toHaveBeenCalled();
+    expect(audio.src).toBe("");
+    expect(audio.load).toHaveBeenCalled();
+    expect(component.getCurrentTime()).toBe(0);
+    expect(screen.getByText("00:00 / 00:00")).toBeTruthy();
+  });
+
+  it("does not seek without a duration or while disabled", async () => {
+    const ontimeupdate = vi.fn();
+    const { container, unmount } = render(Player, {
+      props: { audioFile, ontimeupdate },
+    });
+    const audio = currentAudio();
+    const progress = /** @type {HTMLElement} */ (
+      container.querySelector(".progress-bar")
+    );
+
+    await fireEvent.click(progress, { clientX: 50 });
+    expect(audio.currentTime).toBe(0);
+    expect(ontimeupdate).not.toHaveBeenCalled();
+
+    unmount();
+    settings.set({ ...originalSettings, enablePlayer: false });
+    const disabled = render(Player, { props: { audioFile, ontimeupdate } });
+    const disabledAudio = currentAudio();
+    disabledAudio.duration = 100;
+    disabledAudio.emit("loadedmetadata");
+
+    await fireEvent.click(
+      /** @type {HTMLElement} */ (
+        disabled.container.querySelector(".progress-bar")
+      ),
+      { clientX: 50 },
+    );
+
+    expect(disabledAudio.currentTime).toBe(0);
+    expect(ontimeupdate).not.toHaveBeenCalled();
   });
 });
