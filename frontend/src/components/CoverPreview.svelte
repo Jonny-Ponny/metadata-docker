@@ -1,7 +1,18 @@
 <!-- src/components/CoverPreview.svelte -->
 <script>
+  // @ts-check
   import { isRemoteImageUrl, loadPreviewImage } from "../utils/index.js";
 
+  /**
+   * @typedef {Object} Props
+   * @property {string | null} [url]
+   * @property {string} [alt]
+   * @property {"field" | "result"} [variant]
+   * @property {string | null} [placeholder]
+   * @property {boolean} [showSourceLink]
+   */
+
+  /** @type {Props} */
   let {
     url = null,
     alt = "cover",
@@ -10,7 +21,7 @@
     showSourceLink = true,
   } = $props();
 
-  let previewSrc = $state(null);
+  let previewSrc = $state(/** @type {string | null} */ (null));
   let loadFailed = $state(false);
 
   const isRemote = $derived(isRemoteImageUrl(url));
