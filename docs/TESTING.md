@@ -142,8 +142,8 @@ test. `src/test/setup.js` clears `localStorage` after every test.
 
 Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
 components in `src/components/__tests__/` and stores in `src/stores/__tests__/`.
-There is no frontend coverage report yet. As of 2026-10-27 the suite has 40
-files and 368 tests.
+There is no frontend coverage report yet. As of 2026-10-27 the suite has 41
+files and 387 tests.
 
 Covered areas:
 
@@ -167,6 +167,11 @@ Covered areas:
   preference, toggling and transition suppression; and the upload queue
   (preflight blocking, duplicate skipping, size limits, queued batches,
   cancellation, retry, 401/413/ENOSPC handling and dismissal).
+- `App.svelte`: the login gate, tree loading (including the empty and
+  failed/retry states), search and clearing, file-type routing in the right
+  panel, the folder overview toggle, root folder creation, keyboard rename and
+  delete, logout/re-login, tree refresh events, drag-and-drop and folder-picker
+  uploads, the upload progress bar and the disabled-player path.
 - Components: `Toast` and `ToastContainer` rendering, type styling, manual
   dismiss, auto-dismiss and store updates; `SortButton` menu, selection and
   direction; the `Login` form states, backend error and theme toggle;
@@ -203,6 +208,9 @@ Conventions:
 - Stub `URL.createObjectURL`/`revokeObjectURL` with
   `Object.defineProperty()` instead of replacing the `URL` constructor.
 - Mock `fetch`/`XMLHttpRequest`; the suite must not contact the network.
+- Keep jsdom prototype stubs such as `scrollIntoView` and
+  `HTMLMediaElement.pause` installed for the whole test file; deleting them in
+  `afterEach` breaks the component teardown that runs afterwards.
 - Add a regression test for every frontend bug, as for the backend.
 
 CI runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test` and

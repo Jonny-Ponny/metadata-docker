@@ -320,6 +320,19 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/components/__tests__/SettingsModal.test.js` -
       `reports addon load failures without retrying in a loop`.
 
+## Frontend app shell
+
+- [x] **B-35 (P1) An empty library made the app reload `/api/files` forever.**
+      `App.svelte` loaded the tree from an effect whenever
+      `treeData.length === 0`. A successful response for a library with no files
+      assigned `treeData = []`, which re-ran the effect, so the app sent
+      `/api/files` continuously until it was closed. Found by the first `App`
+      test.
+      **Fix:** guard the automatic load with a `treeRequested` flag, and reset it
+      when the session becomes unauthenticated so the next login loads again.
+      **Test:** `frontend/src/__tests__/App.test.js` - `shows an empty library
+    state`; `loads the tree again after logging out and back in`.
+
 ## Regression tests
 
 Each bug above is pinned by at least one test, so a fix cannot be reverted
@@ -361,3 +374,4 @@ silently.
 | B-32 | `frontend/src/utils/__tests__/timestamp.utils.test.js` - `secondsToTimestamp` rounds to centiseconds                 |
 | B-33 | `frontend/src/components/__tests__/TimestampEditModal.test.js` - `saves on Enter and closes on Escape`               |
 | B-34 | `frontend/src/components/__tests__/SettingsModal.test.js` - `reports addon load failures without retrying in a loop` |
+| B-35 | `frontend/src/__tests__/App.test.js` - `shows an empty library state`                                                |

@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-04`, `B-34`. Next:
-  `T-05`, `B-35`.
+- IDs are permanent and never reused. Last used: `T-04`, `B-35`. Next:
+  `T-05`, `B-36`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -37,6 +37,10 @@ image build. What remains is optional hardening and new features.
 - **Frontend tests (start).** Vitest + jsdom over the pure timestamp, lyrics,
   sort, upload, API-error and version-cache utilities. `npm test` and
   `npm run build` are a separate CI job that gates the image build.
+- **Frontend component, store and utility tests (T-04).** Complete: every
+  component including `App.svelte`, every store and the remaining utilities
+  have Vitest coverage. The suite runs 41 files / 387 tests and includes the
+  regression tests for B-33 to B-35.
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are
@@ -101,19 +105,11 @@ No open items.
 
 ### Frontend checks and tests
 
-The frontend has a Vitest suite over the first pure utilities, ESLint,
-Prettier and `svelte-check` with full `checkJs` type checking in CI. Remaining,
-in this order:
+The frontend has a Vitest suite over the utilities, stores and components, plus
+ESLint, Prettier and `svelte-check` with full `checkJs` type checking in CI.
+Remaining:
 
-- **T-04 (P2)** - Component tests for the editor, upload tray and context menu
-  once the utilities are covered, and coverage for the remaining stores and
-  utilities. The harness and tests for `Toast`, `ToastContainer`, `SortButton`,
-  `Login`, `CoverPreview`, `HoldButton`, `MetadataEditor`, `UploadTray`,
-  `TreeNode`, `TextEditor`, `EditModal`, `FolderOverview`, `ImageViewer`,
-  `TimestampEditModal`, `Player`, `HelpModal`, `LogViewer`, `LRCEditor`,
-  `MetadataFetcher`, `SettingsModal`, the remaining utilities and the auth,
-  context, toast, theme and upload stores are in place; `App` is still open.
-- A UI bug pass once the checks and tests exist, so fixes can be pinned by a
+- A UI bug pass now that the tests exist, so fixes can be pinned by a
   regression test.
 
 ## Out of scope
