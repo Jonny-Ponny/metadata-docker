@@ -50,7 +50,7 @@ image build. What remains is optional hardening and new features.
 - `T-03 (P3)` - Finish enabling `checkJs` for `svelte-check`. Every file under
   `src/` except `src/utils/__tests__/` starts with `// @ts-check` and is clean
   (in a component the pragma goes at the top of `<script>`), so `npm run check`
-  type-checks the app in CI. Remaining: annotate the test helpers (~54 errors,
+  type-checks the app in CI. Remaining: annotate the test helpers (55 errors,
   mostly fake `Response`/XHR objects), then flip the global `checkJs` flag and
   optionally drop the per-file pragmas.
 
