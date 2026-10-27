@@ -1,5 +1,6 @@
 <!-- src/components/FolderOverview.svelte -->
 <script>
+  // @ts-check
   import {
     settings,
     OVERVIEW_FIELD_NAMES,
@@ -7,20 +8,46 @@
     getFieldDescription,
   } from "../utils/index.js";
 
+  /**
+   * @typedef {Object} OverviewAudioFile
+   * @property {string} path
+   * @property {string} name
+   * @property {string} relativePath
+   */
+
+  /**
+   * @typedef {Object} FileResult
+   * @property {string[]} [missingFields]
+   * @property {string} [error]
+   */
+
+  /**
+   * @typedef {Object} Props
+   * @property {string | null} [folderPath]
+   * @property {OverviewAudioFile[]} [audioFiles]
+   */
+
+  /** @type {Props} */
   let { folderPath, audioFiles } = $props();
 
-  let files = $derived(Array.isArray(audioFiles) ? audioFiles : []);
+  let files = $derived(
+    /** @type {OverviewAudioFile[]} */ (
+      Array.isArray(audioFiles) ? audioFiles : []
+    ),
+  );
 
   let loading = $state(true);
-  let error = $state(null);
-  let fileResults = $state({});
+  let error = $state(/** @type {string | null} */ (null));
+  let fileResults = $state(/** @type {Record<string, FileResult>} */ ({}));
 
   // Get the fields that should be checked from settings
   const activeFields = $derived(
-    Array.isArray($settings.overviewFields) &&
+    /** @type {string[]} */ (
+      Array.isArray($settings.overviewFields) &&
       $settings.overviewFields.length > 0
-      ? $settings.overviewFields
-      : OVERVIEW_FIELD_NAMES, // fallback to all fields
+        ? $settings.overviewFields
+        : OVERVIEW_FIELD_NAMES // fallback to all fields
+    ),
   );
 
   $effect(() => {
@@ -58,7 +85,9 @@
         fileResults[file.path] = { missingFields: missing };
       } catch (err) {
         console.error("Failed to fetch metadata for", file.path, err);
-        fileResults[file.path] = { error: err.message };
+        fileResults[file.path] = {
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
       await fetchNext();
     }
@@ -72,6 +101,10 @@
     loading = false;
   }
 
+  /**
+   * @param {string} path
+   * @returns {Promise<any>}
+   */
   async function fetchMetadata(path) {
     const res = await fetch(
       `/api/metadata?path=${encodeURIComponent(path)}&includePicture=false`,
@@ -80,7 +113,11 @@
     return await res.json();
   }
 
+  /**
+   * @returns {(OverviewAudioFile & { missingFields: string[] })[]}
+   */
   function getFilesWithMissing() {
+    /** @type {(OverviewAudioFile & { missingFields: string[] })[]} */
     const result = [];
     for (const file of files) {
       const info = fileResults[file.path];

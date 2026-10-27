@@ -1,20 +1,37 @@
 <!-- src/components/LogViewer.svelte -->
 <script>
+  // @ts-check
   import { toast, getAuthHeaders } from "../utils/index.js";
   import { SvelteURLSearchParams } from "svelte/reactivity";
 
+  /**
+   * @typedef {Object} LogEntry
+   * @property {string} [timestamp]
+   * @property {string} [level]
+   * @property {string} [message]
+   * @property {string} [raw]
+   */
+
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [isOpen]
+   * @property {() => void} onClose
+   */
+
+  /** @type {Props} */
   let { isOpen, onClose } = $props();
 
   // State
-  let logs = $state([]);
+  let logs = $state(/** @type {LogEntry[]} */ ([]));
   let loading = $state(false);
-  let error = $state(null);
+  let error = $state(/** @type {string | null} */ (null));
   let linesToShow = $state(100);
   let levelFilter = $state("");
   let searchFilter = $state("");
   let autoRefresh = $state(false);
 
   // Refs for setInterval
+  /** @type {ReturnType<typeof setInterval> | null} */
   let intervalId = null;
 
   // Available log levels
@@ -50,7 +67,8 @@
         error = data.error || "Failed to fetch logs";
       }
     } catch (err) {
-      error = "Network error: " + err.message;
+      error =
+        "Network error: " + (err instanceof Error ? err.message : String(err));
     } finally {
       // Always set loading to false when done
       loading = false;
@@ -90,7 +108,9 @@
         toast.error(data.error || "Failed to clear logs");
       }
     } catch (err) {
-      toast.error("Network error: " + err.message);
+      toast.error(
+        "Network error: " + (err instanceof Error ? err.message : String(err)),
+      );
     }
   }
 
@@ -115,8 +135,11 @@
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * @param {Event} e
+   */
   function handleAutoRefreshToggle(e) {
-    autoRefresh = e.target.checked;
+    autoRefresh = /** @type {HTMLInputElement} */ (e.target).checked;
 
     if (autoRefresh && isOpen) {
       // Clear any existing interval
@@ -143,6 +166,10 @@
     }
   }
 
+  /**
+   * @param {string} [level]
+   * @returns {string}
+   */
   function getLevelClass(level) {
     if (!level) return "";
     const levelLower = level.toLowerCase();
@@ -162,6 +189,9 @@
   }
 
   // Event handlers
+  /**
+   * @param {KeyboardEvent} e
+   */
   function handleKeyDown(e) {
     if (e.key === "Escape" && isOpen) {
       e.preventDefault();
@@ -170,10 +200,16 @@
     }
   }
 
+  /**
+   * @param {Event} e
+   */
   function stopPropagation(e) {
     e.stopPropagation();
   }
 
+  /**
+   * @param {MouseEvent} e
+   */
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) {
       e.preventDefault();
@@ -182,6 +218,9 @@
     }
   }
 
+  /**
+   * @param {MouseEvent} e
+   */
   function handleCloseClick(e) {
     e.preventDefault();
     e.stopPropagation();
