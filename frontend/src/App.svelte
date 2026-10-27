@@ -83,6 +83,9 @@
   let isLoading = $state(false);
   let treeData = $state(/** @type {TreeItem[]} */ ([])); // Store the file tree
   let error = $state("");
+  // The authenticated effect loads the tree once. Without this guard an empty
+  // library re-runs the effect on every `treeData = []`, looping /api/files.
+  let treeRequested = false;
 
   // Panel states
   let selectedFolder = $state(/** @type {string | null} */ (null));
@@ -1176,9 +1179,14 @@
   });
 
   $effect(() => {
-    if ($isAuthenticated && treeData.length === 0) {
-      loadFileTree();
+    if (!$isAuthenticated) {
+      // Reset so the next login loads a fresh tree.
+      treeRequested = false;
+      return;
     }
+    if (treeRequested) return;
+    treeRequested = true;
+    loadFileTree();
   });
 
   // Event handler for opening logs
