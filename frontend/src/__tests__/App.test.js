@@ -309,6 +309,42 @@ describe("App", () => {
     expect(screen.queryByText("No music files found")).toBeNull();
   });
 
+  it("scrolls the file tree with the wheel while an item is dragged", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    const container = /** @type {HTMLElement} */ (
+      view.container.querySelector(".file-tree-container")
+    );
+    let scrollTop = 0;
+    Object.defineProperty(container, "scrollTop", {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value) => {
+        scrollTop = value;
+      },
+    });
+
+    // Without a drag the page keeps its normal scrolling behaviour.
+    await fireEvent.wheel(container, { deltaY: 120 });
+    expect(container.scrollTop).toBe(0);
+
+    const dataTransfer = {
+      types: ["application/x-music-player-item"],
+      setData: vi.fn(),
+      getData: vi.fn(() => ""),
+      effectAllowed: "",
+    };
+    await fireEvent.dragStart(node(view, "loose.flac"), { dataTransfer });
+    await fireEvent.wheel(container, { deltaY: 120 });
+
+    expect(container.scrollTop).toBe(120);
+
+    await fireEvent.dragEnd(document);
+    await fireEvent.wheel(container, { deltaY: 40 });
+
+    expect(container.scrollTop).toBe(120);
+  });
+
   it("shows an empty library state", async () => {
     isAuthenticated.set(true);
     filesReply = () => makeResponse([]);

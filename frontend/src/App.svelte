@@ -107,6 +107,9 @@
 
   // ========== DRAG AND DROP STATE ==========
   let isDragging = $state(false);
+  // A tree item (not a desktop file) is being dragged. Native drags do not
+  // scroll the tree from the wheel, so the container needs its own handler.
+  let isInternalDrag = $state(false);
   let dragOverElement = $state(/** @type {HTMLElement | null} */ (null)); // Track which element is being hovered
   /** @type {ReturnType<typeof setTimeout> | null} */
   let hoverTimer = null;
@@ -295,6 +298,7 @@
 
   function resetDragState() {
     isDragging = false;
+    isInternalDrag = false;
 
     if (hoverTimer) {
       clearTimeout(hoverTimer);
@@ -420,8 +424,7 @@
   /**
    * @param {DragEvent} e
    */
-  function handleDragLeave(e) {
-    if (isTextDrag) return;
+  function handleDragLeave(e) {    if (isTextDrag) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -436,6 +439,27 @@
       e.clientY >= window.innerHeight;
 
     if (leftWindow) endDrag();
+  }
+
+  /**
+   * Scroll the file tree with the wheel while one of its items is being
+   * dragged. The browser keeps dispatching wheel events during a native drag
+   * but does not scroll the underlying container, so without this the only way
+   * to reach an off-screen folder is to hover the edge first.
+   * @param {WheelEvent} event
+   */
+  function handleTreeWheel(event) {
+    if (!isInternalDrag || !fileTreeContainer) return;
+
+    event.preventDefault();
+    // deltaY is in lines or pages with these deltaMode values, not pixels.
+    const step =
+      event.deltaMode === 1
+        ? 16
+        : event.deltaMode === 2
+          ? fileTreeContainer.clientHeight
+          : 1;
+    fileTreeContainer.scrollTop += event.deltaY * step;
   }
 
   /**
@@ -1069,6 +1093,11 @@
         el.isContentEditable ||
         (el.closest && el.closest('input, textarea, [contenteditable="true"]')))
     );
+    // TreeNode sets this custom type in its own dragstart before the event
+    // bubbles here, so it identifies a move inside the library.
+    isInternalDrag =
+      !isTextDrag &&
+      hasType(e.dataTransfer?.types, "application/x-music-player-item");
   }
 
   function handleDocumentDragEnd() {
@@ -1135,11 +1164,11 @@
     /** @param {KeyboardEvent} event */
     const handleWindowKeyDown = (event) => {
       // Esc cancels a native drag; Firefox may not send dragleave for it.
-      if (event.key === "Escape" && isDragging) endDrag();
+      if (event.key === "Escape" && (isDragging || isInternalDrag)) endDrag();
     };
     /** @param {PointerEvent} event */
     const handleWindowPointer = (event) => {
-      if (!isDragging) return;
+      if (!isDragging && !isInternalDrag) return;
       // A pointerdown means the previous drag session is definitely over.
       // While a native drag is running the browser suppresses mouse/pointer
       // events, so one arriving with no button held is also terminal.
@@ -1501,7 +1530,11 @@
               <button class="retry-btn" onclick={loadFileTree}>Retry</button>
             </div>
           {:else}
-            <div class="file-tree-container" bind:this={fileTreeContainer}>
+            <div
+              class="file-tree-container"
+              bind:this={fileTreeContainer}
+              onwheel={handleTreeWheel}
+            >
               {#if treeData.length === 0}
                 <div class="empty-state">
                   <svg
