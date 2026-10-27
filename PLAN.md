@@ -111,8 +111,8 @@ in this order:
   `Login`, `CoverPreview`, `HoldButton`, `MetadataEditor`, `UploadTray`,
   `TreeNode`, `TextEditor`, `EditModal`, `FolderOverview`, `ImageViewer`,
   `TimestampEditModal`, `Player`, `HelpModal`, `LogViewer`, `LRCEditor`,
-  `MetadataFetcher` and `SettingsModal` are in place; `App` and the remaining
-  stores and utilities are still open.
+  `MetadataFetcher`, `SettingsModal`, the remaining utilities and the auth,
+  context, toast, theme and upload stores are in place; `App` is still open.
 - A UI bug pass once the checks and tests exist, so fixes can be pinned by a
   regression test.
 

@@ -141,8 +141,9 @@ The plugin resolves Svelte's browser build and runs the DOM cleanup after every
 test. `src/test/setup.js` clears `localStorage` after every test.
 
 Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
-components in `src/components/__tests__/`. There is no frontend coverage report
-yet.
+components in `src/components/__tests__/` and stores in `src/stores/__tests__/`.
+There is no frontend coverage report yet. As of 2026-10-27 the suite has 40
+files and 368 tests.
 
 Covered areas:
 
@@ -155,6 +156,17 @@ Covered areas:
   free-space preflight, byte/duration formatting and the XHR upload request
   (progress, success, HTTP/network/timeout/abort failures).
 - API error parsing and the cached `/api/version` request.
+- Remaining utilities: audio format labels and detection, field metadata,
+  folder summaries and byte formatting, colour theme generation, DOM helpers
+  (debounce, scroll, text download, height equalisation), favicon accents,
+  remote cover previews (caching, deduplication, eviction and failure
+  reporting), settings migration/persistence/theme application/smart rename,
+  and the hold-to-confirm action.
+- Stores: auth session restore, login, logout and authorization headers; the
+  context-menu and rename targets; toast creation, removal and timing; theme
+  preference, toggling and transition suppression; and the upload queue
+  (preflight blocking, duplicate skipping, size limits, queued batches,
+  cancellation, retry, 401/413/ENOSPC handling and dismissal).
 - Components: `Toast` and `ToastContainer` rendering, type styling, manual
   dismiss, auto-dismiss and store updates; `SortButton` menu, selection and
   direction; the `Login` form states, backend error and theme toggle;
@@ -185,7 +197,11 @@ Conventions:
   from `svelte` before asserting on the DOM.
 - Stub browser globals with `vi.stubGlobal()` and restore them in `afterEach`.
 - Reset modules with `vi.resetModules()` before testing module-level caches
-  such as `version.utils.js`.
+  such as `version.utils.js` and the upload store's queue runtime.
+- Mock a module's dependencies with `vi.hoisted()` plus `vi.mock()`; the
+  upload-store test replaces `upload.utils.js` this way.
+- Stub `URL.createObjectURL`/`revokeObjectURL` with
+  `Object.defineProperty()` instead of replacing the `URL` constructor.
 - Mock `fetch`/`XMLHttpRequest`; the suite must not contact the network.
 - Add a regression test for every frontend bug, as for the backend.
 
