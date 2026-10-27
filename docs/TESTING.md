@@ -165,7 +165,12 @@ Covered areas:
   `TextEditor` load, save and clipboard; `EditModal` save and close paths;
   `FolderOverview` missing-field reports; `ImageViewer` loading, retry and the
   full-size view; `TimestampEditModal` validation, range hints and keyboard
-  shortcuts; `Player` playback, seeking, clock, volume and disabled state.
+  shortcuts; `Player` playback, seeking, clock, volume and disabled state;
+  `HelpModal` tabs, version footer and close paths; `LogViewer` loading,
+  filtering, clearing, export and auto-refresh; `LRCEditor` columns, timestamp
+  editing, import/export, shifting and keyboard shortcuts; `MetadataFetcher`
+  addon loading, search, song/album previews and batch apply; `SettingsModal`
+  addon list, scheme previews, overview fields and save/cancel.
 
 Conventions:
 

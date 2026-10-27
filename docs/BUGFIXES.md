@@ -306,43 +306,58 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/components/__tests__/TimestampEditModal.test.js` -
       `saves on Enter and closes on Escape`.
 
+## Frontend dialogs
+
+- [x] **B-34 (P2) A failed addon fetch made the settings dialog retry forever.**
+      `SettingsModal.svelte` opened `/api/addons` from an effect guarded by
+      `!addonsFetched && !addonsLoading`. `addonsFetched` was only set on
+      success, so a `500` (or any network failure) re-ran the effect as soon as
+      `addonsLoading` flipped back to `false`: an endless request loop that
+      kept the dialog busy. Found while writing the component tests.
+      **Fix:** track `addonsAttempted` (set before the request, successful or
+      not) so the effect fires once per open, and reset it when the dialog
+      closes so reopening retries.
+      **Test:** `frontend/src/components/__tests__/SettingsModal.test.js` -
+      `reports addon load failures without retrying in a loop`.
+
 ## Regression tests
 
 Each bug above is pinned by at least one test, so a fix cannot be reverted
 silently.
 
-| Bug  | Test                                                                                                   |
-| ---- | ------------------------------------------------------------------------------------------------------ |
-| B-01 | `test_library_root.py::test_delete_cannot_remove_the_library_root`                                     |
-| B-02 | `test_library_root.py::test_mkdir_cannot_create_the_library_root`                                      |
-| B-03 | `test_library_root.py::test_copy_cannot_duplicate_the_library_root`                                    |
-| B-04 | `test_security.py::test_empty_music_folder_falls_back_to_the_default`                                  |
-| B-05 | `test_rename.py::test_rename_cannot_overwrite_an_existing_file`                                        |
-| B-06 | `test_move.py::test_move_cannot_move_a_folder_into_itself`                                             |
-| B-07 | `test_upload.py::test_concurrent_upload_keeps_both_files`                                              |
-| B-08 | `test_api_contract.py::test_json_routes_reject_invalid_bodies`                                         |
-| B-09 | `test_config.py::test_invalid_integer_env_falls_back_to_the_default`                                   |
-| B-10 | `test_tree.py::test_natural_key_handles_digits_int_rejects`                                            |
-| B-11 | `test_tree.py::test_file_tree_skips_a_file_that_disappears_mid_walk`                                   |
-| B-12 | `test_metadata_endpoints.py::test_delete_field_from_a_missing_path_returns_404`                        |
-| B-13 | `test_metadata_endpoints.py::test_smart_rename_rejects_unreadable_metadata_for_a_file`                 |
-| B-14 | `test_metadata_endpoints.py::test_cover_upload_can_reread_missing_metadata`                            |
-| B-15 | `test_metadata_endpoints.py::test_cover_from_url_checks_the_format_before_fetching`                    |
-| B-16 | `test_metadata_endpoints.py::test_root_folder_cover_uses_the_resolved_library_root`                    |
-| B-17 | `test_metadata_endpoints.py::test_save_cover_as_file_rejects_corrupt_base64`                           |
-| B-18 | `test_metadata_endpoints.py::test_image_endpoint_only_serves_images`                                   |
-| B-19 | `test_text_logs.py::test_text_save_rejects_non_string_content`                                         |
-| B-20 | `test_text_logs.py::test_text_read_replaces_invalid_utf8`                                              |
-| B-21 | `test_text_logs.py::test_log_line_count_is_clamped`                                                    |
-| B-22 | `test_tag_backends.py::test_detect_image_mime_reads_magic_bytes`                                       |
-| B-23 | `test_tag_backends.py::test_lrc_timestamps_accept_the_common_subset`                                   |
-| B-24 | `test_addons.py::test_addon_github_url_rejects_unsafe_values`                                          |
-| B-25 | `test_addons.py::test_addon_limit_is_clamped`                                                          |
-| B-26 | `test_version.py::test_import_does_not_call_github_and_the_first_check_is_cached`                      |
-| B-27 | `test_text_logs.py::test_text_save_rejects_oversized_content`                                          |
-| B-28 | `test_upload.py::test_invalid_filename_does_not_create_the_target_folder`                              |
-| B-29 | `test_config.py::test_installed_flask_supports_per_request_upload_limits`                              |
-| B-30 | `test_zip_stream.py::test_sentinel_waits_for_queue_space`                                              |
-| B-31 | `test_config.py::test_invalid_password_hash_generates_a_temporary_password`                            |
-| B-32 | `frontend/src/utils/__tests__/timestamp.utils.test.js` - `secondsToTimestamp` rounds to centiseconds   |
-| B-33 | `frontend/src/components/__tests__/TimestampEditModal.test.js` - `saves on Enter and closes on Escape` |
+| Bug  | Test                                                                                                                 |
+| ---- | -------------------------------------------------------------------------------------------------------------------- |
+| B-01 | `test_library_root.py::test_delete_cannot_remove_the_library_root`                                                   |
+| B-02 | `test_library_root.py::test_mkdir_cannot_create_the_library_root`                                                    |
+| B-03 | `test_library_root.py::test_copy_cannot_duplicate_the_library_root`                                                  |
+| B-04 | `test_security.py::test_empty_music_folder_falls_back_to_the_default`                                                |
+| B-05 | `test_rename.py::test_rename_cannot_overwrite_an_existing_file`                                                      |
+| B-06 | `test_move.py::test_move_cannot_move_a_folder_into_itself`                                                           |
+| B-07 | `test_upload.py::test_concurrent_upload_keeps_both_files`                                                            |
+| B-08 | `test_api_contract.py::test_json_routes_reject_invalid_bodies`                                                       |
+| B-09 | `test_config.py::test_invalid_integer_env_falls_back_to_the_default`                                                 |
+| B-10 | `test_tree.py::test_natural_key_handles_digits_int_rejects`                                                          |
+| B-11 | `test_tree.py::test_file_tree_skips_a_file_that_disappears_mid_walk`                                                 |
+| B-12 | `test_metadata_endpoints.py::test_delete_field_from_a_missing_path_returns_404`                                      |
+| B-13 | `test_metadata_endpoints.py::test_smart_rename_rejects_unreadable_metadata_for_a_file`                               |
+| B-14 | `test_metadata_endpoints.py::test_cover_upload_can_reread_missing_metadata`                                          |
+| B-15 | `test_metadata_endpoints.py::test_cover_from_url_checks_the_format_before_fetching`                                  |
+| B-16 | `test_metadata_endpoints.py::test_root_folder_cover_uses_the_resolved_library_root`                                  |
+| B-17 | `test_metadata_endpoints.py::test_save_cover_as_file_rejects_corrupt_base64`                                         |
+| B-18 | `test_metadata_endpoints.py::test_image_endpoint_only_serves_images`                                                 |
+| B-19 | `test_text_logs.py::test_text_save_rejects_non_string_content`                                                       |
+| B-20 | `test_text_logs.py::test_text_read_replaces_invalid_utf8`                                                            |
+| B-21 | `test_text_logs.py::test_log_line_count_is_clamped`                                                                  |
+| B-22 | `test_tag_backends.py::test_detect_image_mime_reads_magic_bytes`                                                     |
+| B-23 | `test_tag_backends.py::test_lrc_timestamps_accept_the_common_subset`                                                 |
+| B-24 | `test_addons.py::test_addon_github_url_rejects_unsafe_values`                                                        |
+| B-25 | `test_addons.py::test_addon_limit_is_clamped`                                                                        |
+| B-26 | `test_version.py::test_import_does_not_call_github_and_the_first_check_is_cached`                                    |
+| B-27 | `test_text_logs.py::test_text_save_rejects_oversized_content`                                                        |
+| B-28 | `test_upload.py::test_invalid_filename_does_not_create_the_target_folder`                                            |
+| B-29 | `test_config.py::test_installed_flask_supports_per_request_upload_limits`                                            |
+| B-30 | `test_zip_stream.py::test_sentinel_waits_for_queue_space`                                                            |
+| B-31 | `test_config.py::test_invalid_password_hash_generates_a_temporary_password`                                          |
+| B-32 | `frontend/src/utils/__tests__/timestamp.utils.test.js` - `secondsToTimestamp` rounds to centiseconds                 |
+| B-33 | `frontend/src/components/__tests__/TimestampEditModal.test.js` - `saves on Enter and closes on Escape`               |
+| B-34 | `frontend/src/components/__tests__/SettingsModal.test.js` - `reports addon load failures without retrying in a loop` |

@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-04`, `B-33`. Next:
-  `T-05`, `B-34`.
+- IDs are permanent and never reused. Last used: `T-04`, `B-34`. Next:
+  `T-05`, `B-35`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -110,8 +110,9 @@ in this order:
   utilities. The harness and tests for `Toast`, `ToastContainer`, `SortButton`,
   `Login`, `CoverPreview`, `HoldButton`, `MetadataEditor`, `UploadTray`,
   `TreeNode`, `TextEditor`, `EditModal`, `FolderOverview`, `ImageViewer`,
-  `TimestampEditModal` and `Player` are in place; the remaining stores and
-  utilities are still open.
+  `TimestampEditModal`, `Player`, `HelpModal`, `LogViewer`, `LRCEditor`,
+  `MetadataFetcher` and `SettingsModal` are in place; `App` and the remaining
+  stores and utilities are still open.
 - A UI bug pass once the checks and tests exist, so fixes can be pinned by a
   regression test.
 
