@@ -128,13 +128,12 @@ rewrite files; `format:check` is the CI-facing read-only check.
 `package-lock.json`.
 
 `svelte-check --tsconfig ./jsconfig.json` validates Svelte templates and
-compiler diagnostics. `checkJs` is still false globally because turning it on
-reports the remaining JSDoc/type backlog in `App.svelte` and the test helpers
-(tracked in `PLAN.md`). Files opt in individually with a `// @ts-check` first
-line; in a component it goes at the top of `<script>`. All of `src/utils/*.js`,
-`src/stores/*.js` and every component except `App.svelte` now do, so
-`npm run check` type-checks them and any new type error there fails CI.
-Components annotate their `$props()` destructuring with a JSDoc
+compiler diagnostics. `checkJs` is still false globally because the test helpers
+in `src/utils/__tests__/` are not annotated yet (tracked in `PLAN.md`). Every
+source file opts in individually with a `// @ts-check` first line; in a
+component it goes at the top of `<script>`. That covers all of `src/` except the
+tests, so `npm run check` type-checks the app and any new type error there fails
+CI. Components annotate their `$props()` destructuring with a JSDoc
 `@typedef`/`@type`. Add the pragma to a file once its errors are fixed, rather
 than suppressing them.
 
