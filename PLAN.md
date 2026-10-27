@@ -39,7 +39,7 @@ image build. What remains is optional hardening and new features.
   `npm run build` are a separate CI job that gates the image build.
 - **Frontend component, store and utility tests (T-04).** Complete: every
   component including `App.svelte`, every store and the remaining utilities
-  have Vitest coverage. The suite runs 41 files / 393 tests and includes the
+  have Vitest coverage. The suite runs 41 files / 394 tests and includes the
   regression tests for B-33 to B-35.
 - **Frontend coverage and CI parity (T-05).** Complete: `npm run test:coverage`
   uses `@vitest/coverage-v8` to print a summary and write HTML/LCOV reports.

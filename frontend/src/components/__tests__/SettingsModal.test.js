@@ -69,6 +69,34 @@ describe("SettingsModal", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("collapses the hold and upload sections by default", () => {
+    stubAddons();
+    const { container } = render(SettingsModal, {
+      props: { isOpen: true, onClose: vi.fn() },
+    });
+
+    const headings = [...container.querySelectorAll("h3")].map(
+      (heading) => heading.textContent?.trim() ?? "",
+    );
+    expect(headings.indexOf("Folder Overview")).toBeLessThan(
+      headings.indexOf("Hold Durations"),
+    );
+    expect(headings.indexOf("Hold Durations")).toBeLessThan(
+      headings.indexOf("Uploads"),
+    );
+    expect(headings.indexOf("Uploads")).toBeLessThan(
+      headings.indexOf("Color Customization"),
+    );
+
+    const collapsibles = [
+      ...container.querySelectorAll("details.settings-collapsible"),
+    ];
+    expect(collapsibles).toHaveLength(2);
+    for (const section of collapsibles) {
+      expect(section.hasAttribute("open")).toBe(false);
+    }
+  });
+
   it("loads and lists the available addons", async () => {
     stubAddons();
 
