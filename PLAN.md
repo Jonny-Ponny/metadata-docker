@@ -49,12 +49,11 @@ image build. What remains is optional hardening and new features.
 
 - `T-03 (P3)` - Finish enabling `checkJs` for `svelte-check`. Every
   `src/utils/*.js` and `src/stores/*.js` file starts with `// @ts-check` and is
-  clean, as do the small view components `CoverPreview`, `Toast`,
-  `ToastContainer`, `SortButton`, `ImageViewer` and `Player` (the pragma goes at
-  the top of `<script>`), so `npm run check` type-checks them in CI. Still
-  unchecked: the remaining components (including `App.svelte`),
-  `src/utils/__tests__/` and the global `checkJs` flag, which can flip once
-  those are clean.
+  clean, as do all components except `App.svelte`, `MetadataEditor`,
+  `MetadataFetcher`, `LRCEditor`, `SettingsModal` and `TreeNode` (the pragma
+  goes at the top of `<script>`), so `npm run check` type-checks them in CI.
+  Still unchecked: those six files, `src/utils/__tests__/` and the global
+  `checkJs` flag, which can flip once they are clean.
 
 ### Optional security hardening
 
