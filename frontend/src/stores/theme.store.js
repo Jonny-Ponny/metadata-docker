@@ -1,3 +1,4 @@
+// @ts-check
 import { writable } from "svelte/store";
 import { updateFavicon } from "../utils/favicon.utils";
 

@@ -1,3 +1,4 @@
+// @ts-check
 // src/stores/context.store.js
 
 import { writable } from "svelte/store";
