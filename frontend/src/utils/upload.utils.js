@@ -97,7 +97,7 @@ const JUNK_DIR_NAMES = new Set([
 
 /**
  * True for OS metadata files that are never wanted in a music library.
- * @param {string} [relativePath]
+ * @param {string | null} [relativePath]
  * @returns {boolean}
  */
 export function isJunkPath(relativePath) {
@@ -310,7 +310,7 @@ export function joinUploadPath(...parts) {
 }
 
 /**
- * @param {string} [relativePath]
+ * @param {string | null} [relativePath]
  * @returns {string}
  */
 export function dirnameUploadPath(relativePath) {
@@ -536,7 +536,7 @@ export function checkSpace(storage, totalBytes, tempPeakBytes) {
 }
 
 /**
- * @param {number} bytes
+ * @param {unknown} bytes
  * @returns {string}
  */
 export function formatBytes(bytes) {
@@ -553,11 +553,12 @@ export function formatBytes(bytes) {
 }
 
 /**
- * @param {number} seconds
+ * @param {number | undefined} seconds
  * @returns {string}
  */
 export function formatDuration(seconds) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0)
+    return "";
   if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`;
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} min`;

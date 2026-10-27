@@ -52,7 +52,7 @@ function takeLeadingTimestamp(value) {
  * Handles BOM/CRLF, ID tags, comma decimals, 1-3 decimal digits and lines
  * with multiple timestamps (expanded into one entry per timestamp).
  *
- * @param {string} text - Raw lyrics text
+ * @param {string | null} text - Raw lyrics text
  * @returns {{
  *   text: string,
  *   timestamps: string[],

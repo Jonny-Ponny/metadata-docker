@@ -110,7 +110,7 @@ export function validateTimestampRange(lineIndex, newSeconds, timestamps) {
 
 /**
  * Format time for display (MM:SS)
- * @param {number} seconds - Time in seconds
+ * @param {number | undefined} seconds - Time in seconds
  * @returns {string} Formatted time string
  */
 export function formatTimeDisplay(seconds) {
