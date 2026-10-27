@@ -42,17 +42,18 @@ image build. What remains is optional hardening and new features.
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are
   `lint`, `format`, `format:check` and `check`; CI runs all of them before the
   tests and build. Details: [docs/TESTING.md](docs/TESTING.md).
+- **Frontend type checking.** `checkJs` is enabled in `frontend/jsconfig.json`,
+  so `svelte-check` type-checks the utilities, stores, every component
+  (including `App.svelte`), the entry point and the Vitest helpers. Shared
+  shapes are documented with JSDoc typedefs (tree nodes, metadata, upload
+  batches, player API) instead of per-file opt-ins, and CI fails on a new type
+  error.
 
 ## Planned
 
 ### Known issues and small fixes
 
-- `T-03 (P3)` - Finish enabling `checkJs` for `svelte-check`. Every file under
-  `src/` except `src/utils/__tests__/` starts with `// @ts-check` and is clean
-  (in a component the pragma goes at the top of `<script>`), so `npm run check`
-  type-checks the app in CI. Remaining: annotate the test helpers (55 errors,
-  mostly fake `Response`/XHR objects), then flip the global `checkJs` flag and
-  optionally drop the per-file pragmas.
+No open items.
 
 ### Optional security hardening
 
@@ -101,7 +102,8 @@ image build. What remains is optional hardening and new features.
 ### Frontend checks and tests
 
 The frontend has a Vitest suite over the first pure utilities, ESLint,
-Prettier and `svelte-check` in CI. Remaining, in this order:
+Prettier and `svelte-check` with full `checkJs` type checking in CI. Remaining,
+in this order:
 
 - Component tests for the editor, upload tray and context menu once the
   utilities are covered, and coverage for the remaining stores and utilities.
