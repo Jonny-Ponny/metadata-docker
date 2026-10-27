@@ -1,5 +1,6 @@
 <!-- src/App.svelte -->
 <script>
+  // @ts-check
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 
@@ -46,14 +47,47 @@
     applyThemeFromSettings($settings);
   });
 
+  /**
+   * @typedef {Object} TreeItem
+   * @property {string} name
+   * @property {string} path
+   * @property {string} type
+   * @property {string} [file_type]
+   * @property {number} [size]
+   * @property {TreeItem[]} [children]
+   */
+
+  /**
+   * @typedef {Object} AudioFile
+   * @property {string} url
+   * @property {string} name
+   * @property {string} originalName
+   * @property {string} type
+   */
+
+  /**
+   * The instance API Player exposes via `export`.
+   * @typedef {Object} PlayerApi
+   * @property {(time: number) => boolean} seekToTime
+   * @property {() => void} stop
+   * @property {() => number} getCurrentTime
+   */
+
+  /**
+   * @typedef {Object} FolderAudioFile
+   * @property {string} path
+   * @property {string} name
+   * @property {string} relativePath
+   */
+
   // ========== STATE VARIABLES ==========
   let isLoading = $state(false);
-  let treeData = $state([]); // Store the file tree
+  let treeData = $state(/** @type {TreeItem[]} */ ([])); // Store the file tree
   let error = $state("");
 
   // Panel states
-  let selectedFolder = $state(null);
-  let selectedFile = $state(null);
+  let selectedFolder = $state(/** @type {string | null} */ (null));
+  let selectedFile = $state(/** @type {string | null} */ (null));
 
   // Tree expansion state
   let expandedDirs = new SvelteSet();
@@ -63,16 +97,18 @@
   let isResizing = $state(false);
 
   // Player-related state variables
-  let audioFile = $state(null);
+  let audioFile = $state(/** @type {AudioFile | null} */ (null));
 
   // svelte-ignore non_reactive_update
+  /** @type {PlayerApi | undefined} */
   let playerComponent; // Player component reference (not reactive)
 
   // ========== DRAG AND DROP STATE ==========
   let isDragging = $state(false);
-  let dragOverElement = $state(null); // Track which element is being hovered
+  let dragOverElement = $state(/** @type {HTMLElement | null} */ (null)); // Track which element is being hovered
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let hoverTimer = null;
-  let folderInput = $state(null);
+  let folderInput = $state(/** @type {HTMLInputElement | null} */ (null));
 
   // Upload state lives in the upload store. The flag is only used to warn
   // before closing the tab, since there is no resume yet.
@@ -97,7 +133,7 @@
   );
 
   // Ref for the file tree container
-  let fileTreeContainer = $state(null);
+  let fileTreeContainer = $state(/** @type {HTMLDivElement | null} */ (null));
 
   // ========== SEARCH STATE ==========
   let searchQuery = $state("");
@@ -121,19 +157,26 @@
   let showSettingsModal = $state(false);
 
   // Version
-  let currentVersion = $state(null);
-  let latestVersion = $state(null);
-  let updateAvailable = $state(false);
-  let gitSha = $state(null);
+  let currentVersion = $state(/** @type {string | null} */ (null));
+  let gitSha = $state(/** @type {string | null} */ (null));
 
   let showFolderOverview = $state(false);
 
   let isTextDrag = $state(false);
 
+  /**
+   * @param {TreeItem} node
+   * @returns {FolderAudioFile[]}
+   */
   function collectAudioFilesRecursively(node) {
+    /** @type {FolderAudioFile[]} */
     const result = [];
     const limit = 500; // safety limit
 
+    /**
+     * @param {TreeItem} currentNode
+     * @param {string} [currentRelativePath]
+     */
     function walk(currentNode, currentRelativePath = "") {
       if (result.length >= limit) return;
 
@@ -161,9 +204,17 @@
     return result;
   }
 
+  /**
+   * @returns {FolderAudioFile[]}
+   */
   function getAudioFilesInFolder() {
     if (!selectedFolder) return [];
 
+    /**
+     * @param {TreeItem[]} nodes
+     * @param {string} path
+     * @returns {TreeItem | null}
+     */
     function findNode(nodes, path) {
       for (const node of nodes) {
         if (node.path === path) return node;
@@ -189,7 +240,7 @@
     }
 
     // Non‑recursive: direct children only, relativePath is just the filename
-    return folderNode.children
+    return (folderNode.children ?? [])
       .filter((child) => child.type === "file" && child.file_type === "audio")
       .map((child) => ({
         path: child.path,
@@ -208,6 +259,7 @@
   // dragover kept re-arming it). Every terminal signal (drop, dragend, blur,
   // Esc, a pointer event) clears it outright, and a watchdog clears it if
   // dragover stops.
+  /** @type {ReturnType<typeof setInterval> | null} */
   let dragWatchdog = null;
   let lastDragOverAt = 0;
   // Set right after a drop: Firefox can deliver stray dragenter/dragover
@@ -219,6 +271,11 @@
   // DOMStringList (with `contains`, not `includes`) in older Firefox. Never
   // throw here: an exception in a drag handler skips the state reset and is
   // exactly how the blur used to get stuck.
+  /**
+   * @param {any} types
+   * @param {string} type
+   * @returns {boolean}
+   */
   function hasType(types, type) {
     if (!types) return false;
     if (typeof types.includes === "function") return types.includes(type);
@@ -226,6 +283,10 @@
     return Array.from(types).includes(type);
   }
 
+  /**
+   * @param {DragEvent} e
+   * @returns {boolean}
+   */
   function hasFiles(e) {
     return hasType(e?.dataTransfer?.types, "Files");
   }
@@ -266,6 +327,9 @@
     resetDragState();
   }
 
+  /**
+   * @param {DragEvent} e
+   */
   function handleDragEnter(e) {
     if (isTextDrag) return;
     if (!hasFiles(e)) return;
@@ -283,6 +347,9 @@
     startDragWatchdog();
   }
 
+  /**
+   * @param {DragEvent} e
+   */
   function handleDragOver(e) {
     if (isTextDrag) return;
 
@@ -311,8 +378,10 @@
       lastDragOverAt = Date.now();
     }
 
+    const eventTarget = e.target instanceof Element ? e.target : null;
+    /** @type {HTMLElement | null} */
     const newTarget =
-      e.target?.closest?.("[data-folder-path], [data-file-path]") ?? null;
+      eventTarget?.closest("[data-folder-path], [data-file-path]") ?? null;
 
     // Only act if the hovered element actually changed
     if (newTarget !== dragOverElement) {
@@ -336,7 +405,7 @@
       // If the new target is a folder and not already expanded, start a timer
       if (newTarget && newTarget.hasAttribute("data-folder-path")) {
         const folderPath = newTarget.dataset.folderPath;
-        if (!expandedDirs.has(folderPath)) {
+        if (folderPath && !expandedDirs.has(folderPath)) {
           hoverTimer = setTimeout(() => {
             toggleDir(folderPath); // Expand the folder
             hoverTimer = null;
@@ -346,6 +415,9 @@
     }
   }
 
+  /**
+   * @param {DragEvent} e
+   */
   function handleDragLeave(e) {
     if (isTextDrag) return;
     e.preventDefault();
@@ -364,6 +436,9 @@
     if (leftWindow) endDrag();
   }
 
+  /**
+   * @param {DragEvent} e
+   */
   function handleDrop(e) {
     // End the drag state before anything else: the rest of this handler can
     // throw (missing DataTransfer, unreadable entries) and a stuck blur is
@@ -380,22 +455,24 @@
     if (!isInternal && !hasFileDrag) return;
 
     // --- Check for internal move first ---
-    const internalData = e.dataTransfer.getData(
-      "application/x-music-player-item",
-    );
+    const internalData =
+      e.dataTransfer?.getData("application/x-music-player-item") ?? "";
     if (internalData) {
       try {
         const { path: sourcePath, type } = JSON.parse(internalData);
 
         // Determine target folder (same logic as for uploads)
         let targetFolder = "";
-        const dropTarget = e.target?.closest?.("[data-folder-path]") ?? null;
+        const eventTarget = e.target instanceof Element ? e.target : null;
+        /** @type {HTMLElement | null} */
+        const dropTarget = eventTarget?.closest("[data-folder-path]") ?? null;
         if (dropTarget) {
-          targetFolder = dropTarget.dataset.folderPath;
+          targetFolder = dropTarget.dataset.folderPath ?? "";
         } else {
-          const fileTarget = e.target?.closest?.("[data-file-path]") ?? null;
+          /** @type {HTMLElement | null} */
+          const fileTarget = eventTarget?.closest("[data-file-path]") ?? null;
           if (fileTarget) {
-            targetFolder = fileTarget.dataset.folderPath;
+            targetFolder = fileTarget.dataset.folderPath ?? "";
           }
           // else targetFolder remains '' (root)
         }
@@ -416,26 +493,31 @@
         handleMove(sourcePath, targetFolder);
         return; // Done, exit drop handler
       } catch (err) {
-        toast.error(`Internal move error: ${err.message}`);
+        toast.error(
+          `Internal move error: ${err instanceof Error ? err.message : String(err)}`,
+        );
         return;
       }
     }
 
     // --- External upload ---
-    const items = Array.from(e.dataTransfer.items || []);
-    const files = Array.from(e.dataTransfer.files || []);
+    const items = Array.from(e.dataTransfer?.items ?? []);
+    const files = Array.from(e.dataTransfer?.files ?? []);
     if (!items.length && !files.length) return;
 
     // Determine the target folder: the hovered folder, the parent folder of a
     // hovered file, or the library root.
     let targetPath = "";
-    const dropTarget = e.target?.closest?.("[data-folder-path]") ?? null;
+    const eventTarget = e.target instanceof Element ? e.target : null;
+    /** @type {HTMLElement | null} */
+    const dropTarget = eventTarget?.closest("[data-folder-path]") ?? null;
     if (dropTarget) {
-      targetPath = dropTarget.dataset.folderPath;
+      targetPath = dropTarget.dataset.folderPath ?? "";
     } else {
-      const fileTarget = e.target?.closest?.("[data-file-path]") ?? null;
+      /** @type {HTMLElement | null} */
+      const fileTarget = eventTarget?.closest("[data-file-path]") ?? null;
       if (fileTarget) {
-        targetPath = fileTarget.dataset.folderPath || "";
+        targetPath = fileTarget.dataset.folderPath ?? "";
       }
     }
 
@@ -450,7 +532,7 @@
           return null;
         }
       })
-      .filter(Boolean);
+      .filter((entry) => entry !== null);
 
     startDrop({
       entries,
@@ -461,13 +543,19 @@
       onComplete: loadFileTree,
     }).catch((error) => {
       console.error("Upload failed:", error);
-      toast.error(`Upload failed: ${error.message}`);
+      toast.error(
+        `Upload failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     });
   }
 
+  /**
+   * @param {Event} event
+   */
   async function handleFolderInput(event) {
-    const files = Array.from(event.target.files || []);
-    event.target.value = ""; // allow picking the same folder twice
+    const input = /** @type {HTMLInputElement} */ (event.target);
+    const files = Array.from(input.files || []);
+    input.value = ""; // allow picking the same folder twice
     if (!files.length) return;
 
     startDrop({
@@ -478,7 +566,9 @@
       onComplete: loadFileTree,
     }).catch((error) => {
       console.error("Upload failed:", error);
-      toast.error(`Upload failed: ${error.message}`);
+      toast.error(
+        `Upload failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     });
   }
 
@@ -504,7 +594,7 @@
 
       // Initial sort will be applied by the TreeNode components via the store
     } catch (e) {
-      error = e.message;
+      error = e instanceof Error ? e.message : String(e);
       toast.error(`Failed to load files: ${error}`);
     } finally {
       isLoading = false;
@@ -512,6 +602,9 @@
   }
 
   // ========== TREE HANDLERS ==========
+  /**
+   * @param {string} path
+   */
   function toggleDir(path) {
     if (expandedDirs.has(path)) {
       expandedDirs.delete(path);
@@ -520,11 +613,17 @@
     }
   }
 
+  /**
+   * @param {string} path
+   */
   function selectFile(path) {
     selectedFile = path;
     selectedFolder = null;
   }
 
+  /**
+   * @param {string} filePath
+   */
   async function loadAudioFile(filePath) {
     try {
       // Clean up previous blob URL if any
@@ -559,12 +658,17 @@
         type: blob.type,
       };
     } catch (err) {
-      toast.error(`Failed to load audio file: ${err.message}`);
+      toast.error(
+        `Failed to load audio file: ${err instanceof Error ? err.message : String(err)}`,
+      );
       console.error("loadAudioFile error:", err);
     }
   }
 
   // Function to handle folder selection
+  /**
+   * @param {string} path
+   */
   function selectFolder(path) {
     selectedFolder = path;
     selectedFile = null;
@@ -578,6 +682,9 @@
     document.addEventListener("mouseup", stopResize);
   }
 
+  /**
+   * @param {MouseEvent} e
+   */
   function handleResize(e) {
     if (!isResizing) return;
     e.preventDefault(); // Prevent default behaviors
@@ -602,6 +709,9 @@
   }
 
   // Keydown
+  /**
+   * @param {KeyboardEvent} e
+   */
   function handleKeyDown(e) {
     // Check if we're in a rename operation
     if ($renamingPath) {
@@ -666,6 +776,10 @@
   });
 
   // ========== RENAME & DELETE HANDLERS ==========
+  /**
+   * @param {string} oldPath
+   * @param {string} newName
+   */
   async function handleRename(oldPath, newName) {
     try {
       const api_url = "/api/rename"; // build
@@ -693,10 +807,15 @@
       await loadFileTree();
       toast.success("Renamed successfully");
     } catch (e) {
-      toast.error(`Rename failed: ${e.message}`);
+      toast.error(
+        `Rename failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
+  /**
+   * @param {string} path
+   */
   async function handleDelete(path) {
     try {
       const api_url = "/api/delete"; // build
@@ -721,10 +840,16 @@
       await loadFileTree();
       toast.success("Deleted successfully");
     } catch (e) {
-      toast.error(`Delete failed: ${e.message}`);
+      toast.error(
+        `Delete failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
+  /**
+   * @param {string} sourcePath
+   * @param {string} destFolderPath
+   */
   async function handleMove(sourcePath, destFolderPath) {
     try {
       const api_url = "/api/move"; // build
@@ -743,10 +868,14 @@
       // Reload tree to reflect changes
       await loadFileTree();
     } catch (e) {
-      toast.error(`Move failed: ${e.message}`);
+      toast.error(`Move failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
+  /**
+   * @param {string} parentPath
+   * @param {string} [baseName]
+   */
   async function handleCreateFolder(parentPath, baseName = "New Folder") {
     try {
       const desiredPath = parentPath ? `${parentPath}/${baseName}` : baseName;
@@ -776,10 +905,15 @@
       toast.success(`Folder created: ${data.path}`);
       await loadFileTree(); // refresh the tree to show the new folder
     } catch (e) {
-      toast.error(`Create folder failed: ${e.message}`);
+      toast.error(
+        `Create folder failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
+  /**
+   * @param {string} path
+   */
   async function handleCopyItem(path) {
     try {
       const api_url = "/api/copy"; // build
@@ -799,7 +933,7 @@
       await loadFileTree();
       toast.success("Copied successfully");
     } catch (e) {
-      toast.error(`Copy failed: ${e.message}`);
+      toast.error(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -858,11 +992,20 @@
   });
 
   // ========== SEARCH FUNCTION ==========
+  /**
+   * @param {TreeItem[]} nodes
+   * @param {string} query
+   * @returns {TreeItem[] | null}
+   */
   function filterTreeBySearch(nodes, query) {
     if (!query || query.trim() === "") return null;
 
     const lowerQuery = query.toLowerCase().trim();
 
+    /**
+     * @param {TreeItem} node
+     * @returns {TreeItem | null}
+     */
     function filterNode(node) {
       // Check if current node matches
       const nameMatch = node.name.toLowerCase().includes(lowerQuery);
@@ -899,8 +1042,6 @@
     try {
       const data = await fetchVersionInfo();
       currentVersion = data.current_version;
-      latestVersion = data.latest_version;
-      updateAvailable = data.update_available;
       gitSha = data.git_sha || null;
       if (data.update_available) {
         toast.show(
@@ -914,8 +1055,11 @@
     }
   }
 
+  /**
+   * @param {DragEvent} e
+   */
   function handleDocumentDragStart(e) {
-    const el = e.target;
+    const el = e.target instanceof HTMLElement ? e.target : null;
     isTextDrag = !!(
       el &&
       (el.tagName === "INPUT" ||
@@ -960,6 +1104,7 @@
     loadUploadLimit();
 
     // There is no resume yet, so warn before a reload drops the queue.
+    /** @param {BeforeUnloadEvent} event */
     const handleBeforeUnload = (event) => {
       if (!isUploading) return;
       event.preventDefault();
@@ -974,19 +1119,23 @@
     // handler that calls stopPropagation() (or throws) can no longer keep the
     // overlay on. Capture also runs before the container's own drop handler,
     // so the overlay is already gone while the upload is being set up.
+    /** @param {DragEvent} event */
     const handleWindowDragOverCapture = (event) => {
       if (hasFiles(event)) event.preventDefault();
     };
+    /** @param {DragEvent} event */
     const handleWindowDropCapture = (event) => {
       if (hasFiles(event)) event.preventDefault();
       endDrag();
     };
     const handleWindowDragEnd = () => endDrag();
     const handleWindowBlur = () => resetDragState();
+    /** @param {KeyboardEvent} event */
     const handleWindowKeyDown = (event) => {
       // Esc cancels a native drag; Firefox may not send dragleave for it.
       if (event.key === "Escape" && isDragging) endDrag();
     };
+    /** @param {PointerEvent} event */
     const handleWindowPointer = (event) => {
       if (!isDragging) return;
       // A pointerdown means the previous drag session is definitely over.
@@ -1483,8 +1632,6 @@
     isOpen={showHelpModal}
     onClose={() => (showHelpModal = false)}
     {currentVersion}
-    {updateAvailable}
-    {latestVersion}
     {gitSha}
   />
   <LogViewer isOpen={showLogViewer} onClose={() => (showLogViewer = false)} />
