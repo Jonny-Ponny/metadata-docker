@@ -1,4 +1,3 @@
-// @ts-check
 import { describe, expect, it } from "vitest";
 import { sortItems } from "../sort.utils.js";
 

@@ -1,6 +1,5 @@
 <!-- src/components/Login.svelte -->
 <script>
-  // @ts-check
   import { login, authError, theme, toggleTheme } from "../utils/index";
 
   let username = $state("");

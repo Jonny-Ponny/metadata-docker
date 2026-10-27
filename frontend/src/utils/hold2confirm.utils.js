@@ -1,4 +1,3 @@
-// @ts-check
 import { writable } from "svelte/store";
 
 /**

@@ -1,7 +1,6 @@
 <!-- src/components/SortButton.svelte -->
 
 <script>
-  // @ts-check
   import { sortConfig } from "../utils/index.js";
 
   let isOpen = $state(false);

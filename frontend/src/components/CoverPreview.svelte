@@ -1,6 +1,5 @@
 <!-- src/components/CoverPreview.svelte -->
 <script>
-  // @ts-check
   import { isRemoteImageUrl, loadPreviewImage } from "../utils/index.js";
 
   /**

@@ -1,6 +1,5 @@
 <!-- src/components/TimestampEditModal.svelte -->
 <script>
-  // @ts-check
   import {
     parseTimestampToSeconds,
     secondsToTimestamp,

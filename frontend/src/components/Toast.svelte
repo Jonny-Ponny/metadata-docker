@@ -18,7 +18,6 @@ toast.info("Loading file metadata...");
 toast.show("This will stay longer", "info", 10000); -->
 
 <script>
-  // @ts-check
   import { onMount } from "svelte";
 
   /**

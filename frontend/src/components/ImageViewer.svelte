@@ -1,6 +1,5 @@
 <!-- src/components/ImageViewer.svelte -->
 <script>
-  // @ts-check
   import { toast } from "../utils/index.js";
 
   /**

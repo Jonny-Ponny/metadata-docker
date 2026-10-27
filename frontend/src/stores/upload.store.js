@@ -1,4 +1,3 @@
-// @ts-check
 // src/stores/upload.store.js
 
 // Upload queue for drag-and-drop and the folder picker.

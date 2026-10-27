@@ -1,6 +1,5 @@
 <!-- src/components/EditModal.svelte -->
 <script>
-  // @ts-check
   /**
    * @typedef {Object} Props
    * @property {boolean} [show]

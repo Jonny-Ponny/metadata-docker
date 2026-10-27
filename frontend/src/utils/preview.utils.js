@@ -1,4 +1,3 @@
-// @ts-check
 // src/utils/preview.utils.js
 import { getAuthHeaders } from "../stores/auth.store.js";
 

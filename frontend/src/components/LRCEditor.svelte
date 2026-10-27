@@ -1,6 +1,5 @@
 <!-- src/components/LRCEditor.svelte -->
 <script>
-  // @ts-check
   import { onMount, tick } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import {

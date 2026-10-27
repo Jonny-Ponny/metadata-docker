@@ -1,4 +1,3 @@
-// @ts-check
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // version.utils.js keeps the in-flight request in module state, so each test

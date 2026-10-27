@@ -1,6 +1,5 @@
 <!-- src/components/MetadataEditor.svelte -->
 <script>
-  // @ts-check
   import HoldButton from "./HoldButton.svelte";
   import LyricsEditorModal from "./LRCEditor.svelte";
   import { SvelteSet } from "svelte/reactivity";

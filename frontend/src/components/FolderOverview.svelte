@@ -1,6 +1,5 @@
 <!-- src/components/FolderOverview.svelte -->
 <script>
-  // @ts-check
   import {
     settings,
     OVERVIEW_FIELD_NAMES,

@@ -1,6 +1,5 @@
 <!-- src/components/UploadTray.svelte -->
 <script>
-  // @ts-check
   import {
     upload,
     cancel,

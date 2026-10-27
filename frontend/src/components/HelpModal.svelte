@@ -1,6 +1,5 @@
 <!-- src/components/HelpModal.svelte -->
 <script>
-  // @ts-check
   import { onMount } from "svelte";
 
   /**

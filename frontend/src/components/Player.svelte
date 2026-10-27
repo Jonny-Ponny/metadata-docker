@@ -1,6 +1,5 @@
 <!-- src/components/Player.svelte -->
 <script>
-  // @ts-check
   import { onMount } from "svelte";
   import { formatTimeDisplay, settings } from "../utils/index.js";
 

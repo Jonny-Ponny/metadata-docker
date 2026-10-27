@@ -1,5 +1,4 @@
 <script>
-  // @ts-check
   import { holdToConfirm } from "../utils/index.js";
 
   /**

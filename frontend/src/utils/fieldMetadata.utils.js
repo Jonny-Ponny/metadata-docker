@@ -1,4 +1,3 @@
-// @ts-check
 // src/utils/fieldMetadata.utils.js
 
 /** @type {Record<string, { label: string, description: string }>} */

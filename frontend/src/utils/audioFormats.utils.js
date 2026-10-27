@@ -1,4 +1,3 @@
-// @ts-check
 // src/utils/audioFormats.utils.js
 
 // Keep this list in sync with backend/formats.py. The backend is the source of

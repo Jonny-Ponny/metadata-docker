@@ -1,6 +1,5 @@
 <!-- src/components/ToastContainer.svelte -->
 <script>
-  // @ts-check
   import Toast from "./Toast.svelte";
   import { toast } from "../utils/index.js";
 

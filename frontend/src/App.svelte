@@ -1,6 +1,5 @@
 <!-- src/App.svelte -->
 <script>
-  // @ts-check
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
 

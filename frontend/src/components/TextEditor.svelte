@@ -1,6 +1,5 @@
 <!-- src/components/TextEditor.svelte -->
 <script>
-  // @ts-check
   import { toast } from "../utils/index.js";
 
   /**

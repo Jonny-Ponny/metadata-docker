@@ -1,4 +1,3 @@
-// @ts-check
 // src/store/toast.store.js
 
 // ========== TOAST STORE ==========

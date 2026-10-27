@@ -1,4 +1,3 @@
-// @ts-check
 // src/utils/upload.utils.js
 
 // Upload helpers shared by the upload store and the tray component.

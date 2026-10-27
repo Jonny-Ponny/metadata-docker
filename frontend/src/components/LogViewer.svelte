@@ -1,6 +1,5 @@
 <!-- src/components/LogViewer.svelte -->
 <script>
-  // @ts-check
   import { toast, getAuthHeaders } from "../utils/index.js";
   import { SvelteURLSearchParams } from "svelte/reactivity";
 

@@ -1,4 +1,3 @@
-// @ts-check
 // src/utils/api.utils.js
 
 const MAX_PLAIN_TEXT_LENGTH = 200;

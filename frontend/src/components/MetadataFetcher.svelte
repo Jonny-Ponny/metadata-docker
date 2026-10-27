@@ -1,6 +1,5 @@
 <!-- src/components/MetadataFetcher.svelte -->
 <script>
-  // @ts-check
   import {
     toast,
     getFieldLabel,

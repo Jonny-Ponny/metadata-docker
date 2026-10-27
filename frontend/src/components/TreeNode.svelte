@@ -1,6 +1,5 @@
 <!-- src/components/TreeNode.svelte -->
 <script>
-  // @ts-check
   // VS Code doesnt like this
   // @ts-ignore
   import Self from "./TreeNode.svelte";

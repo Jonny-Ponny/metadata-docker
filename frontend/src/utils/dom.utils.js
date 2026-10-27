@@ -1,4 +1,3 @@
-// @ts-check
 // src/utils/dom.utils.js
 
 /**

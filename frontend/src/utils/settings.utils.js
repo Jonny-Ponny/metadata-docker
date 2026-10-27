@@ -1,4 +1,3 @@
-// @ts-check
 // src/utils/settings.utils.js
 
 import { writable } from "svelte/store";

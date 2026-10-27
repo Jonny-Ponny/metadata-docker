@@ -1,4 +1,3 @@
-// @ts-check
 // src/stores/auth.store.js
 import { writable } from "svelte/store";
 

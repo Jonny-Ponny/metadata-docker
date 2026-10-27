@@ -1,4 +1,3 @@
-// @ts-check
 // src/utils/favicon.utils.js
 import iconSvg from "../assets/icon.svg?raw";
 
