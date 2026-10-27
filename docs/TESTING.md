@@ -114,6 +114,7 @@ npm run lint          # ESLint
 npm run format:check  # Prettier, no writes
 npm run check         # svelte-check
 npm test              # vitest run
+npm run test:coverage # Vitest + v8 coverage report
 npm run build
 ```
 
@@ -141,9 +142,26 @@ The plugin resolves Svelte's browser build and runs the DOM cleanup after every
 test. `src/test/setup.js` clears `localStorage` after every test.
 
 Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
-components in `src/components/__tests__/` and stores in `src/stores/__tests__/`.
-There is no frontend coverage report yet. As of 2026-10-27 the suite has 41
-files and 387 tests.
+components in `src/components/__tests__/`, stores in `src/stores/__tests__/`
+and the app shell in `src/__tests__/`. As of 2026-10-27 the suite has 41 files
+and 387 tests.
+
+`npm run test:coverage` runs the suite with `@vitest/coverage-v8` and writes a
+text summary plus HTML and LCOV reports to `frontend/coverage/`. Coverage
+covers `src/**/*.{js,svelte}` except the test files, the Vitest setup and the
+`src/main.js` bootstrap. CI runs it in a non-blocking step after `npm test` and
+uploads the report as the `frontend-coverage` artifact for seven days. No
+threshold is enforced.
+
+Snapshot from 2026-10-27:
+
+| Area       | Lines | Statements | Main gap                                                   |
+| ---------- | ----: | ---------: | ---------------------------------------------------------- |
+| `App`      |   61% |        63% | drag/drop branches, resize and player paths                |
+| components |   74% |        77% | `MetadataEditor` save/cover paths, `TreeNode` context menu |
+| stores     |   90% |        87% | upload retry and session branches                          |
+| utils      |   99% |        98% | defensive branches                                         |
+| all files  |   77% |        78% | branch coverage is 62%                                     |
 
 Covered areas:
 
@@ -213,9 +231,11 @@ Conventions:
   `afterEach` breaks the component teardown that runs afterwards.
 - Add a regression test for every frontend bug, as for the backend.
 
-CI runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test` and
-`npm run build` in the `frontend` job of `.github/workflows/tests.yml`; a
-failure blocks image publication.
+CI runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test`,
+the non-blocking `npm run test:coverage` report and `npm run build` in the
+`frontend` job of `.github/workflows/tests.yml`. The `pytest` and `frontend`
+jobs both run on pull requests and on pushes to `main`, `master` and the phase
+branches; a failing required step blocks image publication.
 
 ## Maintaining this guide
 

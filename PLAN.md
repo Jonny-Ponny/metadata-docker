@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-04`, `B-35`. Next:
-  `T-05`, `B-36`.
+- IDs are permanent and never reused. Last used: `T-05`, `B-35`. Next:
+  `T-06`, `B-36`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -41,6 +41,11 @@ image build. What remains is optional hardening and new features.
   component including `App.svelte`, every store and the remaining utilities
   have Vitest coverage. The suite runs 41 files / 387 tests and includes the
   regression tests for B-33 to B-35.
+- **Frontend coverage and CI parity (T-05).** Complete: `npm run test:coverage`
+  uses `@vitest/coverage-v8` to print a summary and write HTML/LCOV reports.
+  The pull-request and main-branch `frontend` job runs the report in a
+  non-blocking step and uploads it as an artifact, matching the existing
+  non-blocking backend coverage step.
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are

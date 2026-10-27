@@ -63,7 +63,10 @@ frontend/
   src/components/        editor, player, browser, modals
   src/stores/            auth, tree, player, upload, settings, toasts
   src/utils/             pure helpers and the utils barrel
-  src/utils/__tests__/   Vitest unit tests (jsdom)
+  src/utils/__tests__/       Vitest utility tests (jsdom)
+  src/stores/__tests__/      Vitest store tests
+  src/components/__tests__/  Vitest component tests
+  src/__tests__/             App shell test
   src/test/setup.js      Vitest setup
   eslint.config.js       ESLint flat config
   .prettierrc.json       Prettier + Svelte plugin
@@ -187,6 +190,9 @@ cd frontend && npm run dev
 # Frontend unit tests (Vitest + jsdom)
 cd frontend && npm test
 
+# Frontend coverage report (non-blocking in CI)
+cd frontend && npm run test:coverage
+
 # Frontend static checks (ESLint, Prettier, svelte-check)
 cd frontend && npm run lint
 cd frontend && npm run format:check
@@ -224,8 +230,9 @@ and `pytest -q` on pull requests and on `main`, `master`, `fix/**`, `test/**`,
 `refactor/**` and `ci/**`; a second, non-blocking step prints line coverage with
 `pytest-cov`, with no threshold. The `frontend` job installs with `npm ci` and
 runs `npm run lint`, `npm run format:check`, `npm run check`, `npm test`
-(Vitest) and `npm run build` under `frontend/`. Both jobs are required by the
-release workflow.
+(Vitest), a non-blocking `npm run test:coverage` step that uploads the HTML/LCOV
+report as an artifact, and `npm run build` under `frontend/`. Both jobs are
+required by the release workflow.
 
 `.github/workflows/container-release.yml` runs on pushes to `main`/`master` and
 on `v*` tags. It calls `tests.yml` as a `test` job and `build-and-push` declares
