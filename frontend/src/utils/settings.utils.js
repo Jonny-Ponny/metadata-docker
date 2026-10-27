@@ -34,6 +34,7 @@ export const OVERVIEW_FIELD_NAMES = [
 ];
 
 // Color theme defaults
+/** @type {Record<string, string>} */
 export const defaultColors = {
   "color-primary": "#fd7d05",
   "color-badge-audio": "#fd7d05",

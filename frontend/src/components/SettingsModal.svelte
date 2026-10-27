@@ -1,4 +1,5 @@
 <script>
+  // @ts-check
   import { onMount } from "svelte";
   import {
     settings,
@@ -10,19 +11,40 @@
     defaultColors,
   } from "../utils/index.js";
 
+  /**
+   * @typedef {Object} AddonInfo
+   * @property {string} id
+   * @property {string} name
+   * @property {string} [version]
+   * @property {string} [description]
+   * @property {string} [github]
+   * @property {string[]} [methods]
+   * @property {string[]} [required_env_vars]
+   */
+
+  /**
+   * @typedef {Object} Props
+   * @property {boolean} [isOpen]
+   * @property {() => void} onClose
+   */
+
+  /** @type {Props} */
   let { isOpen, onClose } = $props();
 
-  // Local state for form - initialize from settings
-  let localSettings = $state({ ...$settings });
+  // Local state for form - initialize from settings. Settings are a fixed form
+  // plus user-editable colour keys, so keep the values loosely typed.
+  let localSettings = $state(
+    /** @type {Record<string, any>} */ ({ ...$settings }),
+  );
 
   // Refs for input elements
-  let folderInputRef = $state(null);
-  let fileInputRef = $state(null);
+  let folderInputRef = $state(/** @type {HTMLInputElement | null} */ (null));
+  let fileInputRef = $state(/** @type {HTMLInputElement | null} */ (null));
 
   // Addon state
-  let addons = $state([]);
+  let addons = $state(/** @type {AddonInfo[]} */ ([]));
   let addonsLoading = $state(false);
-  let addonsError = $state(null);
+  let addonsError = $state(/** @type {string | null} */ (null));
   let addonsFetched = $state(false);
 
   // Mock data for preview
@@ -37,12 +59,21 @@
     releaseType: "Album",
   };
 
+  /**
+   * @param {unknown} value
+   * @returns {string}
+   */
   function extractYear(value) {
     const match = String(value ?? "").match(/(?<!\d)(?:18|19|20)\d{2}(?!\d)/);
     return match ? match[0] : "";
   }
 
   // Generate preview from scheme
+  /**
+   * @param {string} scheme
+   * @param {boolean} [isFile]
+   * @returns {string}
+   */
   function getPreview(scheme, isFile = false) {
     if (!scheme) return isFile ? "filename.flac" : "Folder Name";
 
@@ -80,6 +111,9 @@
   }
 
   // Handle escape key to close
+  /**
+   * @param {KeyboardEvent} e
+   */
   function handleKeyDown(e) {
     if (e.key === "Escape" && isOpen) {
       handleCancel(); // Use handleCancel instead of direct onClose
@@ -91,6 +125,9 @@
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
+  /**
+   * @param {MouseEvent} e
+   */
   function handleModalClick(e) {
     e.stopPropagation();
   }
@@ -105,6 +142,10 @@
     onClose();
   }
 
+  /**
+   * @param {"folder" | "file"} type
+   * @param {string} variable
+   */
   function insertVariable(type, variable) {
     const inputElement = type === "folder" ? folderInputRef : fileInputRef;
 
@@ -119,8 +160,8 @@
       return;
     }
 
-    const start = inputElement.selectionStart;
-    const end = inputElement.selectionEnd;
+    const start = inputElement.selectionStart ?? 0;
+    const end = inputElement.selectionEnd ?? start;
     const currentValue =
       type === "folder" ? localSettings.folderScheme : localSettings.fileScheme;
 
@@ -155,6 +196,7 @@
   });
 
   // Variable descriptions
+  /** @type {Record<string, string>} */
   const variableDescriptions = {
     TITLE:
       "Song title. Fundamental field that identifies the specific name of an individual piece of music",
@@ -182,13 +224,18 @@
       addons = data.fetchers || [];
       addonsFetched = true;
     } catch (err) {
-      addonsError = err.message;
-      toast.error("Error fetching addons:" + err.message);
+      const message = err instanceof Error ? err.message : String(err);
+      addonsError = message;
+      toast.error("Error fetching addons:" + message);
     } finally {
       addonsLoading = false;
     }
   }
 
+  /**
+   * @param {unknown} version
+   * @returns {string}
+   */
   function formatAddonVersion(version) {
     const value = String(version ?? "").trim();
     if (!value) return "";
@@ -203,11 +250,14 @@
   });
 
   // Helper to toggle a field in overviewFields
+  /**
+   * @param {string} field
+   */
   function toggleOverviewField(field) {
     const index = localSettings.overviewFields.indexOf(field);
     if (index >= 0) {
       localSettings.overviewFields = localSettings.overviewFields.filter(
-        (f) => f !== field,
+        (/** @type {string} */ f) => f !== field,
       );
     } else {
       localSettings.overviewFields = [...localSettings.overviewFields, field];
