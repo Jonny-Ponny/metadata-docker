@@ -98,7 +98,7 @@ describe("CoverPreview", () => {
     });
     await fireEvent.load(image);
 
-    expect(preview?.getAttribute("title")).toBe(`600x450 - ${remote}`);
+    expect(preview?.getAttribute("title")).toBe(`${remote}\n600x450px`);
   });
 
   it("shows a failed marker when the remote cover cannot be loaded", async () => {

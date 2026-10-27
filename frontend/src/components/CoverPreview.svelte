@@ -41,7 +41,7 @@
     !isRemote || !url
       ? undefined
       : imageSize
-        ? `${imageSize.width}x${imageSize.height} - ${url}`
+        ? `${url}\n${imageSize.width}x${imageSize.height}px`
         : url,
   );
 
