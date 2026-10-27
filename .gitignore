@@ -38,6 +38,7 @@ frontend/.vercel/
 frontend/.netlify/
 
 # Frontend - Logs and debug
+frontend/coverage/
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
