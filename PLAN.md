@@ -64,21 +64,6 @@ image build. What remains is optional hardening and new features.
   shapes are documented with JSDoc typedefs (tree nodes, metadata, upload
   batches, player API) instead of per-file opt-ins, and CI fails on a new type
   error.
-- **Session persistence (T-11).** Optional `JWT_SECRET` (at least 32
-  characters) keeps session tokens valid across restarts; unset or shorter
-  values fall back to a random per-process secret with a warning. Compose,
-  `.env_example`, README and DEPLOYMENT document it, and `tests/test_config.py`
-  covers the configured, boundary, random and rejected cases.
-- **Documentation refresh (T-12).** Updated the build-hygiene section in
-  [SECURITY.md](SECURITY.md) for the existing `.dockerignore` and `npm ci`
-  setup, and refreshed the frontend coverage snapshot in
-  [docs/TESTING.md](docs/TESTING.md) with the `LRCEditor` gap.
-- **Opt-in library chown (T-14).** `CHOWN_MUSIC` now controls the recursive
-  `/music` chown and defaults to `false`; `/logs` is still fixed on start when
-  running non-root. A
-  startup warning names both the flag and the host `chown` command when
-  `/music` is not writable by `PUID`/`PGID`, and the compose files and docs
-  describe the actual behaviour.
 
 ## Planned
 
@@ -88,12 +73,9 @@ No open items.
 
 ### Optional security hardening
 
-- **T-13 (P3) - Pin build inputs.** Pin the two base images by manifest-list
-  digest and the workflow `uses:` references by commit SHA, with Dependabot or
-  Renovate opening update PRs. Deferred: improves reproducibility and
-  supply-chain integrity, but does not change runtime behaviour.
 - Build hygiene: pin the remaining direct Python requirements and run
-  `pip-audit`/`npm audit` periodically or as a non-blocking CI job. The
+  `pip-audit`/`npm audit` periodically or as a non-blocking CI job. Base images
+  and Actions are pinned by digest/SHA and refreshed by Dependabot; the
   `.dockerignore`, the frontend `npm ci` install and the Node 22 builder are
   done.
 

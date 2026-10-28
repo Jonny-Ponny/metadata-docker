@@ -1,0 +1,23 @@
+version: 2
+
+# Keep the pinned base-image digests and Action commit SHAs current. The
+# Dockerfile and workflows pin exact inputs; without these updates the pins
+# would silently miss upstream security fixes.
+updates:
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      base-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"
