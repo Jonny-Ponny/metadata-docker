@@ -1,11 +1,13 @@
 # syntax=docker/dockerfile:1
 
+# Base images are pinned by digest so the same Dockerfile always builds from
+# the same inputs. Dependabot refreshes the digests (see .github/dependabot.yml).
 # ---- Stage 1: Build the Svelte frontend ----
 # The frontend output is platform-independent, so build it once on the host
 # architecture instead of under QEMU for every target. Node 24+ publishes no
 # linux/arm/v7 image, so the builder stays on 22 (still armv7-capable and
 # supported until April 2027); the final stage keeps targeting armv7.
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
 WORKDIR /app/frontend
 
 # Install from the lockfile so the image matches CI and the repository
@@ -17,7 +19,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ---- Stage 2: Build the Flask backend and include frontend ----
-FROM python:3.12-alpine
+FROM python:3.12-alpine@sha256:5789aa194f757888f41fa3d48e14b6feaa1b57c0af0b56fcb1372d6474d3bff0
 WORKDIR /app
 
 # Install shadow (for user/group management) and gosu
