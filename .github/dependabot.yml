@@ -9,10 +9,11 @@ updates:
     schedule:
       interval: "weekly"
     ignore:
-      # Node 24+ has no linux/arm/v7 image, while the final stage targets armv7.
+      # Node 23 is EOL/non-LTS, and Node 24+ has no linux/arm/v7 image. Stay
+      # on the Node 22 LTS builder while the final stage targets armv7.
       - dependency-name: "node"
         versions:
-          - ">= 24"
+          - ">= 23"
     groups:
       base-images:
         patterns:
