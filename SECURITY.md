@@ -205,8 +205,9 @@ the build:
 - A `.dockerignore` (`.git`, `node_modules`, `dist`, `backend/static`, `.env*`,
   `__pycache__`, `logs`) keeps accidental local files and development-only
   files out of the build context.
-- Pinning base images by digest and Actions by commit SHA, plus an update bot,
-  is optional but recommended if the project grows.
+- Base images are pinned by manifest-list digest and workflow Actions by
+  commit SHA; Dependabot (`.github/dependabot.yml`) refreshes them weekly so
+  the pins do not silently miss upstream security fixes.
 - Run `pip-audit` / `npm audit` periodically or as a non-blocking CI job rather
   than making every release depend on it.
 
