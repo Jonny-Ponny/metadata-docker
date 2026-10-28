@@ -143,8 +143,8 @@ test. `src/test/setup.js` clears `localStorage` after every test.
 
 Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
 components in `src/components/__tests__/`, stores in `src/stores/__tests__/`
-and the app shell in `src/__tests__/`. As of 2026-10-27 the suite has 41 files
-and 399 tests.
+and the app shell in `src/__tests__/`. As of 2026-10-28 the suite has 41 files
+and 534 tests.
 
 `npm run test:coverage` runs the suite with `@vitest/coverage-v8` and writes a
 text summary plus HTML and LCOV reports to `frontend/coverage/`. Coverage
@@ -153,15 +153,15 @@ covers `src/**/*.{js,svelte}` except the test files, the Vitest setup and the
 uploads the report as the `frontend-coverage` artifact for seven days. No
 threshold is enforced.
 
-Snapshot from 2026-10-27:
+Snapshot from 2026-10-28:
 
 | Area       | Lines | Statements | Main gap                                                   |
 | ---------- | ----: | ---------: | ---------------------------------------------------------- |
-| `App`      |   61% |        63% | drag/drop branches, resize and player paths                |
-| components |   74% |        77% | `MetadataEditor` save/cover paths, `TreeNode` context menu |
-| stores     |   90% |        87% | upload retry and session branches                          |
+| `App`      |   90% |        87% | player wiring, theme and resize branches                   |
+| components |   89% |        90% | `MetadataEditor` keyboard/folder paths, `TreeNode` menus   |
+| stores     |  100% |        99% | defensive branches around the queue runtime                |
 | utils      |   99% |        98% | defensive branches                                         |
-| all files  |   77% |        78% | branch coverage is 62%                                     |
+| all files  |   92% |        91% | branch coverage is 78%                                     |
 
 Covered areas:
 
@@ -187,29 +187,35 @@ Covered areas:
   cancellation, retry, 401/413/ENOSPC handling and dismissal).
 - `App.svelte`: the login gate, tree loading (including the empty and
   failed/retry states), search and clearing, file-type routing in the right
-  panel, the folder overview toggle, root folder creation, keyboard rename and
-  delete, logout/re-login, tree refresh events, drag-and-drop and folder-picker
-  uploads (including wheel scrolling and edge auto-scroll during an internal
-  pointer drag, dropping on the File Browser header to move to the root, and
-  same-item drops), the upload progress bar and the disabled-player path.
+  panel, the folder overview toggle and its recursive/direct-only audio lists,
+  rename/delete/copy/move/create-folder success and failure paths, logout and
+  forced 401 logout, theme toggle, panel resize, `beforeunload`, tree refresh
+  events, drag-and-drop and folder-picker uploads (including the drop overlay,
+  legacy drag types, text-drag suppression, dropping on file rows and the File
+  Browser header, wheel scrolling and edge auto-scroll during an internal
+  pointer drag, and same-item drops), the upload progress bar and the
+  disabled-player path.
 - Components: `Toast` and `ToastContainer` rendering, type styling, manual
-  dismiss, auto-dismiss and store updates; `SortButton` menu, selection and
-  direction; the `Login` form states, backend error and theme toggle;
-  `CoverPreview` data/remote/placeholder/failure rendering and its resolution
-  tooltip; `HoldButton` hold, cancel and disabled states; `MetadataEditor`
-  loading, read-only mode, dirty tracking and file saves; `UploadTray` phases,
+  dismiss, auto-dismiss, store updates and the legacy helper exports;
+  `SortButton` menu, selection and direction; the `Login` form states, backend
+  error and theme toggle; `CoverPreview` data/remote/placeholder/failure
+  rendering and its resolution tooltip; `HoldButton` hold, cancel and disabled
+  states; `MetadataEditor` loading, read-only mode, dirty tracking, field and
+  file saves, cover upload/removal and folder actions; `UploadTray` phases,
   progress, failure details and auto-hide; `TreeNode` selection, context-menu
-  actions, inline rename and the configured delete hold time;
-  `TextEditor` load, save and clipboard; `EditModal` save and close paths;
-  `FolderOverview` missing-field reports; `ImageViewer` loading, retry and the
-  full-size view; `TimestampEditModal` validation, range hints and keyboard
-  shortcuts; `Player` playback, seeking, clock, volume and disabled state;
+  download/rename/create-folder actions, inline rename and the configured
+  delete hold time; `TextEditor` load, save and clipboard; `EditModal` save and
+  close paths; `FolderOverview` missing-field reports; `ImageViewer` loading,
+  retry and the full-size view; `TimestampEditModal` validation, range hints,
+  keyboard shortcuts and live-time capture; `Player` playback, seeking, clock,
+  volume, track changes, live `get-current-time` answers and exported controls;
   `HelpModal` tabs, version footer and close paths; `LogViewer` loading,
   filtering, clearing, export and auto-refresh; `LRCEditor` columns, timestamp
-  editing, import/export, shifting and keyboard shortcuts; `MetadataFetcher`
-  addon loading, search, song/album previews and batch apply; `SettingsModal`
-  addon list, scheme previews, overview fields, section order/collapsed defaults,
-  hold durations and save/cancel.
+  editing, live-time capture, import/export, shifting and keyboard shortcuts;
+  `MetadataFetcher` addon loading and failures, search (Enter and addon
+  switching), song/album previews, presets, cover upload variants and batch
+  apply; `SettingsModal` addon list, scheme previews, overview fields, section
+  order/collapsed defaults, hold durations and save/cancel.
 
 Conventions:
 
@@ -241,6 +247,11 @@ the non-blocking `npm run test:coverage` report and `npm run build` in the
 jobs both run on pull requests and on pushes to `main`, `master` and the phase
 branches; a failing required step blocks image publication.
 
+Frontend test failures only block a pull request when branch protection requires
+the `frontend` check, so repository administrators must keep both `pytest` and
+`frontend` in the required status checks for the protected branch. Adding a job
+to the workflow alone does not stop a merge.
+
 ## Maintaining this guide
 
 Update this file when:
@@ -251,4 +262,4 @@ Update this file when:
 - a new area becomes a known coverage gap.
 
 Keep the coverage snapshot and the open backlog current; do not add per-test
-history here. The coverage numbers were last measured on 2026-10-25.
+history here. The coverage numbers were last measured on 2026-10-28.

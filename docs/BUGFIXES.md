@@ -333,6 +333,25 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/__tests__/App.test.js` - `shows an empty library
     state`; `loads the tree again after logging out and back in`.
 
+## Lyrics editor
+
+- [x] **B-36 (P2) Synced-lyrics timestamps lagged behind the live playback position.**
+      The `c` shortcut in `LRCEditor.svelte` wrote the stored
+      `currentPlaybackTime`, and `Player.svelte` answered `get-current-time`
+      with its stored `currentTime`. Both values only change on `timeupdate`,
+      which browsers fire about four times a second, so the written timestamp
+      could be up to roughly a quarter of a second early depending on where the
+      click landed. The timestamp dialog's "Use Current Playback Time" button
+      read a stale prop the same way. Fixed in external PR #17.
+      **Fix:** answer `get-current-time` with `player.currentTime`, and route the
+      shortcut and the dialog button through `get-current-time` like the other
+      capture paths.
+      **Test:** `frontend/src/components/__tests__/Player.test.js` - `answers
+      get-current-time with the live position, not the last timeupdate`;
+      `LRCEditor.test.js` - `uses the live player time for the current-line
+      shortcut`; `TimestampEditModal.test.js` - `prefers the live playback time
+      over the currentTime prop`.
+
 ## Regression tests
 
 Each bug above is pinned by at least one test, so a fix cannot be reverted
@@ -375,3 +394,4 @@ silently.
 | B-33 | `frontend/src/components/__tests__/TimestampEditModal.test.js` - `saves on Enter and closes on Escape`               |
 | B-34 | `frontend/src/components/__tests__/SettingsModal.test.js` - `reports addon load failures without retrying in a loop` |
 | B-35 | `frontend/src/__tests__/App.test.js` - `shows an empty library state`                                                |
+| B-36 | `frontend/src/components/__tests__/Player.test.js` - `answers get-current-time with the live position, not the last timeupdate` |

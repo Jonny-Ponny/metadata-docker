@@ -365,4 +365,373 @@ describe("upload store", () => {
     expect(get(store.upload).phase).toBe("idle");
     expect(get(store.upload).failures).toEqual([]);
   });
+
+  it("loads the upload limit on the first batch", async () => {
+    vi.resetModules();
+    store = await import("../upload.store.js");
+    mocks.fetchUploadLimit.mockClear();
+
+    await store.startDrop({ files: [file("a.mp3")] });
+
+    expect(mocks.fetchUploadLimit).toHaveBeenCalledTimes(1);
+    expect(get(store.upload).uploaded).toBe(1);
+  });
+
+  it("cancels while the upload limit is still loading", async () => {
+    /** @type {(value: number) => void} */
+    let releaseLimit = () => {};
+    mocks.fetchUploadLimit.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseLimit = resolve;
+        }),
+    );
+    vi.resetModules();
+    store = await import("../upload.store.js");
+    mocks.collectDropFiles.mockImplementation(
+      async (
+        /** @type {unknown} */ _entries,
+        /** @type {File[]} */ files,
+        /** @type {{ signal?: AbortSignal }} */ options = {},
+      ) => {
+        if (options.signal?.aborted) {
+          throw Object.assign(new Error("aborted"), { name: "AbortError" });
+        }
+        return files.map((item) => ({
+          file: item,
+          relativePath: item.name,
+        }));
+      },
+    );
+
+    const pending = store.startDrop({ files: [file("a.mp3")] });
+    await vi.waitFor(() => expect(mocks.fetchUploadLimit).toHaveBeenCalled());
+    store.cancel();
+    releaseLimit(1000);
+    await pending;
+
+    expect(mocks.uploadWithProgress).not.toHaveBeenCalled();
+    expect(get(store.upload).phase).toBe("done");
+    expect(get(store.upload).message).toBe("Upload cancelled.");
+  });
+
+  it("throttles the scan progress reports", async () => {
+    mocks.collectDropFiles.mockImplementation(
+      async (
+        /** @type {unknown} */ _entries,
+        /** @type {File[]} */ files,
+        /**
+         * @param {{ onProgress?: (progress: { files: number, bytes: number }) => void }} [options]
+         */
+        options = {},
+      ) => {
+        options.onProgress?.({ files: 1, bytes: 5 });
+        options.onProgress?.({ files: 2, bytes: 10 });
+        return files.map((item) => ({
+          file: item,
+          relativePath: item.name,
+        }));
+      },
+    );
+
+    await store.startDrop({ files: [file("a.mp3")] });
+
+    expect(get(store.upload).scanFiles).toBe(1);
+    expect(get(store.upload).uploaded).toBe(1);
+  });
+
+  it("reports a drop that cannot be read", async () => {
+    mocks.collectDropFiles.mockRejectedValue(new Error("permission denied"));
+
+    await store.startDrop({ files: [file("a.mp3")] });
+
+    expect(get(store.upload).phase).toBe("done");
+    expect(get(store.upload).message).toBe(
+      "Could not read the dropped files: permission denied",
+    );
+  });
+
+  it("reports an aborted scan as a cancellation", async () => {
+    mocks.collectDropFiles.mockRejectedValue(
+      Object.assign(new Error("aborted"), { name: "AbortError" }),
+    );
+
+    await store.startDrop({ files: [file("a.mp3")] });
+
+    expect(get(store.upload).phase).toBe("done");
+    expect(get(store.upload).message).toBe("Upload cancelled.");
+  });
+
+  it("keeps only the largest in-flight files for the space check", async () => {
+    await store.startDrop({
+      files: [file("a.mp3", 10), file("b.mp3", 20), file("c.mp3", 30)],
+    });
+
+    expect(get(store.upload).uploaded).toBe(3);
+    expect(mocks.checkSpace).toHaveBeenCalledWith(expect.anything(), 60, 50);
+  });
+
+  it("skips the space preflight when storage is unavailable", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mocks.fetchStorage.mockRejectedValue(new Error("offline"));
+
+    await store.startDrop({ files: [file("a.mp3")] });
+
+    expect(warn).toHaveBeenCalledWith(
+      "Storage preflight skipped:",
+      expect.any(Error),
+    );
+    expect(get(store.upload).uploaded).toBe(1);
+  });
+
+  it("cancels after the preflight but before the queue starts", async () => {
+    /** @type {(value: null) => void} */
+    let releaseStorage = () => {};
+    mocks.fetchStorage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseStorage = resolve;
+        }),
+    );
+
+    const pending = store.startDrop({ files: [file("a.mp3")] });
+    await vi.waitFor(() => expect(mocks.fetchStorage).toHaveBeenCalled());
+    store.cancel();
+    releaseStorage(null);
+    await pending;
+
+    expect(mocks.uploadWithProgress).not.toHaveBeenCalled();
+    expect(get(store.upload).message).toBe("Upload cancelled.");
+  });
+
+  it("ignores proceedAnyway when nothing is blocked", async () => {
+    await store.proceedAnyway();
+
+    expect(get(store.upload).phase).toBe("idle");
+    expect(mocks.uploadWithProgress).not.toHaveBeenCalled();
+  });
+
+  it("records a folder that could not be created", async () => {
+    mocks.ensureDirectory.mockRejectedValue(new Error("denied"));
+
+    await store.startDrop({ files: [file("nested/a.mp3")] });
+
+    expect(mocks.uploadWithProgress).not.toHaveBeenCalled();
+    expect(get(store.upload).failures[0]).toMatchObject({
+      reason: "Could not create folder: denied",
+      retryable: false,
+    });
+  });
+
+  it("publishes byte progress and ignores an unknown total", async () => {
+    mocks.uploadWithProgress.mockImplementation(
+      async (
+        /** @type {File} */ _file,
+        /**
+         * @param {{ onProgress?: (loaded: number, total: number) => void }} options
+         */
+        options,
+      ) => {
+        options.onProgress?.(0, 0);
+        options.onProgress?.(5, 10);
+        return { skipped: false };
+      },
+    );
+
+    await store.startDrop({ files: [file("a.mp3", 10)] });
+
+    expect(get(store.upload).doneBytes).toBe(10);
+  });
+
+  it("does not count a file that finished after cancel", async () => {
+    /** @type {() => void} */
+    let resolveUpload = () => {};
+    mocks.uploadWithProgress.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUpload = () => resolve({ skipped: false });
+        }),
+    );
+
+    const pending = store.startDrop({ files: [file("a.mp3")] });
+    await waitForPhase("running");
+    store.cancel();
+    resolveUpload();
+    await pending;
+
+    expect(get(store.upload).uploaded).toBe(0);
+    expect(get(store.upload).message).toBe("Upload cancelled.");
+  });
+
+  it("counts a file the server skipped", async () => {
+    mocks.uploadWithProgress.mockResolvedValue({ skipped: true });
+
+    await store.startDrop({ files: [file("a.mp3")] });
+
+    const state = get(store.upload);
+    expect(state.skipped).toBe(1);
+    expect(state.uploaded).toBe(0);
+    expect(state.phase).toBe("done");
+  });
+
+  it("samples the transfer speed while running", async () => {
+    vi.useFakeTimers();
+    /** @type {{ onProgress?: (loaded: number, total: number) => void }} */
+    let options = {};
+    /** @type {() => void} */
+    let resolveUpload = () => {};
+    mocks.uploadWithProgress.mockImplementation(
+      (
+        /** @type {File} */ _file,
+        /** @type {{ onProgress?: (loaded: number, total: number) => void }} */ opts,
+      ) => {
+        options = opts;
+        return new Promise((resolve) => {
+          resolveUpload = () => resolve({ skipped: false });
+        });
+      },
+    );
+
+    const pending = store.startDrop({ files: [file("a.mp3", 10)] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(get(store.upload).phase).toBe("running");
+
+    options.onProgress?.(10, 10);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(get(store.upload).bytesPerSecond).toBe(10);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(get(store.upload).bytesPerSecond).toBe(7);
+
+    resolveUpload();
+    await pending;
+    expect(get(store.upload).phase).toBe("done");
+    expect(get(store.upload).bytesPerSecond).toBe(0);
+  });
+
+  it("logs a post-processing failure but finishes the tray", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onComplete = vi.fn().mockRejectedValue(new Error("reload failed"));
+
+    await store.startDrop({ files: [file("a.mp3")], onComplete });
+
+    expect(error).toHaveBeenCalledWith(
+      "Upload post-processing failed:",
+      expect.any(Error),
+    );
+    expect(get(store.upload).phase).toBe("done");
+  });
+
+  it("does not reopen the tray when it is dismissed during refresh", async () => {
+    /** @type {() => void} */
+    let release = () => {};
+    const onComplete = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(undefined);
+        }),
+    );
+
+    const pending = store.startDrop({ files: [file("a.mp3")], onComplete });
+    await waitForPhase("refreshing");
+    store.dismiss();
+    release();
+    await pending;
+
+    expect(get(store.upload).phase).toBe("idle");
+  });
+
+  it("ignores cancel and retry when there is nothing to do", async () => {
+    store.cancel();
+    expect(get(store.upload).phase).toBe("idle");
+
+    await store.retryFailed();
+    expect(get(store.upload).phase).toBe("idle");
+  });
+
+  it("ignores cancel while the tree is refreshing", async () => {
+    /** @type {() => void} */
+    let release = () => {};
+    const onComplete = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(undefined);
+        }),
+    );
+
+    const pending = store.startDrop({ files: [file("a.mp3")], onComplete });
+    await waitForPhase("refreshing");
+    store.cancel();
+    expect(get(store.upload).phase).toBe("refreshing");
+
+    release();
+    await pending;
+  });
+
+  it("clears the queued drops when cancelling", async () => {
+    /** @type {(error: unknown) => void} */
+    let failUpload = () => {};
+    mocks.uploadWithProgress.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          failUpload = reject;
+        }),
+    );
+
+    const first = store.startDrop({ files: [file("a.mp3")] });
+    await waitForPhase("running");
+    const second = store.startDrop({ files: [file("b.mp3")] });
+    expect(get(store.upload).queued).toBe(1);
+
+    store.cancel();
+    expect(get(store.upload).queued).toBe(0);
+    expect(get(store.upload).phase).toBe("cancelling");
+
+    failUpload({ name: "AbortError", aborted: true, message: "aborted" });
+    await first;
+    await second;
+  });
+
+  it("does not retry while a batch is running", async () => {
+    /** @type {() => void} */
+    let resolveUpload = () => {};
+    mocks.uploadWithProgress.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUpload = () => resolve({ skipped: false });
+        }),
+    );
+
+    const pending = store.startDrop({ files: [file("a.mp3")] });
+    await waitForPhase("running");
+    await store.retryFailed();
+    expect(mocks.uploadWithProgress).toHaveBeenCalledTimes(1);
+
+    resolveUpload();
+    await pending;
+  });
+
+  it("ignores retries without a retryable failure or a file", async () => {
+    await store.retryFailed();
+    expect(get(store.upload).phase).toBe("idle");
+
+    store.upload.set({
+      ...get(store.upload),
+      phase: "done",
+      failures: [
+        /** @type {any} */ ({
+          name: "x.mp3",
+          reason: "File too large",
+          retryable: true,
+          relativePath: "x.mp3",
+          targetPath: "",
+        }),
+      ],
+      failed: 1,
+    });
+    await store.retryFailed();
+
+    expect(get(store.upload).phase).toBe("done");
+    expect(mocks.uploadWithProgress).not.toHaveBeenCalled();
+  });
 });

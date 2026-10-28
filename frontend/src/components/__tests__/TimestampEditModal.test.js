@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 
@@ -6,7 +6,31 @@ import TimestampEditModal from "../TimestampEditModal.svelte";
 
 const timestamps = ["[00:10.00]", "[00:15.00]", "[00:20.00]"];
 
+/**
+ * Answer the modal's "get-current-time" round trip.
+ * @param {number} time
+ */
+function answerWithTime(time) {
+  /** @param {Event} event */
+  const handler = (event) => {
+    const detail =
+      /** @type {CustomEvent<{ callback: (time: number) => void }>} */ (event)
+        .detail;
+    detail.callback(time);
+  };
+  window.addEventListener("get-current-time", handler);
+  return () => window.removeEventListener("get-current-time", handler);
+}
+
 describe("TimestampEditModal", () => {
+  /** @type {(() => void) | undefined} */
+  let stopTime;
+
+  afterEach(() => {
+    stopTime?.();
+    stopTime = undefined;
+  });
+
   it("renders nothing while hidden", () => {
     render(TimestampEditModal, { props: { show: false } });
 
@@ -121,20 +145,14 @@ describe("TimestampEditModal", () => {
   });
 
   it("fills in the current playback time", async () => {
+    // The button asks the player for the live playback position.
+    stopTime = answerWithTime(75.5);
     render(TimestampEditModal, {
       props: {
         show: true,
         lineIndex: 1,
         timestamps,
       },
-    });
-
-    // The button asks the player for the live playback position.
-    window.addEventListener("get-current-time", (event) => {
-      const detail =
-        /** @type {CustomEvent<{ callback: (time: number) => void }>} */ (event)
-          .detail;
-      detail.callback(75.5);
     });
 
     await fireEvent.click(
@@ -145,6 +163,28 @@ describe("TimestampEditModal", () => {
     expect(
       /** @type {HTMLInputElement} */ (screen.getByRole("textbox")).value,
     ).toBe("01:15.50");
+  });
+
+  it("prefers the live playback time over the currentTime prop", async () => {
+    // currentTime is a timeupdate snapshot that can trail the player.
+    stopTime = answerWithTime(76.2);
+    render(TimestampEditModal, {
+      props: {
+        show: true,
+        lineIndex: 1,
+        timestamps,
+        currentTime: 75.5,
+      },
+    });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: /use current playback time/i }),
+    );
+    await tick();
+
+    expect(
+      /** @type {HTMLInputElement} */ (screen.getByRole("textbox")).value,
+    ).toBe("01:16.20");
   });
 
   it("formats digits while typing", async () => {

@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-09`, `B-35`. Next:
-  `T-10`, `B-36`.
+- IDs are permanent and never reused. Last used: `T-10`, `B-36`. Next:
+  `T-11`, `B-37`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -39,13 +39,20 @@ image build. What remains is optional hardening and new features.
   `npm run build` are a separate CI job that gates the image build.
 - **Frontend component, store and utility tests (T-04).** Complete: every
   component including `App.svelte`, every store and the remaining utilities
-  have Vitest coverage. The suite runs 41 files / 399 tests and includes the
+  have Vitest coverage. The suite runs 41 files / 531 tests and includes the
   regression tests for B-33 to B-35.
 - **Frontend coverage and CI parity (T-05).** Complete: `npm run test:coverage`
   uses `@vitest/coverage-v8` to print a summary and write HTML/LCOV reports.
   The pull-request and main-branch `frontend` job runs the report in a
   non-blocking step and uploads it as an artifact, matching the existing
   non-blocking backend coverage step.
+- **Frontend coverage pass (T-10).** Complete: closed the large gaps left by
+  T-04 in `App` (73% → 90% lines), `MetadataEditor` (38% → 81%), `TreeNode`
+  (59% → 88%), `Player` (69% → 92%), `ToastContainer` (59% → 94%),
+  `MetadataFetcher` (77% → 97%) and `upload.store` (→ 100%). Overall line
+  coverage moved from 86% to 92%. The `frontend` CI job already runs the suite;
+  branch protection must list it as a required check for a failure to block a
+  merge.
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are
@@ -62,7 +69,12 @@ image build. What remains is optional hardening and new features.
 
 ### Known issues and small fixes
 
-No open items.
+- **B-36 (P2) Player ignores a seek made before metadata loads.** `seekToTime()`
+  sets `waitingForMetadata` and registers an `onLoaded` listener, but the
+  `loadedmetadata` listener from `onMount` clears the flag first. Clicking a
+  lyric timestamp (or seeking a freshly selected track) before the duration is
+  known therefore never performs the pending seek. Fix by resolving the pending
+  seek in one handler and add a regression test.
 
 ### Optional security hardening
 

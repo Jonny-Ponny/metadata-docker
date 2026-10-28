@@ -62,6 +62,20 @@ function jsonResponse(body, status = 200) {
 }
 
 /**
+ * @param {Blob} body
+ * @param {number} [status]
+ */
+function blobResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    blob: async () => body,
+    json: async () => ({}),
+    text: async () => "",
+  };
+}
+
+/**
  * @typedef {Object} ApiOverrides
  * @property {unknown[]} [fetchers]
  * @property {Record<string, unknown>} [metadata]
@@ -71,6 +85,11 @@ function jsonResponse(body, status = 200) {
  * @property {Record<string, unknown>} [album]
  * @property {boolean} [searchError]
  * @property {boolean} [songError]
+ * @property {boolean} [addonsError]
+ * @property {boolean} [treeError]
+ * @property {boolean} [metadataError]
+ * @property {boolean} [pictureUrlError]
+ * @property {boolean} [metadataFileError]
  */
 
 /**
@@ -80,21 +99,33 @@ function stubApi(overrides = {}) {
   const fetchMock = vi.fn(
     /**
      * @param {string} url
-     * @param {{ method?: string }} [options]
+     * @param {{ method?: string, body?: unknown }} [options]
      */
     async (url, options = {}) => {
       const target = String(url);
+      if (target.startsWith("data:")) {
+        return blobResponse(new Blob(["cover"], { type: "image/png" }));
+      }
       if (target === "/api/addons") {
+        if (overrides.addonsError) {
+          return jsonResponse({ error: "Nope" }, 500);
+        }
         return jsonResponse({
           fetchers: overrides.fetchers ?? [addon],
         });
       }
       if (target.startsWith("/api/metadata?path=")) {
+        if (overrides.metadataError) {
+          return jsonResponse({ error: "Nope" }, 500);
+        }
         return jsonResponse(
           overrides.metadata ?? { title: "Song Title", album: "Album Name" },
         );
       }
       if (target === "/api/files") {
+        if (overrides.treeError) {
+          return jsonResponse({ error: "Nope" }, 500);
+        }
         return jsonResponse(overrides.tree ?? []);
       }
       if (
@@ -129,6 +160,15 @@ function stubApi(overrides = {}) {
         );
       }
       if (target === "/api/metadata/picture/url") {
+        if (overrides.pictureUrlError) {
+          return jsonResponse({ error: "Nope" }, 500);
+        }
+        return jsonResponse({ success: true });
+      }
+      if (target === "/api/metadata/file") {
+        if (overrides.metadataFileError) {
+          return jsonResponse({ error: "Read-only file" }, 400);
+        }
         return jsonResponse({ success: true });
       }
       return jsonResponse({ success: true, options });
@@ -676,5 +716,504 @@ describe("MetadataFetcher", () => {
     await fireEvent.click(dialog);
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the file name when the prefill metadata fails", async () => {
+    stubApi({ metadataError: true });
+    render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "song",
+        targetPath: "folder/song.mp3",
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        /** @type {HTMLInputElement} */ (
+          screen.getByPlaceholderText("Search...")
+        ).value,
+      ).toBe("song.mp3"),
+    );
+  });
+
+  it("reports a failed addon load", async () => {
+    await renderSong({ addonsError: true });
+
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe(
+        "Failed to load addons: Failed to load addons",
+      ),
+    );
+    expect(
+      /** @type {HTMLButtonElement} */ (
+        screen.getByRole("button", { name: "Search" })
+      ).disabled,
+    ).toBe(true);
+  });
+
+  it("warns when the folder cannot be listed for a batch fetch", async () => {
+    stubApi({ treeError: true });
+    render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "album",
+        targetPath: "folder",
+        isFolder: true,
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        get(toast).some(
+          (entry) =>
+            entry.message ===
+            "Failed to list folder files: Failed to fetch file tree",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("warns when the folder is missing from the file tree", async () => {
+    stubApi({ tree: [] });
+    render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "album",
+        targetPath: "folder",
+        isFolder: true,
+      },
+    });
+
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe("No audio files found in folder"),
+    );
+  });
+
+  it("searches with Enter after switching addons", async () => {
+    const second = { ...addon, id: "other", name: "Other" };
+    const fetchMock = stubApi({ fetchers: [addon, second] });
+    render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "song",
+        targetPath: "folder/song.mp3",
+      },
+    });
+    await waitFor(() =>
+      expect(
+        /** @type {HTMLInputElement} */ (
+          screen.getByPlaceholderText("Search...")
+        ).value,
+      ).toBe("Song Title"),
+    );
+
+    await fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "other" },
+    });
+    await fireEvent.keyDown(screen.getByPlaceholderText("Search..."), {
+      key: "Enter",
+    });
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([url]) =>
+          String(url).includes("/api/addons/other/search_songs"),
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("reports a search that did not succeed", async () => {
+    await renderSong({
+      search: { success: false, error: "Rate limited" },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe("Rate limited"),
+    );
+  });
+
+  it("reports a fetch that did not succeed", async () => {
+    await renderSong({ song: { success: false, error: "Nothing here" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe("Nothing here"),
+    );
+  });
+
+  it("toggles song fields and applies the presets", async () => {
+    await renderSong({
+      song: {
+        success: true,
+        metadata: {
+          title: "Fetched Title",
+          artist: "Fetched Artist",
+          extraInfo: { score: 9 },
+          picture: "https://img.test/a.jpg",
+        },
+      },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Song Metadata");
+
+    expect(screen.getByText('{"score":9}')).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "None" }));
+    expect(
+      /** @type {HTMLInputElement} */ (screen.getByLabelText(/Title:/)).checked,
+    ).toBe(false);
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Coverart only" }),
+    );
+    expect(
+      /** @type {HTMLInputElement} */ (screen.getByLabelText(/Title:/)).checked,
+    ).toBe(false);
+    expect(
+      /** @type {HTMLInputElement} */ (screen.getByLabelText(/Cover Art:/))
+        .checked,
+    ).toBe(true);
+
+    await fireEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(
+      /** @type {HTMLInputElement} */ (screen.getByLabelText(/Title:/)).checked,
+    ).toBe(true);
+
+    await fireEvent.click(screen.getByLabelText(/Title:/));
+    expect(
+      /** @type {HTMLInputElement} */ (screen.getByLabelText(/Title:/)).checked,
+    ).toBe(false);
+  });
+
+  it("uploads a base64 cover from a fetched song", async () => {
+    await renderSong({
+      song: {
+        success: true,
+        metadata: {
+          title: "Fetched Title",
+          picture: "data:image/png;base64,AAAA",
+        },
+      },
+    });
+    const fetchMock = /** @type {ReturnType<typeof vi.fn>} */ (
+      globalThis.fetch
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Song Metadata");
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Apply Selected" }),
+    );
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, options]) =>
+            String(url) === "/api/metadata/picture/file" &&
+            options?.method === "POST" &&
+            options?.body instanceof FormData,
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("reports an unsupported cover format", async () => {
+    await renderSong({
+      song: {
+        success: true,
+        metadata: { title: "Fetched Title", picture: "ftp://cover/a.jpg" },
+      },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Song Metadata");
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Apply Selected" }),
+    );
+
+    await waitFor(() =>
+      expect(
+        get(toast).some(
+          (entry) => entry.message === "Unsupported image format",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("reports a failed field write", async () => {
+    await renderSong({ metadataFileError: true });
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Song Metadata");
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Apply Selected" }),
+    );
+
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe("Apply failed: Read-only file"),
+    );
+  });
+
+  it("reports a failed cover URL upload", async () => {
+    await renderSong({
+      pictureUrlError: true,
+      song: {
+        success: true,
+        metadata: { title: "Fetched Title", picture: "https://img.test/a.jpg" },
+      },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Song Metadata");
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Apply Selected" }),
+    );
+
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe(
+        "Apply failed: Failed to update cover art from URL",
+      ),
+    );
+  });
+
+  it("previews a single album track with extra info and applies it", async () => {
+    const fetchMock = stubApi({
+      album: {
+        success: true,
+        metadata: [
+          {
+            trackNumber: 1,
+            title: "Track One",
+            artist: "Album Artist",
+            extraInfo: { score: 5 },
+            picture: "https://img.test/one.jpg",
+          },
+          {
+            trackNumber: 2,
+            title: "Track Two",
+            artist: "Album Artist",
+            picture: "https://img.test/two.jpg",
+          },
+        ],
+      },
+    });
+    const { container } = render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "album",
+        targetPath: "folder/song.mp3",
+      },
+    });
+    await waitFor(() =>
+      expect(
+        /** @type {HTMLInputElement} */ (
+          screen.getByPlaceholderText("Search...")
+        ).value,
+      ).toBe("Album Name"),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Track Metadata");
+
+    expect(screen.getByText('{"score":5}')).toBeTruthy();
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Coverart only" }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "All" }));
+    await fireEvent.click(screen.getByLabelText(/Title:/));
+
+    const trackSelect = /** @type {HTMLSelectElement} */ (
+      container.querySelector(".track-selector select")
+    );
+    await fireEvent.change(trackSelect, { target: { value: "1" } });
+    await waitFor(() =>
+      expect(screen.getByText("Track 2: Track Two")).toBeTruthy(),
+    );
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Apply Selected" }),
+    );
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("/api/metadata/picture/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: "folder/song.mp3",
+          url: "https://img.test/two.jpg",
+        }),
+      }),
+    );
+  });
+
+  it("edits the batch file cards and global fields", async () => {
+    const fetchMock = stubApi({
+      tree: folderTree,
+      album: {
+        success: true,
+        metadata: [
+          {
+            trackNumber: 1,
+            title: "Track One",
+            extraInfo: "Score 7",
+            picture: "https://img.test/one.jpg",
+          },
+          { trackNumber: 2, title: "Track Two" },
+        ],
+      },
+    });
+    const { container } = render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "album",
+        targetPath: "folder",
+        isFolder: true,
+      },
+    });
+    await waitFor(() =>
+      expect(
+        /** @type {HTMLInputElement} */ (
+          screen.getByPlaceholderText("Search...")
+        ).value,
+      ).toBe("Album Name"),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Files in folder");
+
+    expect(screen.getByText("Score 7")).toBeTruthy();
+
+    const header = /** @type {HTMLElement} */ (
+      container.querySelector(".global-header")
+    );
+    await fireEvent.click(header);
+    expect(container.querySelector(".global-fields .fields-list")).toBeNull();
+    await fireEvent.click(header);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Main fields" }));
+    await fireEvent.click(screen.getByRole("button", { name: "All" }));
+
+    const globalCheckboxes = container.querySelectorAll(
+      ".global-fields .fields-list input[type=checkbox]",
+    );
+    await fireEvent.click(
+      /** @type {HTMLInputElement} */ (globalCheckboxes[0]),
+    );
+
+    const fileToggles = container.querySelectorAll(".file-enable input");
+    await fireEvent.click(/** @type {HTMLInputElement} */ (fileToggles[1]));
+
+    const fileSelect = /** @type {HTMLSelectElement} */ (
+      container.querySelectorAll(".file-card select")[0]
+    );
+    await fireEvent.change(fileSelect, { target: { value: "1" } });
+
+    const fileField = container.querySelector(
+      ".file-card .file-fields input[type=checkbox]",
+    );
+    await fireEvent.click(/** @type {HTMLInputElement} */ (fileField));
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Apply Selected" }),
+    );
+
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe("Metadata applied to 1 file(s)"),
+    );
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, options]) =>
+          String(url) === "/api/metadata/file" &&
+          String(options?.body).includes('"path":"folder/a.mp3"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("shows files without an assigned track", async () => {
+    stubApi({
+      tree: folderTree,
+      album: {
+        success: true,
+        metadata: [{ trackNumber: 1, title: "Only Track" }],
+      },
+    });
+    render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "album",
+        targetPath: "folder",
+        isFolder: true,
+      },
+    });
+    await waitFor(() =>
+      expect(
+        /** @type {HTMLInputElement} */ (
+          screen.getByPlaceholderText("Search...")
+        ).value,
+      ).toBe("Album Name"),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+
+    expect(await screen.findByText("No track assigned")).toBeTruthy();
+  });
+
+  it("warns when the folder is empty at track selection time", async () => {
+    stubApi({
+      tree: [
+        {
+          path: "folder",
+          type: "directory",
+          children: [
+            {
+              path: "folder/cover.jpg",
+              name: "cover.jpg",
+              type: "file",
+              file_type: "image",
+            },
+          ],
+        },
+      ],
+    });
+    render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "album",
+        targetPath: "folder",
+        isFolder: true,
+      },
+    });
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe("No audio files found in folder"),
+    );
+
+    await fireEvent.input(screen.getByPlaceholderText("Search..."), {
+      target: { value: "Album Name" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+
+    await waitFor(() =>
+      expect(get(toast).at(-1)?.message).toBe("No audio files in folder"),
+    );
   });
 });
