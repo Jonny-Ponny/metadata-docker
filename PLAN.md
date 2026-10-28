@@ -73,11 +73,11 @@ No open items.
 
 ### Optional security hardening
 
-- Build hygiene: pin the remaining direct Python requirements and run
-  `pip-audit`/`npm audit` periodically or as a non-blocking CI job. Base images
-  and Actions are pinned by digest/SHA and refreshed by Dependabot; the
-  `.dockerignore`, the frontend `npm ci` install and the Node 22 builder are
-  done.
+- Build hygiene: direct Python requirements are exact-pinned and updated by
+  Dependabot. Run `pip-audit`/`npm audit` periodically or as a non-blocking CI
+  job. Base images and Actions are pinned by digest/SHA and refreshed by
+  Dependabot; the `.dockerignore`, the frontend `npm ci` install and the Node 22
+  builder are done.
 
 ### Features
 
