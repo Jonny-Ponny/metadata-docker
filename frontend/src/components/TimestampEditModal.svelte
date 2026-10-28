@@ -13,7 +13,6 @@
    * @property {boolean} [show]
    * @property {number} [lineIndex]
    * @property {string} [currentValue]
-   * @property {number} [currentTime]
    * @property {string[]} [timestamps]
    * @property {() => void} [onClose]
    * @property {(index: number, value: string) => void} [onSave]
@@ -24,7 +23,6 @@
     show = false,
     lineIndex = -1,
     currentValue = "",
-    currentTime = 0,
     timestamps = [],
     onClose = () => {},
     onSave = () => {},
@@ -73,8 +71,9 @@
   }
 
   function useCurrentTime() {
-    // Read the live playback position via the player. The currentTime prop is
-    // a stored timeupdate snapshot and can be up to one event interval stale.
+    // Read the live playback position via the player, like the other capture
+    // paths in the lyrics editor. The button label carries no clock, so it
+    // cannot disagree with the value this fills in.
     const event = new CustomEvent("get-current-time", {
       detail: {
         callback: (/** @type {number} */ time) => {
@@ -303,7 +302,7 @@
             <p>Between {allowedRange.prevTime} and {allowedRange.nextTime}</p>
             <p class="timestamp-current-time">
               <button class="btn btn-small" onclick={useCurrentTime}>
-                Use Current Playback Time ({secondsToTimestamp(currentTime)})
+                Use Current Playback Time
               </button>
             </p>
           </div>

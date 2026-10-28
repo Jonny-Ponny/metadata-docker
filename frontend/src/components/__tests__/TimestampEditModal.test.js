@@ -165,26 +165,16 @@ describe("TimestampEditModal", () => {
     ).toBe("01:15.50");
   });
 
-  it("prefers the live playback time over the currentTime prop", async () => {
-    // currentTime is a timeupdate snapshot that can trail the player.
-    stopTime = answerWithTime(76.2);
+  it("does not label the current-time button with a stale timestamp", () => {
     render(TimestampEditModal, {
-      props: {
-        show: true,
-        lineIndex: 1,
-        timestamps,
-        currentTime: 75.5,
-      },
+      props: { show: true, lineIndex: 1, timestamps },
     });
 
-    await fireEvent.click(
-      screen.getByRole("button", { name: /use current playback time/i }),
-    );
-    await tick();
-
+    // The label used to render the stored currentTime, which could trail the
+    // live value the button actually inserts.
     expect(
-      /** @type {HTMLInputElement} */ (screen.getByRole("textbox")).value,
-    ).toBe("01:16.20");
+      screen.getByRole("button", { name: "Use Current Playback Time" }),
+    ).toBeTruthy();
   });
 
   it("formats digits while typing", async () => {

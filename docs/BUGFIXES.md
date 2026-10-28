@@ -342,15 +342,39 @@ continue` (and keep the directory-level `PermissionError` handling).
       which browsers fire about four times a second, so the written timestamp
       could be up to roughly a quarter of a second early depending on where the
       click landed. The timestamp dialog's "Use Current Playback Time" button
-      read a stale prop the same way. Fixed in external PR #17.
+      read a stale prop the same way.
+      **Credit:** found and fixed by [@bkoroglu1](https://github.com/bkoroglu1)
+      in [PR #17](https://github.com/Jonny-Ponny/metadata-docker/pull/17).
       **Fix:** answer `get-current-time` with `player.currentTime`, and route the
       shortcut and the dialog button through `get-current-time` like the other
       capture paths.
       **Test:** `frontend/src/components/__tests__/Player.test.js` - `answers
       get-current-time with the live position, not the last timeupdate`;
       `LRCEditor.test.js` - `uses the live player time for the current-line
-      shortcut`; `TimestampEditModal.test.js` - `prefers the live playback time
-      over the currentTime prop`.
+      shortcut`; `TimestampEditModal.test.js` - `fills in the current playback
+      time`.
+
+- [x] **B-37 (P2) The timestamp dialog's live-time button still showed a stale clock.**
+      After the B-36 fix the button inserted the live playback position, but its
+      label still rendered `(secondsToTimestamp(currentTime))` from the stored
+      `currentTime` prop, so the hint and the inserted value could disagree by up
+      to one `timeupdate` interval. That prop was then only used for the label.
+      **Fix:** label the button "Use Current Playback Time" and drop the unused
+      `currentTime` prop and its pass-through in `LRCEditor.svelte`.
+      **Test:** `frontend/src/components/__tests__/TimestampEditModal.test.js` -
+      `does not label the current-time button with a stale timestamp`.
+
+- [x] **B-38 (P2) Syncing the current line scrolled the editor down by a line.**
+      The `c` shortcut applied the timestamp and then re-equalised the column
+      heights. `equalizeAllLineHeights()` resets the heights before re-applying
+      them in a frame, which shifts the scroll position; the next-line shortcut
+      already started a scroll before equalising, so only `c` drifted. The line
+      the user was editing moved off-centre and stayed there until the next sync
+      scrolled again.
+      **Fix:** share the scroll-then-equalise helper between both shortcuts so
+      the synced line stays in view.
+      **Test:** `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps
+      the current line in view when syncing with the c shortcut`.
 
 ## Regression tests
 
@@ -395,3 +419,5 @@ silently.
 | B-34 | `frontend/src/components/__tests__/SettingsModal.test.js` - `reports addon load failures without retrying in a loop` |
 | B-35 | `frontend/src/__tests__/App.test.js` - `shows an empty library state`                                                |
 | B-36 | `frontend/src/components/__tests__/Player.test.js` - `answers get-current-time with the live position, not the last timeupdate` |
+| B-37 | `frontend/src/components/__tests__/TimestampEditModal.test.js` - `does not label the current-time button with a stale timestamp` |
+| B-38 | `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps the current line in view when syncing with the c shortcut` |

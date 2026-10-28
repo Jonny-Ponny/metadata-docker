@@ -144,7 +144,7 @@ test. `src/test/setup.js` clears `localStorage` after every test.
 Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
 components in `src/components/__tests__/`, stores in `src/stores/__tests__/`
 and the app shell in `src/__tests__/`. As of 2026-10-28 the suite has 41 files
-and 534 tests.
+and 535 tests.
 
 `npm run test:coverage` runs the suite with `@vitest/coverage-v8` and writes a
 text summary plus HTML and LCOV reports to `frontend/coverage/`. Coverage
@@ -211,7 +211,8 @@ Covered areas:
   volume, track changes, live `get-current-time` answers and exported controls;
   `HelpModal` tabs, version footer and close paths; `LogViewer` loading,
   filtering, clearing, export and auto-refresh; `LRCEditor` columns, timestamp
-  editing, live-time capture, import/export, shifting and keyboard shortcuts;
+  editing, live-time capture, import/export, shifting, keyboard shortcuts and
+  keeping the synced line in view while editing;
   `MetadataFetcher` addon loading and failures, search (Enter and addon
   switching), song/album previews, presets, cover upload variants and batch
   apply; `SettingsModal` addon list, scheme previews, overview fields, section
