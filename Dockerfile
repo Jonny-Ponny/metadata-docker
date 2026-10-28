@@ -8,7 +8,7 @@
 # linux/arm/v7 image, so the builder stays on 22 (still armv7-capable and
 # supported until April 2027); the final stage keeps targeting armv7. The
 # Dependabot config ignores Node major updates for this reason.
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:23-bookworm-slim@sha256:86191b94d2a163be41f3dc7fe5e5fcaca8ba2f1be7275d98a06343483c17414a AS frontend-builder
 WORKDIR /app/frontend
 
 # Install from the lockfile so the image matches CI and the repository
