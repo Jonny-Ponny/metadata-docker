@@ -25,6 +25,7 @@ services:
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}
       - PUID=1000
       - PGID=1000
+      - CHOWN_MUSIC=${CHOWN_MUSIC:-false}
       - TZ=UTC
     volumes:
       - ~/path/to/your/music:/music
@@ -48,6 +49,7 @@ see [Exposure](#exposure) before changing that.
 | `MAX_UPLOAD_MB` | Maximum size of one upload request (one file). Cover art has a separate 20 MiB cap. | `4096` |
 | `PUID` | UID the container drops to. | `1000` (image) |
 | `PGID` | GID the container drops to. | `1000` (image) |
+| `CHOWN_MUSIC` | Recursively change `/music` ownership to `PUID`/`PGID` at startup. `/logs` is fixed when running non-root. | `false` |
 | `MUSIC_FOLDER` | Library path inside the container. | `/music` |
 | `LOG_DIR` | Log directory. | `/logs` |
 | `CONTAINER_PORT` | Port gunicorn binds inside the container. | `5000` |
@@ -80,6 +82,24 @@ Set `PUID`/`PGID` to the owner of your music folder. Both `0` runs the
 container as root; it is supported but not recommended. Both must be `0` or both
 non-zero: a mixed pair is rejected at startup instead of running with root-group
 access. The container does not run as root by default.
+
+### Library ownership
+
+The entrypoint always fixes `/logs` ownership and then starts as
+`PUID`/`PGID`. It does **not** recursively chown `/music` by default: walking a
+large or network-mounted library on every start is slow, and the chown can take
+ownership of files deliberately shared with another service.
+
+Make the host folder writable by the `PUID`/`PGID` pair, for example:
+
+```bash
+sudo chown -R 1000:1000 /path/to/your/music
+```
+
+Alternatively set `CHOWN_MUSIC=true` to have the entrypoint run
+`chown -R` on `/music` at every start. When `/music` is not writable by the
+runtime user, startup logs a warning that names both options. Running as root
+(`PUID=0` and `PGID=0`) skips the ownership setup entirely.
 
 ### Password hash instead of a plaintext password
 
@@ -204,8 +224,9 @@ the published image.
 - Check folder permissions: `ls -la /path/to/your/music`.
 - The app needs read/write on the library and `/logs`; a mismatch shows up as
   `403` or `500` responses and permission errors in the log.
-- The container does not recursively `chown` `/music`; run a one-time
-  `chown -R <PUID>:<PGID> /path/to/your/music` if the IDs differ.
+- `/logs` is chowned on startup. `/music` is only chowned when
+  `CHOWN_MUSIC=true`; otherwise run a one-time
+  `chown -R <PUID>:<PGID> /path/to/your/music` or enable the flag.
 
 ### Can't reach the web interface
 

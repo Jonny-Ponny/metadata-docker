@@ -70,7 +70,9 @@ restart. Sessions last `TOKEN_EXPIRE_HOURS` and survive a restart when
 Set `PUID`/`PGID` to the owner of your music folder, or both to `0` to run as
 root (not recommended). A mixed pair such as `PUID=1000, PGID=0` is rejected at
 startup: it would leave the app user in the root group without the root-mode
-safeguards. The compose port is bound to `127.0.0.1`; to reach the
+safeguards. When running non-root, `/logs` ownership is fixed on startup;
+`/music` is only chowned when `CHOWN_MUSIC=true`, so otherwise the host folder
+must already be writable by `PUID`/`PGID`. The compose port is bound to `127.0.0.1`; to reach the
 app from other machines, put a TLS-terminating reverse proxy in front of it -
 never expose plain HTTP to the internet. See
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full environment reference,
@@ -140,6 +142,7 @@ with or without timestamps, and clear all timestamps.
 | `TOKEN_EXPIRE_HOURS` | Session-token lifetime in hours. | `12` |
 | `MAX_UPLOAD_MB` | Maximum size of one upload request (one file). | `4096` |
 | `PUID` / `PGID` | UID/GID the container runs as. | `1000` |
+| `CHOWN_MUSIC` | Recursively chown `/music` to `PUID`/`PGID` at startup. `/logs` is fixed when running non-root. | `false` |
 | `MUSIC_FOLDER` / `LOG_DIR` | Library and log paths inside the container. | `/music`, `/logs` |
 | `DISABLE_VERSION_CHECK` | Skip the GitHub release check. | `False` |
 

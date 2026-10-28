@@ -10,6 +10,22 @@ USER_SITE="/app/.local"
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
 
+# Optional recursive ownership fix for the music library. Off by default: a
+# large or network-mounted library makes every start slow, and the chown can
+# take ownership of files that are deliberately shared with another service.
+case "$(printf '%s' "${CHOWN_MUSIC:-false}" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on)
+        CHOWN_MUSIC_ENABLED=1
+        ;;
+    0|false|no|off)
+        CHOWN_MUSIC_ENABLED=0
+        ;;
+    *)
+        echo "WARNING: Unrecognised CHOWN_MUSIC='$CHOWN_MUSIC'; treating it as false."
+        CHOWN_MUSIC_ENABLED=0
+        ;;
+esac
+
 # Application code is root-owned and not writable by the runtime user. Prevent
 # Python from trying to create __pycache__ files under /app.
 export PYTHONDONTWRITEBYTECODE=1
@@ -149,12 +165,21 @@ if [ "$RUN_AS_ROOT" = "1" ]; then
         --no-control-socket app:app
 fi
 
-# Change ownership so the unprivileged user can read/write the library and logs.
-# Do not touch /app: application code must stay root-owned and immutable. The
-# addons mount is read-only, so it is left alone as well.
-for dir in /music /logs; do
-    chown -R "$PUID":"$PGID" "$dir" || echo "WARNING: could not change ownership of $dir, continuing"
-done
+# Logs are app-managed and usually small, so keep them writable on every start.
+# The library is left alone unless CHOWN_MUSIC is enabled; otherwise the host
+# folder must already be writable by PUID/PGID. Do not touch /app: application
+# code must stay root-owned and immutable. The addons mount is read-only, so it
+# is left alone as well.
+chown -R "$PUID":"$PGID" /logs || echo "WARNING: could not change ownership of /logs, continuing"
+
+if [ "$CHOWN_MUSIC_ENABLED" = "1" ]; then
+    echo "CHOWN_MUSIC enabled: changing /music ownership to $PUID:$PGID (this may take a while)"
+    chown -R "$PUID":"$PGID" /music || echo "WARNING: could not change ownership of /music, continuing"
+elif ! gosu "$USER_NAME" sh -c 'test -w /music && test -x /music'; then
+    echo "WARNING: /music is not writable by $USER_NAME ($PUID:$PGID)."
+    echo "         Set CHOWN_MUSIC=true to change ownership at startup, or run on the host:"
+    echo "         chown -R $PUID:$PGID /path/to/your/music"
+fi
 
 echo "Starting gunicorn as user $USER_NAME..."
 # The control socket defaults to $HOME/.gunicorn, but /app is root-owned and
