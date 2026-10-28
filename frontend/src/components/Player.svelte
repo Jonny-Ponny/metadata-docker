@@ -26,7 +26,8 @@
   let currentTime = $state(0);
   let duration = $state(0);
   let volume = $state(0.05);
-  let waitingForMetadata = $state(false);
+  /** @type {number | null} */
+  let pendingSeekTime = null;
   let shouldAutoPlay = $state(false);
 
   const VOLUME_STORAGE_KEY = "player-volume";
@@ -92,8 +93,16 @@
 
     player.addEventListener("loadedmetadata", () => {
       duration = player.duration;
-      waitingForMetadata = false;
-      if (shouldAutoPlay) {
+      const pendingSeek = pendingSeekTime;
+      pendingSeekTime = null;
+
+      if (pendingSeek !== null) {
+        // A seek requested before the duration was known (for example a lyric
+        // timestamp click on a freshly selected track) runs now.
+        shouldAutoPlay = false;
+        doSeekAndPlay(pendingSeek);
+      } else if (shouldAutoPlay) {
+        shouldAutoPlay = false;
         player
           .play()
           .then(() => {
@@ -103,7 +112,6 @@
             console.error("[Player] Auto-play failed:", err);
             playing = false;
           });
-        shouldAutoPlay = false;
       }
     });
 
@@ -210,6 +218,29 @@
   }
 
   /**
+   * Seek to a position and start playback if it is paused.
+   * @param {number} timeInSeconds
+   */
+  function doSeekAndPlay(timeInSeconds) {
+    if (!audio) return;
+    const player = audio;
+    const targetTime = Math.max(
+      0,
+      Math.min(timeInSeconds, player.duration || 0),
+    );
+    player.currentTime = targetTime;
+    if (ontimeupdate) ontimeupdate(player.currentTime);
+
+    if (!playing) {
+      playing = true; // <-- optimistic update
+      player.play().catch((/** @type {unknown} */ err) => {
+        console.error("[Player] Playback failed in seekToTime:", err);
+        playing = false; // revert on failure
+      });
+    }
+  }
+
+  /**
    * @param {number} timeInSeconds
    * @returns {boolean}
    */
@@ -222,36 +253,12 @@
       player.src = audioFile.url;
     }
 
-    const doSeekAndPlay = () => {
-      const targetTime = Math.max(
-        0,
-        Math.min(timeInSeconds, player.duration || 0),
-      );
-      player.currentTime = targetTime;
-      if (ontimeupdate) ontimeupdate(player.currentTime);
-
-      if (!playing) {
-        playing = true; // <-- optimistic update
-        player.play().catch((/** @type {unknown} */ err) => {
-          console.error("[Player] Playback failed in seekToTime:", err);
-          playing = false; // revert on failure
-        });
-      }
-    };
-
-    // If duration isn't known yet, wait for metadata
+    // If the duration isn't known yet, remember the target; the single
+    // loadedmetadata handler resolves it once the metadata arrives.
     if (!duration && player.readyState < 1) {
-      waitingForMetadata = true;
-      const onLoaded = () => {
-        player.removeEventListener("loadedmetadata", onLoaded);
-        if (waitingForMetadata) {
-          doSeekAndPlay();
-          waitingForMetadata = false;
-        }
-      };
-      player.addEventListener("loadedmetadata", onLoaded);
+      pendingSeekTime = timeInSeconds;
     } else {
-      doSeekAndPlay();
+      doSeekAndPlay(timeInSeconds);
     }
     return true;
   }
@@ -265,6 +272,7 @@
       playing = false;
       currentTime = 0;
       duration = 0;
+      pendingSeekTime = null;
     }
   }
 
@@ -282,7 +290,7 @@
     playing = false;
     currentTime = 0;
     duration = 0;
-    waitingForMetadata = false;
+    pendingSeekTime = null;
     shouldAutoPlay = false;
 
     if (wasPlaying) {

@@ -436,6 +436,27 @@ describe("Player", () => {
     expect(ontimeupdate).toHaveBeenCalledWith(100);
   });
 
+  it("performs a seek requested before the metadata loads", async () => {
+    const ontimeupdate = vi.fn();
+    const { component } = render(Player, {
+      props: { audioFile, ontimeupdate },
+    });
+    const audio = currentAudio();
+    await tick();
+
+    // The duration is still unknown, so the seek is queued.
+    expect(component.seekToTime(42)).toBe(true);
+    expect(audio.currentTime).toBe(0);
+
+    audio.duration = 100;
+    audio.emit("loadedmetadata");
+    await tick();
+
+    expect(audio.currentTime).toBe(42);
+    expect(audio.play).toHaveBeenCalled();
+    expect(ontimeupdate).toHaveBeenCalledWith(42);
+  });
+
   it("refuses to seek without a file", () => {
     const { component } = render(Player, { props: { audioFile: null } });
 
