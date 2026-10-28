@@ -364,6 +364,18 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/components/__tests__/TimestampEditModal.test.js` -
       `does not label the current-time button with a stale timestamp`.
 
+- [x] **B-38 (P2) Syncing the current line scrolled the editor down by a line.**
+      The `c` shortcut applied the timestamp and then re-equalised the column
+      heights. `equalizeAllLineHeights()` resets the heights before re-applying
+      them in a frame, which shifts the scroll position; the next-line shortcut
+      already started a scroll before equalising, so only `c` drifted. The line
+      the user was editing moved off-centre and stayed there until the next sync
+      scrolled again.
+      **Fix:** share the scroll-then-equalise helper between both shortcuts so
+      the synced line stays in view.
+      **Test:** `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps
+      the current line in view when syncing with the c shortcut`.
+
 ## Regression tests
 
 Each bug above is pinned by at least one test, so a fix cannot be reverted
@@ -408,3 +420,4 @@ silently.
 | B-35 | `frontend/src/__tests__/App.test.js` - `shows an empty library state`                                                |
 | B-36 | `frontend/src/components/__tests__/Player.test.js` - `answers get-current-time with the live position, not the last timeupdate` |
 | B-37 | `frontend/src/components/__tests__/TimestampEditModal.test.js` - `does not label the current-time button with a stale timestamp` |
+| B-38 | `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps the current line in view when syncing with the c shortcut` |
