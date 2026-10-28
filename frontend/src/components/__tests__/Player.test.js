@@ -402,6 +402,25 @@ describe("Player", () => {
     window.removeEventListener("player-time-update", timeListener);
   });
 
+  it("answers get-current-time with the live position, not the last timeupdate", () => {
+    render(Player, { props: { audioFile } });
+    const audio = currentAudio();
+    const timeCallback = vi.fn();
+
+    audio.currentTime = 12.5;
+    audio.emit("timeupdate");
+
+    // Playback moved on, but the browser has not fired the next timeupdate yet.
+    audio.currentTime = 12.7;
+    window.dispatchEvent(
+      new CustomEvent("get-current-time", {
+        detail: { callback: timeCallback },
+      }),
+    );
+
+    expect(timeCallback).toHaveBeenCalledWith(12.7);
+  });
+
   it("clamps a seek to the track duration", () => {
     const ontimeupdate = vi.fn();
     const { component } = render(Player, {
