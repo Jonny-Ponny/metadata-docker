@@ -6,7 +6,8 @@
 # The frontend output is platform-independent, so build it once on the host
 # architecture instead of under QEMU for every target. Node 24+ publishes no
 # linux/arm/v7 image, so the builder stays on 22 (still armv7-capable and
-# supported until April 2027); the final stage keeps targeting armv7.
+# supported until April 2027); the final stage keeps targeting armv7. The
+# Dependabot config ignores Node major updates for this reason.
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
 WORKDIR /app/frontend
 

@@ -180,8 +180,11 @@ What it doesn't prove:
   what CI builds, and the result still verifies.
 - **Dependencies are safe.** Base images, npm/PyPI packages and addon
   `*requirements.txt` files come from outside this repo.
-- **The image is reproducible.** Building the same commit locally may produce a
-  different digest.
+- **The image is byte-for-byte reproducible.** Pinning base images and Actions
+  removes one source of drift, but other inputs still vary: `apk add` resolves
+  from live Alpine repositories, transitive Python packages are resolved by
+  pip, and BuildKit/attestation metadata can differ. Building the same commit
+  may still produce a different digest.
 
 If you don't trust the maintainer, build from a reviewed tag:
 
@@ -196,9 +199,9 @@ docker build -t metadata-docker .
 Proportionate hardening for the project size, and what to watch when changing
 the build:
 
-- Direct Python requirements are pinned with a floor and a cap where the API
-  matters (`Flask>=3.1,<4`, `mutagen>=1.47,<2`); keep doing that for packages
-  whose internals are used.
+- Direct Python requirements are exact-pinned in `backend/requirements.txt`,
+  and Dependabot (`.github/dependabot.yml`) updates them weekly. Transitive
+  packages are still resolved by pip rather than locked.
 - The `Dockerfile` builds the frontend in a separate stage with `npm ci`, so it
   consumes the committed `package-lock.json` exactly, and copies only
   `frontend/dist/` into the image.
@@ -230,5 +233,7 @@ the build:
   write access to the library and a deliberate attack; closing it would touch
   every file operation for little practical gain here. The upload name race is
   in scope because it can happen without an attacker.
-- Builds are not hermetic or reproducible; dependency pinning and periodic
-  audits are proportionate to the project size.
+- Builds are not hermetic or reproducible even with pinned base images:
+  Alpine package repositories, transitive Python packages and BuildKit metadata
+  remain variable inputs. Dependency pinning and periodic audits are
+  proportionate to the project size.

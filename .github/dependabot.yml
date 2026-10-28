@@ -1,13 +1,18 @@
 version: 2
 
-# Keep the pinned base-image digests and Action commit SHAs current. The
-# Dockerfile and workflows pin exact inputs; without these updates the pins
-# would silently miss upstream security fixes.
+# Keep the pinned base-image digests, Action commit SHAs and direct Python
+# requirements current. Without these updates the pins would silently miss
+# upstream security fixes.
 updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Node 24+ has no linux/arm/v7 image, while the final stage targets armv7.
+      - dependency-name: "node"
+        versions:
+          - ">= 24"
     groups:
       base-images:
         patterns:
@@ -19,5 +24,14 @@ updates:
       interval: "weekly"
     groups:
       actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    groups:
+      python:
         patterns:
           - "*"
