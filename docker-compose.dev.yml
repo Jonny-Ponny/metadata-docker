@@ -10,6 +10,7 @@ services:
       - AUTH_USERNAME=${AUTH_USERNAME:-}               # Login; random if empty
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}               # Password; random if empty
       - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH:-}     # Optional hash instead of password
+      - JWT_SECRET=${JWT_SECRET:-}                     # Optional; random per restart if empty
       - TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS:-12}   # Optional
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}           # Per-file request limit
       - PUID=1000
