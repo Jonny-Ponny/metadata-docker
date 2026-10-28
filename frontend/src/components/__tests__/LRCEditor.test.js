@@ -436,6 +436,36 @@ describe("LRCEditor", () => {
     );
   });
 
+  it("keeps the current line in view when syncing with the c shortcut", async () => {
+    render(LRCEditor, {
+      props: {
+        isOpen: true,
+        initialLyrics: "one\ntwo",
+        initialTimestamps: ["[00:05.00]", "[00:10.00]"],
+      },
+    });
+
+    // Make line 0 the active line.
+    window.dispatchEvent(
+      new CustomEvent("player-time-update", { detail: { time: 6 } }),
+    );
+    await tick();
+
+    stopTime = answerWithTime(7);
+    await fireEvent.keyDown(document.body, { key: "c" });
+    await tick();
+
+    // The synced line is scrolled back into view before the heights are
+    // re-equalised, otherwise the reset shifts the view down by a line.
+    const scrollIntoView = /** @type {any} */ (
+      Element.prototype.scrollIntoView
+    );
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(
+      document.getElementById("modal-timestamp-0"),
+    );
+  });
+
   it("warns when there is no active line to synchronize", async () => {
     render(LRCEditor, {
       props: { isOpen: true, initialLyrics: "one\ntwo" },

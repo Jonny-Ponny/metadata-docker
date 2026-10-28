@@ -216,6 +216,42 @@
     }
   }
 
+  /**
+   * Keep a line in view while its timestamp is applied. The reset/re-apply
+   * cycle in equalizeAllLineHeights() shifts the scroll position by a line
+   * unless a scroll is already running, so start one first and equalise while
+   * it is in flight.
+   * @param {Element | null} line
+   */
+  function scrollToLineAndEqualize(line) {
+    if (line) {
+      line.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    requestAnimationFrame(() => {
+      // Temporarily disable transitions during height equalization
+      const style = document.createElement("style");
+      style.id = "temp-no-transition";
+      style.textContent = `
+                        .lyric-line {
+                            transition: none !important;
+                        }
+                    `;
+      document.head.appendChild(style);
+
+      // Force a small delay to let scroll start
+      setTimeout(() => {
+        equalizeAllLineHeights();
+
+        // Remove the temp style after equalization
+        setTimeout(() => {
+          const tempStyle = document.getElementById("temp-no-transition");
+          if (tempStyle) tempStyle.remove();
+        }, 100);
+      }, 10);
+    });
+  }
+
   // ========== HEIGHT EQUALISATION ==========
   function cleanupResizeObservers() {
     resizeObservers.forEach((observer) => observer.disconnect());
@@ -423,37 +459,8 @@
           updateSynchronizedLyricsText();
           currentActiveLine = targetIndex;
 
-          // First scroll to the element BEFORE height equalization
-          if (targetElement) {
-            targetElement.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }
-
-          // Then handle height equalization after scroll starts
-          requestAnimationFrame(() => {
-            // Temporarily disable transitions during height equalization
-            const style = document.createElement("style");
-            style.id = "temp-no-transition";
-            style.textContent = `
-                        .lyric-line {
-                            transition: none !important;
-                        }
-                    `;
-            document.head.appendChild(style);
-
-            // Force a small delay to let scroll start
-            setTimeout(() => {
-              equalizeAllLineHeights();
-
-              // Remove the temp style after equalization
-              setTimeout(() => {
-                const tempStyle = document.getElementById("temp-no-transition");
-                if (tempStyle) tempStyle.remove();
-              }, 100);
-            }, 10);
-          });
+          // Keep the new line in view while the heights re-equalise
+          scrollToLineAndEqualize(targetElement);
         },
       },
     });
@@ -736,11 +743,17 @@
   }
 
   function insertCurrentTimeToCurrentLine() {
-    if (currentActiveLine === -1 || currentActiveLine >= timestamps.length) {
+    const targetIndex = currentActiveLine;
+    if (targetIndex === -1 || targetIndex >= timestamps.length) {
       toast.info("No active line to set timestamp");
       return;
     }
     if (USLT === "") return;
+
+    // Keep the line being synced in view while the heights re-equalise
+    const targetElement = document.querySelector(
+      `[data-line-index="${targetIndex}"]`,
+    );
 
     // Read the live playback position via the player. The stored
     // timeupdate value can be up to one event interval stale, which
@@ -754,7 +767,7 @@
           }
 
           const newTimestamp = secondsToTimestamp(time);
-          timestamps[currentActiveLine] = newTimestamp;
+          timestamps[targetIndex] = newTimestamp;
 
           // Ensure timestamps length matches lines
           const lines = USLT.split("\n");
@@ -763,9 +776,7 @@
           }
 
           updateSynchronizedLyricsText();
-          requestAnimationFrame(() => {
-            equalizeAllLineHeights();
-          });
+          scrollToLineAndEqualize(targetElement);
         },
       },
     });
