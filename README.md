@@ -64,7 +64,8 @@ docker compose up -d
 Open <http://localhost:8888> and log in with the credentials from the compose
 file. If you left them empty, the app prints temporary credentials to the
 container logs (`docker compose logs app`) at startup; they change on every
-restart.
+restart. Sessions last `TOKEN_EXPIRE_HOURS` and survive a restart when
+`JWT_SECRET` is set; otherwise a new secret is generated for each run.
 
 Set `PUID`/`PGID` to the owner of your music folder, or both to `0` to run as
 root (not recommended). A mixed pair such as `PUID=1000, PGID=0` is rejected at
@@ -135,6 +136,7 @@ with or without timestamps, and clear all timestamps.
 | `AUTH_USERNAME` | Login username. Generated and logged if empty. | random per run |
 | `AUTH_PASSWORD` | Login password. Generated and logged if empty. | random per run |
 | `AUTH_PASSWORD_HASH` | Werkzeug password hash, used instead of `AUTH_PASSWORD`. | unset |
+| `JWT_SECRET` | Stable session-token secret, at least 32 characters. Random per run if unset. | random per run |
 | `TOKEN_EXPIRE_HOURS` | Session-token lifetime in hours. | `12` |
 | `MAX_UPLOAD_MB` | Maximum size of one upload request (one file). | `4096` |
 | `PUID` / `PGID` | UID/GID the container runs as. | `1000` |

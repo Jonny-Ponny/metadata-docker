@@ -51,8 +51,10 @@ everyone on that network can reach the login page.
   the single gunicorn worker's threads, and resets on restart. Behind a reverse
   proxy it sees the proxy address, so it degrades to a global limit; deploy
   behind a trusted proxy only.
-- The JWT secret is random per process, so a restart invalidates every token and
-  logs everyone out.
+- The JWT secret is random per process unless `JWT_SECRET` is set to at least
+  32 characters. Without a configured secret a restart invalidates every token
+  and logs everyone out; with one, sessions survive restarts until they expire
+  or the secret changes.
 - The SPA stores the token in `localStorage`, so it is exposed to XSS. A
   restrictive `Content-Security-Policy` and the related headers are sent as
   defense-in-depth (`X-Content-Type-Options`, `X-Frame-Options`,
@@ -194,12 +196,12 @@ the build:
 - Direct Python requirements are pinned with a floor and a cap where the API
   matters (`Flask>=3.1,<4`, `mutagen>=1.47,<2`); keep doing that for packages
   whose internals are used.
-- The `Dockerfile` builds the frontend in a separate stage and copies only
-  `frontend/dist/` into the image. Switching that stage from `npm install` to
-  `npm ci` would make it consume the committed `package-lock.json` exactly.
+- The `Dockerfile` builds the frontend in a separate stage with `npm ci`, so it
+  consumes the committed `package-lock.json` exactly, and copies only
+  `frontend/dist/` into the image.
 - A `.dockerignore` (`.git`, `node_modules`, `dist`, `backend/static`, `.env*`,
-  `__pycache__`, `logs`) keeps accidental local files out of the build context;
-  it is not in the repo yet.
+  `__pycache__`, `logs`) keeps accidental local files and development-only
+  files out of the build context.
 - Pinning base images by digest and Actions by commit SHA, plus an update bot,
   is optional but recommended if the project grows.
 - Run `pip-audit` / `npm audit` periodically or as a non-blocking CI job rather
@@ -216,8 +218,8 @@ the build:
 - The JWT stays in `localStorage` with a strict CSP instead of an `HttpOnly`
   cookie plus CSRF protection. This is an accepted trade-off for a single-admin
   app.
-- No token revocation/`jti`; tokens are short-lived and a restart invalidates
-  them.
+- No token revocation/`jti`; tokens are short-lived, and a restart invalidates
+  them unless a stable `JWT_SECRET` is configured.
 - No full TOCTOU hardening (`O_NOFOLLOW`/`dir_fd`) and no blanket ban on
   symlinks. `realpath` containment plus skipping links in tree, bulk and ZIP
   operations is considered sufficient. The remaining race requires concurrent

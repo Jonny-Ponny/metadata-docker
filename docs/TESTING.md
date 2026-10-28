@@ -155,13 +155,17 @@ threshold is enforced.
 
 Snapshot from 2026-10-28:
 
-| Area       | Lines | Statements | Main gap                                                   |
-| ---------- | ----: | ---------: | ---------------------------------------------------------- |
-| `App`      |   90% |        87% | player wiring, theme and resize branches                   |
-| components |   89% |        90% | `MetadataEditor` keyboard/folder paths, `TreeNode` menus   |
-| stores     |  100% |        99% | defensive branches around the queue runtime                |
-| utils      |   99% |        98% | defensive branches                                         |
-| all files  |   92% |        91% | branch coverage is 78%                                     |
+| Area       | Lines | Statements | Main gap                                                                                       |
+| ---------- | ----: | ---------: | ---------------------------------------------------------------------------------------------- |
+| `App`      |   90% |        87% | player wiring, theme and resize branches                                                       |
+| components |   89% |        90% | `LRCEditor` import/shift paths (75%), `MetadataEditor` keyboard/folder paths, `TreeNode` menus |
+| stores     |  100% |        99% | defensive branches around the queue runtime                                                    |
+| utils      |   99% |        98% | defensive branches                                                                             |
+| all files  |   92% |        91% | branch coverage is 78%                                                                         |
+
+`LRCEditor.svelte` is the lowest-covered component at 75% lines / 70% branches;
+import/export, timestamp shifting, column editing and keyboard paths are the
+next test target.
 
 Covered areas:
 

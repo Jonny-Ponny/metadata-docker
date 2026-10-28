@@ -20,6 +20,7 @@ services:
       - AUTH_USERNAME=${AUTH_USERNAME:-}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
       - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH:-}
+      - JWT_SECRET=${JWT_SECRET:-}
       - TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS:-12}
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}
       - PUID=1000
@@ -42,6 +43,7 @@ see [Exposure](#exposure) before changing that.
 | `AUTH_USERNAME` | Login username. Generated and logged if empty. | random per run |
 | `AUTH_PASSWORD` | Login password. Generated and logged if empty. | random per run |
 | `AUTH_PASSWORD_HASH` | Werkzeug password hash, used instead of `AUTH_PASSWORD`. | unset |
+| `JWT_SECRET` | Stable session-token secret, at least 32 characters. Random per process if unset or too short. | random per run |
 | `TOKEN_EXPIRE_HOURS` | Session-token lifetime in hours. | `12` |
 | `MAX_UPLOAD_MB` | Maximum size of one upload request (one file). Cover art has a separate 20 MiB cap. | `4096` |
 | `PUID` | UID the container drops to. | `1000` (image) |
@@ -56,6 +58,20 @@ see [Exposure](#exposure) before changing that.
 
 Invalid or empty integer values (`TOKEN_EXPIRE_HOURS=abc`, `MAX_UPLOAD_MB=0`)
 log a warning and fall back to the default instead of crashing at startup.
+
+### Keeping sessions across restarts
+
+Session tokens are signed with a secret generated at startup, so by default a
+restart logs everyone out. Set `JWT_SECRET` to a random string of at least 32
+characters to keep sessions valid across restarts:
+
+```bash
+openssl rand -hex 32
+```
+
+A shorter value is ignored with a warning and a random per-process secret is
+used instead. Changing the secret invalidates every existing session; keep it
+out of version control. `TOKEN_EXPIRE_HOURS` still caps the token lifetime.
 
 `APP_GIT_SHA` is not operator-configurable: the image build sets it to the
 commit SHA and `/api/version` exposes it.
