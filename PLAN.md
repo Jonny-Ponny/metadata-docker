@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-12`, `B-39`. Next:
-  `T-13`, `B-40`.
+- IDs are permanent and never reused. Last used: `T-14`, `B-39`. Next:
+  `T-15`, `B-40`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -73,6 +73,12 @@ image build. What remains is optional hardening and new features.
   [SECURITY.md](SECURITY.md) for the existing `.dockerignore` and `npm ci`
   setup, and refreshed the frontend coverage snapshot in
   [docs/TESTING.md](docs/TESTING.md) with the `LRCEditor` gap.
+- **Opt-in library chown (T-14).** `CHOWN_MUSIC` now controls the recursive
+  `/music` chown and defaults to `false`; `/logs` is still fixed on start when
+  running non-root. A
+  startup warning names both the flag and the host `chown` command when
+  `/music` is not writable by `PUID`/`PGID`, and the compose files and docs
+  describe the actual behaviour.
 
 ## Planned
 
@@ -82,17 +88,14 @@ No open items.
 
 ### Optional security hardening
 
-- Build hygiene: pin the remaining direct Python requirements, optionally pin
-  base images by digest and Actions by commit SHA with an update bot. Run
+- **T-13 (P3) - Pin build inputs.** Pin the two base images by manifest-list
+  digest and the workflow `uses:` references by commit SHA, with Dependabot or
+  Renovate opening update PRs. Deferred: improves reproducibility and
+  supply-chain integrity, but does not change runtime behaviour.
+- Build hygiene: pin the remaining direct Python requirements and run
   `pip-audit`/`npm audit` periodically or as a non-blocking CI job. The
-  `.dockerignore` and the frontend's `npm ci` install are done, and the
-  frontend builder is pinned to Node 22 because Node 24+ has no armv7 image.
-- Compose hardening: `no-new-privileges`, `pids_limit`, memory/CPU limits and
-  `tmpfs: /tmp`; an opt-in `CHOWN_MUSIC` flag instead of the recursive chown;
-  document the `PUID=0` trade-off clearly. `read_only` and `cap_drop: ALL` only
-  after the entrypoint stops writing `/etc`.
-- Persist the JWT secret through an optional `JWT_SECRET` variable so restarts
-  do not log everyone out (availability, not security).
+  `.dockerignore`, the frontend `npm ci` install and the Node 22 builder are
+  done.
 
 ### Features
 

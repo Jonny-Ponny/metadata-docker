@@ -112,6 +112,9 @@ See [docs/ADDONS.md](docs/ADDONS.md) for the addon interface.
 
 - Runs as `PUID`/`PGID` (default `1000` in the image), so non-root unless you
   set `0`.
+- When running non-root, the entrypoint recursively chowns `/logs` on every
+  start and `/music` only when `CHOWN_MUSIC=true`; otherwise the host library
+  permissions must already match `PUID`/`PGID`.
 - Needs read/write on the music library and `/logs`; treat it like code running
   with that file access.
 - The healthcheck polls the unauthenticated `/api/ping` endpoint from inside the
