@@ -130,7 +130,17 @@ if not AUTH_PASSWORD_HASH and (
     log_warning('AUTH_PASSWORD is weak or matches the username. Set a strong password before exposing the app.')
 
 
-JWT_SECRET_KEY = os.urandom(24).hex()
+# Optional stable JWT secret. Without it, every process start generates a new
+# one and a restart invalidates all sessions. A configured value shorter than
+# 32 characters is ignored with a warning instead of weakening token signatures.
+_JWT_SECRET_ENV = os.getenv('JWT_SECRET') or ''
+if _JWT_SECRET_ENV and len(_JWT_SECRET_ENV) < 32:
+    log_warning(
+        'JWT_SECRET is shorter than 32 characters; using a random per-process '
+        'secret instead. Sessions will be invalidated on restart.'
+    )
+    _JWT_SECRET_ENV = ''
+JWT_SECRET_KEY = _JWT_SECRET_ENV or secrets.token_hex(24)
 
 TOKEN_EXPIRE_HOURS = _env_int('TOKEN_EXPIRE_HOURS', 12)
 

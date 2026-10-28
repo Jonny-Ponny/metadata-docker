@@ -39,6 +39,7 @@ def _import_with_env(app_module, root, overrides):
             "AUTH_USERNAME": "test-admin",
             "AUTH_PASSWORD": "test-password",
             "AUTH_PASSWORD_HASH": "",
+            "JWT_SECRET": "",
             "PYTHONDONTWRITEBYTECODE": "1",
         }
     )
@@ -52,7 +53,8 @@ def _import_with_env(app_module, root, overrides):
         "'MAX_UPLOAD_MB': app.MAX_UPLOAD_BYTES // (1024 * 1024), "
         "'AUTH_USERNAME': app.AUTH_USERNAME, "
         "'AUTH_PASSWORD': app.AUTH_PASSWORD, "
-        "'AUTH_PASSWORD_HASH': app.AUTH_PASSWORD_HASH"
+        "'AUTH_PASSWORD_HASH': app.AUTH_PASSWORD_HASH, "
+        "'JWT_SECRET_KEY': app.JWT_SECRET_KEY"
         "}))"
     )
     result = subprocess.run(
@@ -143,3 +145,37 @@ def test_valid_password_hash_is_used_instead_of_the_plaintext(
 
     assert result["AUTH_PASSWORD_HASH"] == password_hash
     assert result["AUTH_PASSWORD"] == ""
+
+
+def test_configured_jwt_secret_is_used(app_module, tmp_path):
+    """A stable secret keeps sessions valid across restarts (T-11)."""
+    secret = "a" * 64
+    result = _import_with_env(app_module, tmp_path, {"JWT_SECRET": secret})
+
+    assert result["JWT_SECRET_KEY"] == secret
+
+
+def test_jwt_secret_at_minimum_length_is_used(app_module, tmp_path):
+    secret = "b" * 32
+    result = _import_with_env(app_module, tmp_path, {"JWT_SECRET": secret})
+
+    assert result["JWT_SECRET_KEY"] == secret
+
+
+def test_jwt_secret_is_random_when_unset(app_module, tmp_path):
+    first = _import_with_env(app_module, tmp_path, {"JWT_SECRET": ""})
+    second = _import_with_env(app_module, tmp_path, {"JWT_SECRET": ""})
+
+    assert first["JWT_SECRET_KEY"] != second["JWT_SECRET_KEY"]
+    assert len(first["JWT_SECRET_KEY"]) == 48
+
+
+@pytest.mark.parametrize("secret", ["too-short", "c" * 31])
+def test_short_jwt_secret_is_ignored(app_module, tmp_path, secret):
+    result = _import_with_env(app_module, tmp_path, {"JWT_SECRET": secret})
+
+    assert result["JWT_SECRET_KEY"] != secret
+    assert len(result["JWT_SECRET_KEY"]) == 48
+
+    log = (tmp_path / "logs" / "app.log").read_text(encoding="utf-8")
+    assert "JWT_SECRET is shorter than 32 characters" in log

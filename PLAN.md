@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-10`, `B-39`. Next:
-  `T-11`, `B-40`.
+- IDs are permanent and never reused. Last used: `T-12`, `B-39`. Next:
+  `T-13`, `B-40`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -64,6 +64,15 @@ image build. What remains is optional hardening and new features.
   shapes are documented with JSDoc typedefs (tree nodes, metadata, upload
   batches, player API) instead of per-file opt-ins, and CI fails on a new type
   error.
+- **Session persistence (T-11).** Optional `JWT_SECRET` (at least 32
+  characters) keeps session tokens valid across restarts; unset or shorter
+  values fall back to a random per-process secret with a warning. Compose,
+  `.env_example`, README and DEPLOYMENT document it, and `tests/test_config.py`
+  covers the configured, boundary, random and rejected cases.
+- **Documentation refresh (T-12).** Updated the build-hygiene section in
+  [SECURITY.md](SECURITY.md) for the existing `.dockerignore` and `npm ci`
+  setup, and refreshed the frontend coverage snapshot in
+  [docs/TESTING.md](docs/TESTING.md) with the `LRCEditor` gap.
 
 ## Planned
 
