@@ -7,7 +7,7 @@
 # architecture instead of under QEMU for every target. Node 24+ publishes no
 # linux/arm/v7 image, so the builder stays on 22 (still armv7-capable and
 # supported until April 2027); the final stage keeps targeting armv7.
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370 AS frontend-builder
 WORKDIR /app/frontend
 
 # Install from the lockfile so the image matches CI and the repository
