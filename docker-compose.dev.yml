@@ -15,6 +15,7 @@ services:
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}           # Per-file request limit
       - PUID=1000
       - PGID=1000
+      - CHOWN_MUSIC=${CHOWN_MUSIC:-false}              # Recursive /music chown at startup
       - TZ=UTC
     volumes:
       - ~/Media/music:/music                           # Library
