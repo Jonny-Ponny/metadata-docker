@@ -376,6 +376,19 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps
       the current line in view when syncing with the c shortcut`.
 
+## Player
+
+- [x] **B-39 (P2) A seek made before the track metadata loaded was dropped.**
+      `seekToTime()` queued the seek by setting `waitingForMetadata` and adding
+      its own `loadedmetadata` listener. The listener installed in `onMount` ran
+      first and cleared the flag, so the queued seek was skipped. Clicking a
+      lyric timestamp (or seeking a freshly selected track) before the duration
+      was known left playback at 0:00.
+      **Fix:** store the target in `pendingSeekTime` and resolve it in the
+      single `loadedmetadata` handler once the duration is known.
+      **Test:** `frontend/src/components/__tests__/Player.test.js` - `performs a
+      seek requested before the metadata loads`.
+
 ## Regression tests
 
 Each bug above is pinned by at least one test, so a fix cannot be reverted
@@ -421,3 +434,4 @@ silently.
 | B-36 | `frontend/src/components/__tests__/Player.test.js` - `answers get-current-time with the live position, not the last timeupdate` |
 | B-37 | `frontend/src/components/__tests__/TimestampEditModal.test.js` - `does not label the current-time button with a stale timestamp` |
 | B-38 | `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps the current line in view when syncing with the c shortcut` |
+| B-39 | `frontend/src/components/__tests__/Player.test.js` - `performs a seek requested before the metadata loads` |
