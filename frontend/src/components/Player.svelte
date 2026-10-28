@@ -139,7 +139,9 @@
         /** @type {CustomEvent<{ callback?: (time: number) => void }>} */ (e)
           .detail;
       if (callback && typeof callback === "function") {
-        callback(currentTime);
+        // Live read: the stored currentTime is only updated on timeupdate
+        // events, so it can be up to one event interval stale here.
+        callback(player ? player.currentTime : currentTime);
       }
     };
 

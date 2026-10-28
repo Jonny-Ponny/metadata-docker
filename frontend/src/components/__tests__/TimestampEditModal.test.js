@@ -126,13 +126,21 @@ describe("TimestampEditModal", () => {
         show: true,
         lineIndex: 1,
         timestamps,
-        currentTime: 75.5,
       },
+    });
+
+    // The button asks the player for the live playback position.
+    window.addEventListener("get-current-time", (event) => {
+      const detail =
+        /** @type {CustomEvent<{ callback: (time: number) => void }>} */ (event)
+          .detail;
+      detail.callback(75.5);
     });
 
     await fireEvent.click(
       screen.getByRole("button", { name: /use current playback time/i }),
     );
+    await tick();
 
     expect(
       /** @type {HTMLInputElement} */ (screen.getByRole("textbox")).value,

@@ -411,6 +411,31 @@ describe("LRCEditor", () => {
     );
   });
 
+  it("uses the live player time for the current-line shortcut", async () => {
+    render(LRCEditor, {
+      props: {
+        isOpen: true,
+        initialLyrics: "one\ntwo",
+        initialTimestamps: ["[00:05.00]", "[00:10.00]"],
+      },
+    });
+
+    // Make line 0 active from a stale timeupdate value.
+    window.dispatchEvent(
+      new CustomEvent("player-time-update", { detail: { time: 6 } }),
+    );
+    await tick();
+
+    // The player answers with the live value, not the stored 6.
+    stopTime = answerWithTime(7);
+    await fireEvent.keyDown(document.body, { key: "c" });
+    await tick();
+
+    await waitFor(() =>
+      expect(screen.getAllByText("[00:07.00]").length).toBeGreaterThan(0),
+    );
+  });
+
   it("warns when there is no active line to synchronize", async () => {
     render(LRCEditor, {
       props: { isOpen: true, initialLyrics: "one\ntwo" },

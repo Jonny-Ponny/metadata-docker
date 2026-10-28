@@ -742,26 +742,34 @@
     }
     if (USLT === "") return;
 
-    // Use the stored current playback time
-    const time = currentPlaybackTime;
-    if (time === undefined || time === null) {
-      toast.error("Current playback time not available");
-      return;
-    }
+    // Read the live playback position via the player. The stored
+    // timeupdate value can be up to one event interval stale, which
+    // would write timestamps slightly early.
+    const event = new CustomEvent("get-current-time", {
+      detail: {
+        callback: (/** @type {number} */ time) => {
+          if (time === undefined || time === null) {
+            toast.error("Current playback time not available");
+            return;
+          }
 
-    const newTimestamp = secondsToTimestamp(time);
-    timestamps[currentActiveLine] = newTimestamp;
+          const newTimestamp = secondsToTimestamp(time);
+          timestamps[currentActiveLine] = newTimestamp;
 
-    // Ensure timestamps length matches lines
-    const lines = USLT.split("\n");
-    while (timestamps.length < lines.length) {
-      timestamps.push("[--:--.--]");
-    }
+          // Ensure timestamps length matches lines
+          const lines = USLT.split("\n");
+          while (timestamps.length < lines.length) {
+            timestamps.push("[--:--.--]");
+          }
 
-    updateSynchronizedLyricsText();
-    requestAnimationFrame(() => {
-      equalizeAllLineHeights();
+          updateSynchronizedLyricsText();
+          requestAnimationFrame(() => {
+            equalizeAllLineHeights();
+          });
+        },
+      },
     });
+    window.dispatchEvent(event);
   }
 
   $effect(() => {
