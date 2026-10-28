@@ -1206,7 +1206,6 @@
     show={showTimestampModal}
     lineIndex={editingTimestampIndex}
     currentValue={editingTimestampValue}
-    currentTime={currentPlaybackTime}
     {timestamps}
     onClose={closeTimestampModal}
     onSave={saveTimestampFromModal}
