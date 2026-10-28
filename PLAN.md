@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-10`, `B-36`. Next:
-  `T-11`, `B-37`.
+- IDs are permanent and never reused. Last used: `T-10`, `B-39`. Next:
+  `T-11`, `B-40`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -69,12 +69,7 @@ image build. What remains is optional hardening and new features.
 
 ### Known issues and small fixes
 
-- **B-36 (P2) Player ignores a seek made before metadata loads.** `seekToTime()`
-  sets `waitingForMetadata` and registers an `onLoaded` listener, but the
-  `loadedmetadata` listener from `onMount` clears the flag first. Clicking a
-  lyric timestamp (or seeking a freshly selected track) before the duration is
-  known therefore never performs the pending seek. Fix by resolving the pending
-  seek in one handler and add a regression test.
+No open items.
 
 ### Optional security hardening
 
