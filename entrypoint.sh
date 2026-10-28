@@ -14,8 +14,16 @@ PGID="${PGID:-1000}"
 # Python from trying to create __pycache__ files under /app.
 export PYTHONDONTWRITEBYTECODE=1
 
-if [ "$PUID" = "0" ]; then
+# Root mode is all-or-nothing. A mixed configuration (for example PUID=1000,
+# PGID=0) leaves the runtime user in the root group, so it must not be treated
+# as unprivileged: it would still run addon dependency installation and chown
+# the library to PUID:root. Reject it instead of silently running root-like.
+if [ "$PUID" = "0" ] && [ "$PGID" = "0" ]; then
     RUN_AS_ROOT=1
+elif [ "$PUID" = "0" ] || [ "$PGID" = "0" ]; then
+    echo "ERROR: PUID and PGID must both be 0 (run as root) or both non-zero."
+    echo "       Refusing to start with PUID=$PUID and PGID=$PGID."
+    exit 1
 else
     RUN_AS_ROOT=0
 fi
@@ -23,7 +31,7 @@ fi
 # User/Group setup
 # Default to an unprivileged user so the container does not run as root unless
 # explicitly asked to (PUID=0 and PGID=0).
-if [ "$PUID" = "0" ] && [ "$PGID" = "0" ]; then
+if [ "$RUN_AS_ROOT" = "1" ]; then
     echo "PUID/PGID set to 0, running as root"
     USER_NAME=root
 else
@@ -133,9 +141,9 @@ else
     echo "No addons directory found at ${PLUGIN_DIR}, skipping plugin dependency installation."
 fi
 
-# Running fully as root (PUID=0/PGID=0) keeps the previous behaviour of not
-# touching library/log ownership.
-if [ "$PUID" = "0" ] && [ "$PGID" = "0" ]; then
+# Running fully as root keeps the previous behaviour of not touching library/log
+# ownership.
+if [ "$RUN_AS_ROOT" = "1" ]; then
     echo "Starting gunicorn as root..."
     exec gunicorn --bind 0.0.0.0:${CONTAINER_PORT:-5000} --workers 1 --threads 8 \
         --no-control-socket app:app

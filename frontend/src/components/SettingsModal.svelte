@@ -8,6 +8,10 @@
     FIELD_METADATA,
     toast,
     defaultColors,
+    sanitizeHoldDuration,
+    DEFAULT_HOLD_DURATIONS,
+    HOLD_DURATION_MIN,
+    HOLD_DURATION_MAX,
   } from "../utils/index.js";
 
   /**
@@ -44,7 +48,9 @@
   let addons = $state(/** @type {AddonInfo[]} */ ([]));
   let addonsLoading = $state(false);
   let addonsError = $state(/** @type {string | null} */ (null));
-  let addonsFetched = $state(false);
+  // Tracks an attempt, successful or not. Retrying from the open effect on
+  // failure looped forever and hammered /api/addons.
+  let addonsAttempted = $state(false);
 
   // Mock data for preview
   const mockMetadata = {
@@ -132,7 +138,23 @@
   }
 
   function handleSave() {
-    saveSettings(localSettings);
+    // Normalize before persisting: an empty or out-of-range number input must
+    // not produce an unusable hold time.
+    saveSettings({
+      ...localSettings,
+      holdApplyDuration: sanitizeHoldDuration(
+        localSettings.holdApplyDuration,
+        DEFAULT_HOLD_DURATIONS.apply,
+      ),
+      holdTagDeleteDuration: sanitizeHoldDuration(
+        localSettings.holdTagDeleteDuration,
+        DEFAULT_HOLD_DURATIONS.tagDelete,
+      ),
+      holdDeleteDuration: sanitizeHoldDuration(
+        localSettings.holdDeleteDuration,
+        DEFAULT_HOLD_DURATIONS.delete,
+      ),
+    });
     onClose();
   }
 
@@ -212,7 +234,8 @@
   };
 
   async function fetchAddons() {
-    if (addonsFetched || addonsLoading) return;
+    if (addonsAttempted || addonsLoading) return;
+    addonsAttempted = true;
     addonsLoading = true;
     addonsError = null;
     try {
@@ -221,7 +244,6 @@
         throw new Error(`Failed to fetch addons (${response.status})`);
       const data = await response.json();
       addons = data.fetchers || [];
-      addonsFetched = true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       addonsError = message;
@@ -243,8 +265,13 @@
 
   // Trigger fetch when modal opens
   $effect(() => {
-    if (isOpen && !addonsFetched && !addonsLoading) {
+    if (isOpen && !addonsAttempted) {
       fetchAddons();
+    }
+    if (!isOpen) {
+      // Allow a fresh attempt the next time the modal opens.
+      addonsAttempted = false;
+      addonsError = null;
     }
   });
 
@@ -314,32 +341,6 @@
             </label>
             <p class="setting-description">
               When disabled, audio files won't be loaded when selected.
-            </p>
-          </div>
-        </div>
-
-        <!-- Uploads -->
-        <div class="settings-section">
-          <h3>Uploads</h3>
-          <div class="setting-item">
-            <label class="select-label" for="upload-conflict">
-              When the destination file already exists
-            </label>
-            <select
-              id="upload-conflict"
-              class="setting-select"
-              bind:value={localSettings.uploadDuplicates}
-            >
-              <option value="skip-identical"
-                >Skip identical, rename different</option
-              >
-              <option value="keep-both">Keep both (rename the new file)</option>
-            </select>
-            <p class="setting-description">
-              "Skip identical" leaves a file with the same name and size
-              untouched, so re-dropping a folder only uploads what changed. A
-              file with the same name but a different size is added as "name
-              (1)". "Keep both" always renames the incoming file.
             </p>
           </div>
         </div>
@@ -510,6 +511,132 @@
             </p>
           </div>
         </div>
+
+        <!-- Hold Durations -->
+        <details class="settings-section settings-collapsible">
+          <summary class="settings-collapsible-summary">
+            <h3>Hold Durations</h3>
+            <span class="summary-chevron">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M9 18l6-6-6-6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+          </summary>
+          <p class="section-description">
+            How long to hold a button before its action runs. Shorter times are
+            faster; longer times are harder to trigger by accident. Values are
+            clamped to {HOLD_DURATION_MIN}&ndash;{HOLD_DURATION_MAX} ms.
+          </p>
+          <div class="setting-item">
+            <label class="select-label" for="hold-apply"
+              >Apply a tag or cover to the whole folder</label
+            >
+            <div class="duration-input-row">
+              <input
+                id="hold-apply"
+                class="setting-number"
+                type="number"
+                min={HOLD_DURATION_MIN}
+                max={HOLD_DURATION_MAX}
+                step="100"
+                bind:value={localSettings.holdApplyDuration}
+              />
+              <span>ms</span>
+            </div>
+            <p class="setting-description">
+              The folder button next to a tag field or the cover art applies the
+              current value to every file in the folder.
+            </p>
+          </div>
+          <div class="setting-item">
+            <label class="select-label" for="hold-tag-delete"
+              >Delete a tag field or cover art</label
+            >
+            <div class="duration-input-row">
+              <input
+                id="hold-tag-delete"
+                class="setting-number"
+                type="number"
+                min={HOLD_DURATION_MIN}
+                max={HOLD_DURATION_MAX}
+                step="100"
+                bind:value={localSettings.holdTagDeleteDuration}
+              />
+              <span>ms</span>
+            </div>
+            <p class="setting-description">
+              The trash button next to a tag field or the cover-art delete
+              button. Deletes the tag from the current file or, when folder mode
+              is on, from the folder.
+            </p>
+          </div>
+          <div class="setting-item">
+            <label class="select-label" for="hold-delete"
+              >Delete a file or folder</label
+            >
+            <div class="duration-input-row">
+              <input
+                id="hold-delete"
+                class="setting-number"
+                type="number"
+                min={HOLD_DURATION_MIN}
+                max={HOLD_DURATION_MAX}
+                step="100"
+                bind:value={localSettings.holdDeleteDuration}
+              />
+              <span>ms</span>
+            </div>
+            <p class="setting-description">
+              The hold-to-delete item in a file or folder's context menu. This
+              is the most destructive action, so it defaults to 1500 ms.
+            </p>
+          </div>
+        </details>
+
+        <!-- Uploads -->
+        <details class="settings-section settings-collapsible">
+          <summary class="settings-collapsible-summary">
+            <h3>Uploads</h3>
+            <span class="summary-chevron">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M9 18l6-6-6-6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+          </summary>
+          <div class="setting-item">
+            <label class="select-label" for="upload-conflict">
+              When the destination file already exists
+            </label>
+            <select
+              id="upload-conflict"
+              class="setting-select"
+              bind:value={localSettings.uploadDuplicates}
+            >
+              <option value="skip-identical"
+                >Skip identical, rename different</option
+              >
+              <option value="keep-both">Keep both (rename the new file)</option>
+            </select>
+            <p class="setting-description">
+              "Skip identical" leaves a file with the same name and size
+              untouched, so re-dropping a folder only uploads what changed. A
+              file with the same name but a different size is added as "name
+              (1)". "Keep both" always renames the incoming file.
+            </p>
+          </div>
+        </details>
 
         <!-- Color Customization -->
         <div class="settings-section">
@@ -758,6 +885,42 @@
     padding-bottom: 8px;
   }
 
+  /* Collapsible settings sections (Hold Durations, Uploads). */
+  .settings-collapsible > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+
+  .settings-collapsible > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .settings-collapsible > summary::marker {
+    content: "";
+  }
+
+  .settings-collapsible > summary h3 {
+    flex: 1;
+    margin: 0;
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .settings-collapsible[open] > summary {
+    margin-bottom: 16px;
+  }
+
+  .settings-collapsible[open] > summary .summary-chevron {
+    transform: rotate(90deg);
+  }
+
   .section-description {
     margin: 0 0 16px 0;
     font-size: 13px;
@@ -815,6 +978,33 @@
     outline: none;
     border-color: var(--color-primary);
     box-shadow: 0 0 0 2px var(--color-primary-transparent);
+  }
+
+  .duration-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .setting-number {
+    width: 120px;
+    padding: 7px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    font-size: 13px;
+  }
+
+  .setting-number:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-transparent);
+  }
+
+  .duration-input-row span {
+    font-size: 13px;
+    color: #888;
   }
 
   .scheme-input-group {
@@ -1297,6 +1487,10 @@
     border-color: #444;
   }
 
+  :global(body.dark) .settings-collapsible > summary {
+    border-color: #444;
+  }
+
   :global(body.dark) .section-description,
   :global(body.dark) .setting-description,
   :global(body.dark) .variable-buttons strong {
@@ -1315,6 +1509,16 @@
     background: #3d3d3d;
     border-color: #555;
     color: #e0e0e0;
+  }
+
+  :global(body.dark) .setting-number {
+    background: #3d3d3d;
+    border-color: #555;
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .duration-input-row span {
+    color: #aaa;
   }
 
   :global(body.dark) .scheme-input {

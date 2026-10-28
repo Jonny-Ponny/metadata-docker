@@ -83,6 +83,9 @@
   let isLoading = $state(false);
   let treeData = $state(/** @type {TreeItem[]} */ ([])); // Store the file tree
   let error = $state("");
+  // The authenticated effect loads the tree once. Without this guard an empty
+  // library re-runs the effect on every `treeData = []`, looping /api/files.
+  let treeRequested = false;
 
   // Panel states
   let selectedFolder = $state(/** @type {string | null} */ (null));
@@ -104,10 +107,32 @@
 
   // ========== DRAG AND DROP STATE ==========
   let isDragging = $state(false);
+  // A tree item is being moved. Internal moves use pointer events instead of
+  // the native HTML5 drag session: Firefox does not dispatch wheel events to
+  // the page during a native drag, so the tree could not be scrolled with the
+  // wheel while an item was held. A pointer-driven drag keeps normal input.
+  let isInternalDrag = $state(false);
   let dragOverElement = $state(/** @type {HTMLElement | null} */ (null)); // Track which element is being hovered
   /** @type {ReturnType<typeof setTimeout> | null} */
   let hoverTimer = null;
   let folderInput = $state(/** @type {HTMLInputElement | null} */ (null));
+  /** @type {{ path: string, type: "file" | "directory", name: string, startX: number, startY: number, pointerId: number } | null} */
+  let pendingTreeDrag = null;
+  /** @type {{ path: string, type: "file" | "directory", name: string } | null} */
+  let draggedTreeItem = null;
+  /** @type {HTMLElement | null} */
+  let treeDragGhost = null;
+  /** @type {HTMLElement | null} */
+  let appContainer = $state(null);
+  // Last pointer position during a tree drag, used by the edge auto-scroll
+  // loop (the pointer can be still while the rows move under it).
+  let dragPointerX = 0;
+  let dragPointerY = 0;
+  /** @type {number | null} */
+  let dragAutoScrollFrame = null;
+  // A drag ends with a click event from the browser; it must not select or
+  // expand whatever happens to be under the pointer.
+  let suppressTreeClick = false;
 
   // Upload state lives in the upload store. The flag is only used to warn
   // before closing the tab, since there is no resume yet.
@@ -292,6 +317,10 @@
 
   function resetDragState() {
     isDragging = false;
+    isInternalDrag = false;
+    pendingTreeDrag = null;
+    draggedTreeItem = null;
+    stopTreeAutoScroll();
 
     if (hoverTimer) {
       clearTimeout(hoverTimer);
@@ -301,6 +330,14 @@
     if (dragOverElement) {
       dragOverElement.classList.remove("drag-target");
       dragOverElement = null;
+    }
+
+    if (treeDragGhost) {
+      treeDragGhost.remove();
+      treeDragGhost = null;
+    }
+    if (typeof document !== "undefined") {
+      document.body.classList.remove("internal-dragging");
     }
 
     if (dragWatchdog) {
@@ -347,31 +384,52 @@
   }
 
   /**
+   * Highlight the node under a drag and expand a hovered folder after a short
+   * dwell. Shared by native file drags and the pointer-driven tree drag.
+   * @param {HTMLElement | null} newTarget
+   */
+  function setDragTarget(newTarget) {
+    if (newTarget === dragOverElement) return;
+
+    if (dragOverElement) {
+      dragOverElement.classList.remove("drag-target");
+    }
+    if (newTarget) {
+      newTarget.classList.add("drag-target");
+    }
+    dragOverElement = newTarget;
+
+    // Reset the expansion timer whenever the target changes
+    if (hoverTimer) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+
+    // If the new target is a folder and not already expanded, start a timer
+    if (newTarget && newTarget.hasAttribute("data-folder-path")) {
+      const folderPath = newTarget.dataset.folderPath;
+      if (folderPath && !expandedDirs.has(folderPath)) {
+        hoverTimer = setTimeout(() => {
+          toggleDir(folderPath); // Expand the folder
+          hoverTimer = null;
+        }, 1000); // 1 second delay
+      }
+    }
+  }
+
+  /**
    * @param {DragEvent} e
    */
   function handleDragOver(e) {
     if (isTextDrag) return;
 
-    // Determine if this is an internal drag (our custom data type present)
-    const types = e.dataTransfer?.types;
-    const isInternal = hasType(types, "application/x-music-player-item");
-    const hasFileDrag = hasType(types, "Files");
-
-    // Ignore anything that is neither an internal move nor a file upload
-    if (!isInternal && !hasFileDrag) return;
+    // Native drags are only external files now; tree moves are pointer-driven.
+    if (!hasFiles(e)) return;
 
     e.preventDefault();
     e.stopPropagation();
 
-    // Only override the effect for internal moves. For an external file drag
-    // the browser already picked the effect the source allows; forcing "copy"
-    // can make Firefox treat the drop as invalid and keep the drag session
-    // (and the blur) alive.
-    if (e.dataTransfer && isInternal) {
-      e.dataTransfer.dropEffect = "move";
-    }
-
-    if (hasFileDrag && isDragging) {
+    if (isDragging) {
       // dragover keeps the active drag alive; it must never *arm* the
       // overlay, or a stray event after the drag ended re-blurs the app.
       lastDragOverAt = Date.now();
@@ -381,37 +439,7 @@
     /** @type {HTMLElement | null} */
     const newTarget =
       eventTarget?.closest("[data-folder-path], [data-file-path]") ?? null;
-
-    // Only act if the hovered element actually changed
-    if (newTarget !== dragOverElement) {
-      // Remove highlight from previous element
-      if (dragOverElement) {
-        dragOverElement.classList.remove("drag-target");
-      }
-
-      // Add highlight to new element
-      if (newTarget) {
-        newTarget.classList.add("drag-target");
-      }
-      dragOverElement = newTarget;
-
-      // Reset the expansion timer whenever the target changes
-      if (hoverTimer) {
-        clearTimeout(hoverTimer);
-        hoverTimer = null;
-      }
-
-      // If the new target is a folder and not already expanded, start a timer
-      if (newTarget && newTarget.hasAttribute("data-folder-path")) {
-        const folderPath = newTarget.dataset.folderPath;
-        if (folderPath && !expandedDirs.has(folderPath)) {
-          hoverTimer = setTimeout(() => {
-            toggleDir(folderPath); // Expand the folder
-            hoverTimer = null;
-          }, 1000); // 1 second delay
-        }
-      }
-    }
+    setDragTarget(newTarget);
   }
 
   /**
@@ -436,6 +464,287 @@
   }
 
   /**
+   * Scroll the file tree with the wheel while one of its items is being
+   * dragged. The pointer-driven drag keeps normal input, but the wheel may be
+   * targeted at the ghost, the panel header or the window rather than the
+   * scrolling panel. The window-level capture listener keeps the tree
+   * scrolling from wherever the pointer is and prevents the page behind it
+   * from scrolling instead.
+   * @param {WheelEvent} event
+   */
+  function handleTreeWheel(event) {
+    if (!isInternalDrag || !fileTreeContainer) return;
+    // Do not swallow the wheel for the rest of the page when there is nothing
+    // to scroll (a short tree, or a horizontal-only wheel).
+    if (fileTreeContainer.scrollHeight <= fileTreeContainer.clientHeight) {
+      return;
+    }
+    if (event.deltaY === 0) return;
+
+    event.preventDefault();
+    // deltaY is in lines or pages with these deltaMode values, not pixels.
+    const step =
+      event.deltaMode === 1
+        ? 16
+        : event.deltaMode === 2
+          ? fileTreeContainer.clientHeight
+          : 1;
+    fileTreeContainer.scrollTop += event.deltaY * step;
+  }
+
+  /**
+   * The tree node under a point on the page.
+   * @param {number} x
+   * @param {number} y
+   * @returns {HTMLElement | null}
+   */
+  function treeNodeAtPoint(x, y) {
+    if (typeof document.elementFromPoint !== "function") return null;
+    const element = document.elementFromPoint(x, y);
+    return element instanceof Element
+      ? /** @type {HTMLElement | null} */ (
+          element.closest("[data-folder-path], [data-file-path]")
+        )
+      : null;
+  }
+
+  /**
+   * The tree node under a pointer event. Pointer events already target the
+   * element under the cursor, so `event.target` is normally enough; the
+   * geometry lookup keeps this working when the target is the window (tests,
+   * or a synthetic event).
+   * @param {PointerEvent} event
+   * @returns {HTMLElement | null}
+   */
+  function treeNodeAt(event) {
+    if (event.target instanceof Element) {
+      const direct = event.target.closest(
+        "[data-folder-path], [data-file-path]",
+      );
+      if (direct) return /** @type {HTMLElement} */ (direct);
+    }
+    return treeNodeAtPoint(event.clientX, event.clientY);
+  }
+
+  function stopTreeAutoScroll() {
+    if (dragAutoScrollFrame !== null) {
+      cancelAnimationFrame(dragAutoScrollFrame);
+      dragAutoScrollFrame = null;
+    }
+  }
+
+  /**
+   * Scroll the tree while a dragged item is held near its top or bottom edge.
+   * The native drag used to do this itself; a pointer drag has to implement it.
+   * The loop keeps running while the pointer is still so the rows keep moving,
+   * and re-evaluates the drop target because the content moves underneath it.
+   */
+  function treeAutoScrollStep() {
+    dragAutoScrollFrame = null;
+    if (!isInternalDrag || !fileTreeContainer) return;
+
+    const rect = fileTreeContainer.getBoundingClientRect();
+    if (
+      dragPointerX < rect.left ||
+      dragPointerX > rect.right ||
+      dragPointerY < rect.top ||
+      dragPointerY > rect.bottom
+    ) {
+      return;
+    }
+
+    const edge = Math.min(40, rect.height / 4);
+    /** @type {number} */
+    let speed = 0;
+    if (dragPointerY < rect.top + edge) {
+      speed = -18 * ((rect.top + edge - dragPointerY) / edge);
+    } else if (dragPointerY > rect.bottom - edge) {
+      speed = 18 * ((dragPointerY - (rect.bottom - edge)) / edge);
+    }
+    if (speed === 0) return;
+
+    const maxScroll =
+      fileTreeContainer.scrollHeight - fileTreeContainer.clientHeight;
+    if (maxScroll <= 0) return;
+
+    const previous = fileTreeContainer.scrollTop;
+    const next = Math.min(maxScroll, Math.max(0, previous + speed));
+    if (next === previous) return;
+    fileTreeContainer.scrollTop = next;
+
+    setDragTarget(treeNodeAtPoint(dragPointerX, dragPointerY));
+    dragAutoScrollFrame = requestAnimationFrame(treeAutoScrollStep);
+  }
+
+  function scheduleTreeAutoScroll() {
+    if (
+      dragAutoScrollFrame !== null ||
+      !isInternalDrag ||
+      typeof requestAnimationFrame !== "function"
+    ) {
+      return;
+    }
+    dragAutoScrollFrame = requestAnimationFrame(treeAutoScrollStep);
+  }
+
+  /**
+   * Arm a pointer-driven move when a tree row is pressed. The drag only starts
+   * after a few pixels of movement so normal clicks keep working.
+   * @param {PointerEvent} event
+   */
+  function handleTreePointerDown(event) {
+    if (event.button !== 0 || event.pointerType === "touch") return;
+    // A new press starts a new interaction; any pending click suppression is
+    // stale by now.
+    suppressTreeClick = false;
+
+    if (
+      event.target instanceof Element &&
+      event.target.closest("input, textarea, button, [contenteditable='true']")
+    ) {
+      return;
+    }
+
+    const node = treeNodeAt(event);
+    if (!node) return;
+    const path =
+      node.getAttribute("data-file-path") ??
+      node.getAttribute("data-folder-path");
+    if (!path) return;
+    // TreeNode shows an input instead of the label while renaming; the row
+    // must not turn into a drag target then.
+    if ($renamingPath === path) return;
+
+    pendingTreeDrag = {
+      path,
+      type: node.hasAttribute("data-file-path") ? "file" : "directory",
+      name: path.split("/").pop() ?? path,
+      startX: event.clientX,
+      startY: event.clientY,
+      pointerId: event.pointerId,
+    };
+  }
+
+  /**
+   * @param {PointerEvent} event
+   */
+  function beginTreeDrag(event) {
+    if (!pendingTreeDrag) return;
+    draggedTreeItem = {
+      path: pendingTreeDrag.path,
+      type: pendingTreeDrag.type,
+      name: pendingTreeDrag.name,
+    };
+    pendingTreeDrag = null;
+    isInternalDrag = true;
+    dragPointerX = event.clientX;
+    dragPointerY = event.clientY;
+
+    document.body.classList.add("internal-dragging");
+    document.getSelection()?.removeAllRanges();
+
+    const ghost = document.createElement("div");
+    ghost.className = "tree-drag-ghost";
+    ghost.textContent = draggedTreeItem.name;
+    ghost.style.left = `${event.clientX}px`;
+    ghost.style.top = `${event.clientY}px`;
+    document.body.appendChild(ghost);
+    treeDragGhost = ghost;
+
+    setDragTarget(treeNodeAt(event));
+    scheduleTreeAutoScroll();
+  }
+
+  /**
+   * @param {PointerEvent} event
+   */
+  function handleTreePointerMove(event) {
+    if (!pendingTreeDrag && !isInternalDrag) return;
+
+    if (!isInternalDrag) {
+      if (!pendingTreeDrag || pendingTreeDrag.pointerId !== event.pointerId) {
+        return;
+      }
+      // Keep the browser from starting a text selection while the pointer is
+      // held down, even before the drag threshold is crossed.
+      event.preventDefault();
+      const dx = event.clientX - pendingTreeDrag.startX;
+      const dy = event.clientY - pendingTreeDrag.startY;
+      if (dx * dx + dy * dy < 25) return;
+      beginTreeDrag(event);
+      return;
+    }
+
+    event.preventDefault();
+    dragPointerX = event.clientX;
+    dragPointerY = event.clientY;
+    if (treeDragGhost) {
+      treeDragGhost.style.left = `${event.clientX}px`;
+      treeDragGhost.style.top = `${event.clientY}px`;
+    }
+    setDragTarget(treeNodeAt(event));
+    scheduleTreeAutoScroll();
+  }
+
+  /**
+   * @param {PointerEvent} event
+   */
+  function handleTreePointerUp(event) {
+    pendingTreeDrag = null;
+    if (!isInternalDrag) return;
+
+    // The drag is over, so the browser's follow-up click must not select or
+    // toggle whatever the item was dropped on.
+    suppressTreeClick = true;
+
+    const item = draggedTreeItem;
+    const targetNode = treeNodeAt(event);
+    const targetPath =
+      targetNode?.getAttribute("data-file-path") ??
+      targetNode?.getAttribute("data-folder-path") ??
+      "";
+    const targetFolder = targetNode?.getAttribute("data-folder-path") ?? "";
+    // The old native drop moved an item to the library root whenever it was
+    // released outside a tree row, including the File Browser header. Keep
+    // that: the only real cancel is a release outside the app window.
+    const insideApp =
+      !!appContainer &&
+      event.target instanceof Node &&
+      appContainer.contains(event.target);
+
+    resetDragState();
+
+    if (!item) return;
+    if (!targetNode && !insideApp) return;
+
+    // Dropped directly on itself (a file row or its own folder row).
+    if (targetPath === item.path) {
+      toast.warning("Cannot move an item into itself");
+      return;
+    }
+
+    if (item.type === "directory") {
+      if (targetFolder.startsWith(`${item.path}/`)) {
+        toast.warning("Cannot move a folder into its own subfolder");
+        return;
+      }
+    }
+
+    // Dropping an item beside itself is a no-op rather than an API round trip.
+    const parent = item.path.includes("/")
+      ? item.path.slice(0, item.path.lastIndexOf("/"))
+      : "";
+    if (targetFolder === parent) return;
+
+    handleMove(item.path, targetFolder);
+  }
+
+  function handleTreePointerCancel() {
+    pendingTreeDrag = null;
+    if (isInternalDrag) resetDragState();
+  }
+
+  /**
    * @param {DragEvent} e
    */
   function handleDrop(e) {
@@ -448,56 +757,8 @@
     e.preventDefault();
     e.stopPropagation();
 
-    const types = e.dataTransfer?.types;
-    const isInternal = hasType(types, "application/x-music-player-item");
-    const hasFileDrag = hasType(types, "Files");
-    if (!isInternal && !hasFileDrag) return;
-
-    // --- Check for internal move first ---
-    const internalData =
-      e.dataTransfer?.getData("application/x-music-player-item") ?? "";
-    if (internalData) {
-      try {
-        const { path: sourcePath, type } = JSON.parse(internalData);
-
-        // Determine target folder (same logic as for uploads)
-        let targetFolder = "";
-        const eventTarget = e.target instanceof Element ? e.target : null;
-        /** @type {HTMLElement | null} */
-        const dropTarget = eventTarget?.closest("[data-folder-path]") ?? null;
-        if (dropTarget) {
-          targetFolder = dropTarget.dataset.folderPath ?? "";
-        } else {
-          /** @type {HTMLElement | null} */
-          const fileTarget = eventTarget?.closest("[data-file-path]") ?? null;
-          if (fileTarget) {
-            targetFolder = fileTarget.dataset.folderPath ?? "";
-          }
-          // else targetFolder remains '' (root)
-        }
-
-        // Prevent moving to itself
-        if (targetFolder === sourcePath) {
-          toast.warning("Cannot move an item into itself");
-          return;
-        }
-
-        // Prevent moving a folder into its own subfolder (would create a cycle)
-        if (type === "directory" && targetFolder.startsWith(sourcePath + "/")) {
-          toast.warning("Cannot move a folder into its own subfolder");
-          return;
-        }
-
-        // Perform the move
-        handleMove(sourcePath, targetFolder);
-        return; // Done, exit drop handler
-      } catch (err) {
-        toast.error(
-          `Internal move error: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        return;
-      }
-    }
+    // Native drops are external uploads; tree moves end in handleTreePointerUp.
+    if (!hasFiles(e)) return;
 
     // --- External upload ---
     const items = Array.from(e.dataTransfer?.items ?? []);
@@ -1058,6 +1319,9 @@
    * @param {DragEvent} e
    */
   function handleDocumentDragStart(e) {
+    // Native drags are only external files or dragged text now; tree moves
+    // are pointer-driven (see handleTreePointerDown), so no tree item needs
+    // to be recognised here.
     const el = e.target instanceof HTMLElement ? e.target : null;
     isTextDrag = !!(
       el &&
@@ -1132,10 +1396,13 @@
     /** @param {KeyboardEvent} event */
     const handleWindowKeyDown = (event) => {
       // Esc cancels a native drag; Firefox may not send dragleave for it.
-      if (event.key === "Escape" && isDragging) endDrag();
+      if (event.key === "Escape" && (isDragging || isInternalDrag)) endDrag();
     };
     /** @param {PointerEvent} event */
     const handleWindowPointer = (event) => {
+      // Only the external-file overlay needs this fallback. A tree drag ends
+      // through its own pointerup/cancel handlers, so a stray pointer event
+      // must not clear it.
       if (!isDragging) return;
       // A pointerdown means the previous drag session is definitely over.
       // While a native drag is running the browser suppresses mouse/pointer
@@ -1149,14 +1416,34 @@
     window.addEventListener("dragover", handleWindowDragOverCapture, true);
     window.addEventListener("drop", handleWindowDropCapture, true);
     window.addEventListener("dragend", handleWindowDragEnd, true);
+    // Non-passive: while an internal drag is active this takes over the wheel
+    // so the tree scrolls even if Firefox targets the event outside the panel.
+    window.addEventListener("wheel", handleTreeWheel, {
+      capture: true,
+      passive: false,
+    });
     window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("keydown", handleWindowKeyDown, true);
     window.addEventListener("pointerdown", handleWindowPointer, true);
     window.addEventListener("pointerup", handleWindowPointer, true);
     window.addEventListener("pointermove", handleWindowPointer, true);
+    // Internal moves are pointer-driven; these listeners follow the press,
+    // the threshold, the hovered drop target and the release.
+    window.addEventListener("pointermove", handleTreePointerMove, true);
+    window.addEventListener("pointerup", handleTreePointerUp, true);
+    window.addEventListener("pointercancel", handleTreePointerCancel, true);
+    /** @param {MouseEvent} event */
+    const handleDragClick = (event) => {
+      if (!suppressTreeClick) return;
+      suppressTreeClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener("click", handleDragClick, true);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      resetDragState();
       window.fetch = originalFetch; // Restore original fetch
       window.removeEventListener("refreshFileTree", loadFileTree);
       window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -1165,20 +1452,34 @@
       window.removeEventListener("dragover", handleWindowDragOverCapture, true);
       window.removeEventListener("drop", handleWindowDropCapture, true);
       window.removeEventListener("dragend", handleWindowDragEnd, true);
+      window.removeEventListener("wheel", handleTreeWheel, true);
       window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("keydown", handleWindowKeyDown, true);
       window.removeEventListener("pointerdown", handleWindowPointer, true);
       window.removeEventListener("pointerup", handleWindowPointer, true);
       window.removeEventListener("pointermove", handleWindowPointer, true);
+      window.removeEventListener("pointermove", handleTreePointerMove, true);
+      window.removeEventListener("pointerup", handleTreePointerUp, true);
+      window.removeEventListener(
+        "pointercancel",
+        handleTreePointerCancel,
+        true,
+      );
+      window.removeEventListener("click", handleDragClick, true);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       resetDragState();
     };
   });
 
   $effect(() => {
-    if ($isAuthenticated && treeData.length === 0) {
-      loadFileTree();
+    if (!$isAuthenticated) {
+      // Reset so the next login loads a fresh tree.
+      treeRequested = false;
+      return;
     }
+    if (treeRequested) return;
+    treeRequested = true;
+    loadFileTree();
   });
 
   // Event handler for opening logs
@@ -1246,10 +1547,12 @@
   <div
     role="region"
     class="container"
+    bind:this={appContainer}
     ondragenter={handleDragEnter}
     ondragover={handleDragOver}
     ondragleave={handleDragLeave}
     ondrop={handleDrop}
+    onpointerdown={handleTreePointerDown}
     class:dragging={isDragging}
   >
     <!-- Theme switch, help toggle and settings toggle -->
@@ -1458,7 +1761,10 @@
           </div>
         </div>
 
-        <div class="panel-content file-tree-panel">
+        <div
+          class="panel-content file-tree-panel"
+          bind:this={fileTreeContainer}
+        >
           {#if isLoading && treeData.length === 0}
             <div class="empty-state">
               <svg
@@ -1493,7 +1799,7 @@
               <button class="retry-btn" onclick={loadFileTree}>Retry</button>
             </div>
           {:else}
-            <div class="file-tree-container" bind:this={fileTreeContainer}>
+            <div class="file-tree-container">
               {#if treeData.length === 0}
                 <div class="empty-state">
                   <svg

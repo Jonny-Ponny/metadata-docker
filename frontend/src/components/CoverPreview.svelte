@@ -22,6 +22,9 @@
 
   let previewSrc = $state(/** @type {string | null} */ (null));
   let loadFailed = $state(false);
+  let imageSize = $state(
+    /** @type {{ width: number, height: number } | null} */ (null),
+  );
 
   const isRemote = $derived(isRemoteImageUrl(url));
   const isDirectImage = $derived(
@@ -32,11 +35,34 @@
   const showPlaceholder = $derived(
     !!placeholder && (!url || !canLoad || loadFailed),
   );
+  // The size is only known once the browser has decoded the image, so the
+  // tooltip starts as the bare URL and gains the dimensions afterwards.
+  const title = $derived(
+    !isRemote || !url
+      ? undefined
+      : imageSize
+        ? `${url}\n${imageSize.width}x${imageSize.height}px`
+        : url,
+  );
+
+  /**
+   * @param {Event} event
+   */
+  function handleImageLoad(event) {
+    const image = /** @type {HTMLImageElement} */ (event.currentTarget);
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      imageSize = {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      };
+    }
+  }
 
   $effect(() => {
     let active = true;
     previewSrc = null;
     loadFailed = false;
+    imageSize = null;
 
     if (!url || !canLoad) {
       return;
@@ -61,9 +87,9 @@
   });
 </script>
 
-<div class="cover-preview {variant}" title={isRemote ? url : undefined}>
+<div class="cover-preview {variant}" {title}>
   {#if previewSrc}
-    <img src={previewSrc} {alt} class="cover-image" />
+    <img src={previewSrc} {alt} class="cover-image" onload={handleImageLoad} />
   {:else if showPlaceholder}
     <img src={placeholder} {alt} class="cover-image" />
   {:else if loadFailed}

@@ -205,6 +205,32 @@ body {
   height: 100%;
 }
 
+/* Pointer-driven tree drag. No native drag session is created (Firefox does
+   not deliver wheel events during one), so the tree stays scrollable. */
+body.internal-dragging,
+body.internal-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.tree-drag-ghost {
+  position: fixed;
+  z-index: 10001;
+  max-width: 240px;
+  padding: 4px 8px;
+  overflow: hidden;
+  font-size: 12px;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  background: var(--color-primary);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 25%);
+  opacity: 0.92;
+  transform: translate(12px, 12px);
+}
+
 .file-tree {
   list-style: none;
   padding: 8px 0;

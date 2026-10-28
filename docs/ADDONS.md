@@ -95,9 +95,10 @@ A few things to keep in mind:
 - The container installs `*requirements.txt` dependencies on every start as the
   unprivileged `PUID`/`PGID` user (into `/app/.local`), before the app launches.
   The first start after adding an addon can take a bit longer.
-- If you run the container as root (`PUID=0`), runtime addon dependency
-  installation is disabled. Install the dependencies in a custom image derived
-  from this one, or run with a non-root `PUID`/`PGID`.
+- If you run the container as root (`PUID=0` and `PGID=0`), runtime addon
+  dependency installation is disabled. Install the dependencies in a custom
+  image derived from this one, or run with a non-root `PUID`/`PGID`. Setting
+  only one of the two to `0` aborts startup.
 - Dependencies are installed inside the container, so changing an addon's
   requirement file requires a container restart.
 - The addons folder is read-only inside the container. Addons that write cache
@@ -241,7 +242,8 @@ empty string when there is nothing to show.
   methods, so a temporarily unavailable service does not break loading.
 - Dependencies go in a `*requirements.txt` file next to the addon, one package
   per line. The container installs them on the next start as the unprivileged
-  `PUID`/`PGID` user; installation is skipped when running as root (`PUID=0`).
+  `PUID`/`PGID` user; installation is skipped when running as root (`PUID=0`
+  and `PGID=0`).
 - `addon_base` is importable because the backend runs from the directory
   containing it. Outside Docker, the addons folder is resolved relative to the
   process working directory (`backend/addons` if you run the backend from

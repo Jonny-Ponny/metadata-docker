@@ -41,6 +41,33 @@ export const defaultColors = {
   "color-badge-text": "#2e7d32",
 };
 
+// Hold-to-confirm durations, in milliseconds. Separate settings so a fast
+// folder apply does not also make a destructive delete easier to trigger.
+export const DEFAULT_HOLD_DURATIONS = {
+  apply: 800, // apply a tag/cover to the whole folder
+  tagDelete: 800, // delete a tag field or the cover art
+  delete: 1500, // delete a file or folder
+};
+
+export const HOLD_DURATION_MIN = 200;
+export const HOLD_DURATION_MAX = 5000;
+
+/**
+ * Keep a configured hold duration usable. Saved settings can hold strings,
+ * `NaN` from an empty number input, or an out-of-range value.
+ * @param {unknown} value
+ * @param {number} fallback
+ * @returns {number}
+ */
+export function sanitizeHoldDuration(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(
+    HOLD_DURATION_MAX,
+    Math.max(HOLD_DURATION_MIN, Math.round(number)),
+  );
+}
+
 // Default settings
 const defaultSettings = {
   allowDeleteKey: true,
@@ -52,6 +79,9 @@ const defaultSettings = {
   overviewFields: [...OVERVIEW_FIELD_NAMES], // All fields selected by default
   recursiveOverview: false, // Recursive overview flag
   uploadDuplicates: "skip-identical", // Uploads: skip-identical | keep-both
+  holdApplyDuration: DEFAULT_HOLD_DURATIONS.apply, // Hold to apply to a folder
+  holdTagDeleteDuration: DEFAULT_HOLD_DURATIONS.tagDelete, // Hold to delete a tag
+  holdDeleteDuration: DEFAULT_HOLD_DURATIONS.delete, // Hold to delete a file/folder
   ...defaultColors, // Color defaults
 };
 
@@ -76,10 +106,25 @@ function loadSettings() {
         ];
       }
       // Merge with defaults to ensure all fields exist
-      return {
+      const merged = {
         ...defaultSettings,
         ...parsed,
       };
+      // Older saves do not have the hold durations, and hand-edited values are
+      // not guaranteed to be numbers in range.
+      merged.holdApplyDuration = sanitizeHoldDuration(
+        merged.holdApplyDuration,
+        DEFAULT_HOLD_DURATIONS.apply,
+      );
+      merged.holdTagDeleteDuration = sanitizeHoldDuration(
+        merged.holdTagDeleteDuration,
+        DEFAULT_HOLD_DURATIONS.tagDelete,
+      );
+      merged.holdDeleteDuration = sanitizeHoldDuration(
+        merged.holdDeleteDuration,
+        DEFAULT_HOLD_DURATIONS.delete,
+      );
+      return merged;
     }
   } catch (e) {
     console.error("Failed to load settings:", e);

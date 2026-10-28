@@ -13,8 +13,8 @@ maintaining a large local collection.
 
 - **Metadata editor** - common and custom tags for MP3, FLAC, OGG/Opus, M4A,
   WAV and AIFF, single files or whole folders (optionally recursive).
-- **Cover art** - upload, fetch from a URL, view, delete, and extract to
-  `cover.jpg`.
+- **Cover art** - upload, view, delete, and extract to `cover.jpg`; addons can
+  also apply covers from a remote URL.
 - **File management** - upload files/folders via drag and drop, move items
   inside the tree, rename, copy and delete from the context menu.
 - **Smart rename** - build a naming scheme from metadata fields and apply it to
@@ -67,7 +67,9 @@ container logs (`docker compose logs app`) at startup; they change on every
 restart.
 
 Set `PUID`/`PGID` to the owner of your music folder, or both to `0` to run as
-root (not recommended). The compose port is bound to `127.0.0.1`; to reach the
+root (not recommended). A mixed pair such as `PUID=1000, PGID=0` is rejected at
+startup: it would leave the app user in the root group without the root-mode
+safeguards. The compose port is bound to `127.0.0.1`; to reach the
 app from other machines, put a TLS-terminating reverse proxy in front of it -
 never expose plain HTTP to the internet. See
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full environment reference,
@@ -99,6 +101,9 @@ healthcheck, volumes and troubleshooting.
 - Upload: file icon for one file, hold the folder icon for a batch.
 - Delete: hold the trash icon.
 - Save as file: extract the embedded cover to `cover.jpg` in the same folder.
+- Remote URLs: the editor has no URL field. Addon results (Fetch Song/Album
+  Metadata) can supply a remote cover URL; the fetched-metadata preview links
+  back to its source.
 
 ### Smart rename
 

@@ -37,9 +37,12 @@ theme.subscribe((value) => {
     // The favicon uses a different accent per mode, so refresh it here too
     updateFavicon();
 
-    // Remove the no-transitions class after the theme is applied
+    // Remove the no-transitions class after the theme is applied. The timeout
+    // outlives a test file's jsdom environment, so `document` can be gone by
+    // the time it runs.
     requestAnimationFrame(() => {
       setTimeout(() => {
+        if (typeof document === "undefined") return;
         document.body.classList.remove("no-transitions");
       }, 10);
     });

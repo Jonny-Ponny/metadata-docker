@@ -60,9 +60,10 @@ log a warning and fall back to the default instead of crashing at startup.
 `APP_GIT_SHA` is not operator-configurable: the image build sets it to the
 commit SHA and `/api/version` exposes it.
 
-Set `PUID`/`PGID` to the owner of your music folder. `0` runs the container as
-root; it is supported but not recommended. The container does not run as root
-by default.
+Set `PUID`/`PGID` to the owner of your music folder. Both `0` runs the
+container as root; it is supported but not recommended. Both must be `0` or both
+non-zero: a mixed pair is rejected at startup instead of running with root-group
+access. The container does not run as root by default.
 
 ### Password hash instead of a plaintext password
 
