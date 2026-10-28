@@ -73,19 +73,28 @@
   }
 
   function useCurrentTime() {
-    const timestamp = secondsToTimestamp(currentTime);
-    // Remove brackets and ensure proper format
-    editingTimestampValue = timestamp.slice(1, -1);
+    // Read the live playback position via the player. The currentTime prop is
+    // a stored timeupdate snapshot and can be up to one event interval stale.
+    const event = new CustomEvent("get-current-time", {
+      detail: {
+        callback: (/** @type {number} */ time) => {
+          const timestamp = secondsToTimestamp(time);
+          // Remove brackets and ensure proper format
+          editingTimestampValue = timestamp.slice(1, -1);
 
-    // Validate seconds don't exceed 59
-    const parts = editingTimestampValue.split(/[:.]/);
-    if (parts.length === 3) {
-      let [minutes, seconds, centiseconds] = parts;
-      if (parseInt(seconds) > 59) {
-        seconds = "59";
-        editingTimestampValue = `${minutes}:${seconds}.${centiseconds}`;
-      }
-    }
+          // Validate seconds don't exceed 59
+          const parts = editingTimestampValue.split(/[:.]/);
+          if (parts.length === 3) {
+            let [minutes, seconds, centiseconds] = parts;
+            if (parseInt(seconds) > 59) {
+              seconds = "59";
+              editingTimestampValue = `${minutes}:${seconds}.${centiseconds}`;
+            }
+          }
+        },
+      },
+    });
+    window.dispatchEvent(event);
   }
 
   // Calculate allowed range for hints
