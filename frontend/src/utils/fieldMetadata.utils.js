@@ -38,6 +38,27 @@ export const FIELD_METADATA = {
     label: "Genre",
     description: "The musical genre",
   },
+  releaseType: {
+    label: "Release Type",
+    description:
+      "The kind of release, for example album, EP, single or compilation",
+  },
+  comment: {
+    label: "Comment",
+    description: "Free-form notes about the track or release",
+  },
+  description: {
+    label: "Description",
+    description: "Additional free-form text describing the track or release",
+  },
+  composer: {
+    label: "Composer",
+    description: "The writer(s) or composer(s) of the track",
+  },
+  publisher: {
+    label: "Publisher",
+    description: "The label or entity that published the release",
+  },
   unsyncedLyrics: {
     label: "Unsynced Lyrics",
     description: "Plain text lyrics",

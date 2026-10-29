@@ -87,6 +87,34 @@ describe("FolderOverview", () => {
     );
   });
 
+  it("checks release type, comment and description", async () => {
+    settings.set({
+      ...originalSettings,
+      overviewFields: ["releaseType", "comment", "description"],
+    });
+    stubMetadata({
+      "folder/a.mp3": { releaseType: "", comment: "", description: "" },
+      "folder/b.mp3": {
+        releaseType: "Album",
+        comment: "Note",
+        description: "Details",
+      },
+    });
+
+    render(FolderOverview, {
+      props: { folderPath: "folder", audioFiles: files },
+    });
+
+    expect(
+      await screen.findByText("1 of 2 files have missing fields"),
+    ).toBeTruthy();
+    expect(screen.getByText("Release Type")).toBeTruthy();
+    expect(screen.getByText("Comment")).toBeTruthy();
+    expect(screen.getByText("Description")).toBeTruthy();
+    expect(screen.getByText("a.mp3")).toBeTruthy();
+    expect(screen.queryByText("b.mp3")).toBeNull();
+  });
+
   it("counts files that failed to load separately", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     stubMetadata(

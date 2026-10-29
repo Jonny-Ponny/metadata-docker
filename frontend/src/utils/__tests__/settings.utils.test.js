@@ -39,6 +39,9 @@ describe("settings utils", () => {
     });
     expect(get(settings).overviewFields).toContain("title");
     expect(get(settings).overviewFields).toContain("picture");
+    expect(get(settings).overviewFields).toContain("releaseType");
+    expect(get(settings).overviewFields).toContain("comment");
+    expect(get(settings).overviewFields).toContain("description");
   });
 
   it("sanitizes configured hold durations", async () => {

@@ -8,6 +8,7 @@
     toast,
     processEditedLyrics,
     getFieldLabel,
+    getFieldDescription,
     settings,
     sanitizeHoldDuration,
     DEFAULT_HOLD_DURATIONS,
@@ -1289,7 +1290,7 @@
         class:editing={editingFields.has(field)}
         class:dirty={isDirty}
       >
-        <label for={field}>
+        <label for={field} title={getFieldDescription(field) || undefined}>
           {getFieldLabel(field)}
         </label>
         <div class="input-wrapper">
@@ -1438,8 +1439,8 @@
             class:editing={editingFields.has(field)}
             class:dirty={isDirty}
           >
-            <label for={field}>
-              {field.charAt(0).toUpperCase() + field.slice(1)}
+            <label for={field} title={getFieldDescription(field) || undefined}>
+              {getFieldLabel(field)}
             </label>
             <div class="input-wrapper">
               <textarea
@@ -1550,7 +1551,9 @@
         {#each Object.entries(metadata.otherFields || {}) as [key, value] (key)}
           {@const isDirty = dirtyFields.has(key)}
           <div class="field" class:dirty={isDirty}>
-            <label for={key}>{key}</label>
+            <label for={key} title={getFieldDescription(key) || undefined}>
+              {getFieldLabel(key)}
+            </label>
             <div class="input-wrapper">
               <input
                 type="text"
