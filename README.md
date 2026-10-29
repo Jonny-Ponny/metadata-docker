@@ -195,7 +195,8 @@ Architecture and development notes live in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The backend test commands,
 coverage snapshot and test conventions are in [docs/TESTING.md](docs/TESTING.md);
 fixed defects and their regression tests are recorded in
-[docs/BUGFIXES.md](docs/BUGFIXES.md).
+[docs/BUGFIXES.md](docs/BUGFIXES.md). For contribution rules and the checks to
+run before opening a PR, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Acknowledgments
 
