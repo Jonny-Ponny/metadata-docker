@@ -21,6 +21,7 @@ from metadata_writer import (
     delete_field_from_folder,
     update_file_metadata,
     update_file_picture,
+    update_files_fields,
     update_folder_metadata,
     update_folder_metadata_only_current,
     update_folder_pictures,
@@ -28,8 +29,12 @@ from metadata_writer import (
 )
 from paths import safe_path
 from safe_fetch import ImageTooLargeError, UnsafeURLError, fetch_image
+from tag_backends import BULK_EDITABLE_FIELDS
 
 bp = Blueprint('tags', __name__)
+
+MAX_BATCH_PATHS = 500
+_NUMBER_PAIR = re.compile(r'^\d+(/\d+)?$')
 
 
 def _path(value):
@@ -184,6 +189,85 @@ def update_single_file():
         return _permission_error(e)
     except Exception as e:
         return _server_error(e)
+
+def _parse_batch(data):
+    """Validate a batch body; return ``(paths, values, deletions, error)``."""
+    paths = data.get('paths')
+    values = data.get('set', {})
+    deletions = data.get('delete', [])
+
+    if (
+        not isinstance(paths, list)
+        or not paths
+        or not all(isinstance(path, str) and path for path in paths)
+    ):
+        return None, None, None, 'paths must be a non-empty list of file paths'
+    if len(paths) > MAX_BATCH_PATHS:
+        return None, None, None, f'Too many paths (max {MAX_BATCH_PATHS})'
+    if not isinstance(values, dict):
+        return None, None, None, 'set must be an object of field values'
+    if not isinstance(deletions, list) or not all(
+        isinstance(field, str) for field in deletions
+    ):
+        return None, None, None, 'delete must be a list of field names'
+    if not values and not deletions:
+        return None, None, None, 'Nothing to change'
+
+    for field in [*values, *deletions]:
+        if field not in BULK_EDITABLE_FIELDS:
+            return None, None, None, f'Field cannot be bulk edited: {field}'
+    for field, value in values.items():
+        if not isinstance(value, str):
+            return None, None, None, f'Value for {field} must be a string'
+    both = set(values) & set(deletions)
+    if both:
+        return None, None, None, f'Field both set and deleted: {sorted(both)[0]}'
+    disk = values.get('diskNumber')
+    if disk is not None and not _NUMBER_PAIR.match(disk.strip()):
+        return None, None, None, 'diskNumber must look like "1" or "1/2"'
+
+    return paths, values, deletions, None
+
+
+# POST /api/metadata/batch
+# Set and delete several metadata fields on a list of files
+@bp.route('/api/metadata/batch', methods=['POST'])
+@token_required
+def update_batch():
+    data, error = _json_object()
+    if error:
+        return error
+    paths, values, deletions, message = _parse_batch(data)
+    if message:
+        return jsonify({'error': message}), 400
+    if 'diskNumber' in values:
+        values = {**values, 'diskNumber': values['diskNumber'].strip()}
+
+    try:
+        # Resolve every path before writing anything: one path outside the
+        # library rejects the whole batch.
+        resolved = {}
+        for path in paths:
+            full_path = _path(path)
+            resolved.setdefault(
+                full_path, os.path.relpath(full_path, MUSIC_ROOT).replace(os.sep, '/')
+            )
+
+        results = update_files_fields(list(resolved), values, deletions)
+        return jsonify({
+            'success': True,
+            'updated': results['updated'],
+            'failed': results['failed'],
+            'total': results['total'],
+            'failed_files': [resolved[path] for path in results['failed_files']],
+            'message': f"Updated {results['updated']} of {results['total']} files",
+        })
+
+    except PermissionError as e:
+        return _permission_error(e)
+    except Exception as e:
+        return _server_error(e)
+
 
 # POST /api/metadata/folder
 # Update a single metadata field for all files in a folder

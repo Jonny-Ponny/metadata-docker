@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-14`, `B-39`. Next:
-  `T-15`, `B-40`.
+- IDs are permanent and never reused. Last used: `T-15`, `B-39`. Next:
+  `T-16`, `B-40`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -64,6 +64,13 @@ image build. What remains is optional hardening and new features.
   shapes are documented with JSDoc typedefs (tree nodes, metadata, upload
   batches, player API) instead of per-file opt-ins, and CI fails on a new type
   error.
+- **Bulk tag edit (T-15).** Complete: a "Bulk edit" view for the selected
+  folder lists its audio files (optionally with subfolders, up to 500) with
+  checkboxes and shift-click ranges, shows shared values or "(multiple
+  values)", and sends only the touched fields after a confirmation step.
+  `POST /api/metadata/batch` sets and deletes several fields with one save per
+  file and reports failed files. Covered by `tests/test_batch_metadata.py`,
+  `BulkEditor.test.js` and `bulkEdit.utils.test.js`.
 
 ## Planned
 
@@ -91,8 +98,9 @@ No open items.
 - **Library-wide tag search** - replace the client-side filename filter with an
   mtime-invalidated tag index, and reuse it for reports (missing fields, missing
   covers, duplicate artist/title).
-- **Multi-select** in the tree with batch actions, plus copy/paste tags from one
-  file onto a selection.
+- **Multi-select** in the tree with batch actions (move, delete, bulk edit
+  across folders), plus copy/paste tags from one file onto a selection. Bulk
+  cover art for a selection is not in T-15 either.
 - **UX and performance** - lazy per-directory tree loading, a smart-rename
   dry-run preview with a conflict strategy, addon reload from Settings,
   responsive/mobile layout, more keyboard shortcuts and modal focus handling,

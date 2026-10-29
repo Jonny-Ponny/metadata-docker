@@ -675,6 +675,11 @@ body.dark .create-folder-btn:hover {
   color: var(--color-primary-dark);
 }
 
+.panel-header-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
 .toggle-overview-btn {
   background: transparent;
   border: none;

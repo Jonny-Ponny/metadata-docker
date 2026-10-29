@@ -126,6 +126,17 @@ in the backends; `metadata_extractor.py` and `metadata_writer.py` are thin
 entry points, and every single-file write goes through `metadata_writer._modify`
 so logging and unsupported-format handling cannot drift.
 
+Bulk edits (`POST /api/metadata/batch`, the "Bulk edit" view of a selected
+folder) take `{paths, set, delete}` for up to 500 files. Every path is resolved
+with `safe_path()` before anything is written, so one path outside the library
+rejects the whole request with `403`. Only `BULK_EDITABLE_FIELDS` are accepted
+(no title, track number or lyrics), and `diskNumber` must look like `1` or
+`1/2`. Each file is loaded and saved once through the `update_fields` action of
+`_modify`; missing, unsupported or symlinked files are reported in
+`failed_files` (library-relative) without stopping the rest. Adding a
+bulk-editable field means updating `BULK_EDITABLE_FIELDS` in both
+`tag_backends.py` and `fieldMetadata.utils.js`.
+
 Files with a supported extension but unreadable tags are reported as a `500`
 with a clear message; files without a supported extension are returned by the
 API as read-only `read_only_metadata()` payloads.

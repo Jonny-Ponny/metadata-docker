@@ -760,6 +760,30 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("toggles the bulk editor for a selected folder", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+
+    expect(screen.queryByRole("button", { name: "Bulk edit tags" })).toBeNull();
+
+    await fireEvent.click(node(view, "Albums"));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "Bulk edit tags" }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Bulk Edit" }),
+    ).toBeTruthy();
+    expect(await screen.findByText("1 of 1 files selected")).toBeTruthy();
+
+    await fireEvent.click(screen.getByTitle("Toggle folder metadata overview"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Folder Overview" }),
+    ).toBeTruthy();
+    expect(screen.queryByText("1 of 1 files selected")).toBeNull();
+  });
+
   it("creates a root folder and refreshes the tree", async () => {
     isAuthenticated.set(true);
     await renderAuthenticated();

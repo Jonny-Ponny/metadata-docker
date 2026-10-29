@@ -32,7 +32,7 @@ python -m pytest -q --cov=backend --cov-report=term-missing
 | Measurement                       | Tests | Line coverage | Statements | Missed |
 | --------------------------------- | ----: | ------------: | ---------: | -----: |
 | Baseline before the coverage work |   616 |           83% |       2583 |    437 |
-| Current (2026-10-25)              |   848 |           92% |       2591 |    206 |
+| Current (2026-10-29)              |   883 |           92% |       2672 |    210 |
 
 `config.py` is under-reported because its tests import the app in a subprocess.
 
@@ -143,8 +143,8 @@ test. `src/test/setup.js` clears `localStorage` after every test.
 
 Tests live next to the code they cover: utilities in `src/utils/__tests__/`,
 components in `src/components/__tests__/`, stores in `src/stores/__tests__/`
-and the app shell in `src/__tests__/`. As of 2026-10-28 the suite has 41 files
-and 536 tests.
+and the app shell in `src/__tests__/`. As of 2026-10-29 the suite has 43 files
+and 564 tests.
 
 `npm run test:coverage` runs the suite with `@vitest/coverage-v8` and writes a
 text summary plus HTML and LCOV reports to `frontend/coverage/`. Coverage

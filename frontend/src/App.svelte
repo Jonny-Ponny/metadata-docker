@@ -15,6 +15,7 @@
   import SettingsModal from "./components/SettingsModal.svelte";
   import TextEditor from "./components/TextEditor.svelte";
   import FolderOverview from "./components/FolderOverview.svelte";
+  import BulkEditor from "./components/BulkEditor.svelte";
   import UploadTray from "./components/UploadTray.svelte";
 
   import {
@@ -185,6 +186,7 @@
   let gitSha = $state(/** @type {string | null} */ (null));
 
   let showFolderOverview = $state(false);
+  let showBulkEditor = $state(false);
 
   let isTextDrag = $state(false);
 
@@ -229,28 +231,30 @@
   }
 
   /**
+   * @param {TreeItem[]} nodes
+   * @param {string} path
+   * @returns {TreeItem | null}
+   */
+  function findNode(nodes, path) {
+    for (const node of nodes) {
+      if (node.path === path) return node;
+      if (node.children) {
+        const found = findNode(node.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  let selectedFolderNode = $derived(
+    selectedFolder ? findNode(treeData, selectedFolder) : null,
+  );
+
+  /**
    * @returns {FolderAudioFile[]}
    */
   function getAudioFilesInFolder() {
-    if (!selectedFolder) return [];
-
-    /**
-     * @param {TreeItem[]} nodes
-     * @param {string} path
-     * @returns {TreeItem | null}
-     */
-    function findNode(nodes, path) {
-      for (const node of nodes) {
-        if (node.path === path) return node;
-        if (node.children) {
-          const found = findNode(node.children, path);
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-
-    const folderNode = findNode(treeData, selectedFolder);
+    const folderNode = selectedFolderNode;
     if (!folderNode) return [];
 
     if ($settings.recursiveOverview) {
@@ -1861,6 +1865,8 @@
               File Info (read-only)
             {:else if selectedFile}
               Metadata Editor
+            {:else if selectedFolder && showBulkEditor}
+              Bulk Edit
             {:else if selectedFolder && !selectedFile}
               Folder Overview
             {:else}
@@ -1868,26 +1874,53 @@
             {/if}
           </h3>
           {#if selectedFolder && !selectedFile}
-            <button
-              class="toggle-overview-btn"
-              class:active={showFolderOverview}
-              onclick={() => (showFolderOverview = !showFolderOverview)}
-              title="Toggle folder metadata overview"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+            <div class="panel-header-actions">
+              <button
+                class="toggle-overview-btn"
+                class:active={showFolderOverview}
+                onclick={() => {
+                  showFolderOverview = !showFolderOverview;
+                  if (showFolderOverview) showBulkEditor = false;
+                }}
+                title="Toggle folder metadata overview"
               >
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-              </svg>
-            </button>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+              </button>
+              <button
+                class="toggle-overview-btn"
+                class:active={showBulkEditor}
+                onclick={() => {
+                  showBulkEditor = !showBulkEditor;
+                  if (showBulkEditor) showFolderOverview = false;
+                }}
+                title="Edit tags of several files at once"
+                aria-label="Bulk edit tags"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
+            </div>
           {/if}
         </div>
 
@@ -1898,6 +1931,8 @@
             <TextEditor filePath={selectedFile} />
           {:else if selectedFile}
             <MetadataEditor filePath={selectedFile} />
+          {:else if selectedFolder && showBulkEditor}
+            <BulkEditor folderNode={selectedFolderNode} />
           {:else if selectedFolder && showFolderOverview}
             <FolderOverview
               folderPath={selectedFolder}

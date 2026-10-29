@@ -77,6 +77,14 @@ FIELD_SCHEMA = {
     },
 }
 
+# Fields the bulk editor may set or delete across many files at once. Titles,
+# track numbers and lyrics are per-track by nature, so they stay single-file.
+# Keep in sync with BULK_EDITABLE_FIELDS in frontend fieldMetadata.utils.js.
+BULK_EXCLUDED_FIELDS = ('title', 'trackNumber', 'lyrics', 'unsyncedLyrics')
+BULK_EDITABLE_FIELDS = tuple(
+    field for field in FIELD_SCHEMA if field not in BULK_EXCLUDED_FIELDS
+)
+
 ID3_FRAME_CLASSES = {
     'TIT2': TIT2,
     'TALB': TALB,

@@ -69,3 +69,20 @@ export function getFieldLabel(key) {
 export function getFieldDescription(key) {
   return FIELD_METADATA[key]?.description || "";
 }
+
+// Fields the bulk editor may change on many files at once. Per-track fields
+// (title, track number, lyrics) stay single-file. Keep in sync with
+// BULK_EDITABLE_FIELDS in backend/tag_backends.py.
+export const BULK_EDITABLE_FIELDS = [
+  "album",
+  "artist",
+  "albumArtist",
+  "diskNumber",
+  "date",
+  "genre",
+  "comment",
+  "description",
+  "composer",
+  "publisher",
+  "releaseType",
+];

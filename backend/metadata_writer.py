@@ -27,6 +27,7 @@ def _backend_for_audio(file_path, audio):
 # and error handling cannot drift between the public wrappers below.
 _ACTION_ERROR_LABELS = {
     'update_field': 'updating metadata',
+    'update_fields': 'updating metadata',
     'update_picture': 'updating picture',
     'delete_field': 'deleting field',
     'delete_cover_art': 'deleting cover art',
@@ -51,6 +52,14 @@ def _modify(file_path, action, *args):
             field, value = args
             backend.write_field(audio, field, value)
             message = f"Updated {field}"
+        elif action == 'update_fields':
+            values, deletions = args
+            for field, value in values.items():
+                backend.write_field(audio, field, value)
+            for field in deletions:
+                backend.delete_field(audio, field)
+            changed = [*values, *(f"-{field}" for field in deletions)]
+            message = f"Updated {', '.join(changed)}"
         elif action == 'update_picture':
             image_data, mime_type = args
             backend.set_picture(audio, image_data, mime_type)
@@ -78,6 +87,11 @@ def _modify(file_path, action, *args):
 def update_file_metadata(file_path, field, value):
     """Update a single metadata field in a file."""
     return _modify(file_path, 'update_field', field, value)
+
+
+def update_file_fields(file_path, values, deletions=()):
+    """Set and delete several metadata fields in a file with one save."""
+    return _modify(file_path, 'update_fields', dict(values), list(deletions))
 
 
 def update_file_picture(file_path, image_data, mime_type=None):
@@ -129,6 +143,13 @@ def _iter_audio_files(folder_path, recursive=True):
 
 def _apply_to_folder(folder_path, operation, recursive=True):
     """Apply *operation* to every supported audio file in a folder."""
+    return _apply_to_files(
+        _iter_audio_files(folder_path, recursive=recursive), operation
+    )
+
+
+def _apply_to_files(file_paths, operation):
+    """Apply *operation* to each path and count successes and failures."""
     results = {
         'total': 0,
         'updated': 0,
@@ -136,7 +157,7 @@ def _apply_to_folder(folder_path, operation, recursive=True):
         'failed_files': [],
     }
 
-    for file_path in _iter_audio_files(folder_path, recursive=recursive):
+    for file_path in file_paths:
         results['total'] += 1
         try:
             if operation(file_path):
@@ -158,6 +179,21 @@ def update_folder_metadata(folder_path, field, value):
         folder_path,
         lambda file_path: update_file_metadata(file_path, field, value),
     )
+
+
+def update_files_fields(file_paths, values, deletions=()):
+    """Set and delete metadata fields on each of *file_paths*.
+
+    Paths must already be resolved and checked by the caller. Missing,
+    unsupported or symlinked files are counted as failures, like the folder
+    helpers, which never follow links either.
+    """
+    def operation(file_path):
+        if os.path.islink(file_path) or not os.path.isfile(file_path):
+            return False
+        return update_file_fields(file_path, values, deletions)
+
+    return _apply_to_files(file_paths, operation)
 
 
 def update_folder_pictures(folder_path, image_data, mime_type=None):
