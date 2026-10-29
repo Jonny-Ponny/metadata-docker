@@ -12,6 +12,9 @@ describe("fieldMetadata", () => {
     expect(getFieldLabel("albumArtist")).toBe("Album Artist");
     expect(getFieldLabel("picture")).toBe("Cover Art");
     expect(getFieldLabel("lyrics")).toBe("Synced Lyrics");
+    expect(getFieldLabel("releaseType")).toBe("Release Type");
+    expect(getFieldLabel("comment")).toBe("Comment");
+    expect(getFieldLabel("description")).toBe("Description");
   });
 
   it("falls back to the raw key for unknown fields", () => {
@@ -23,6 +26,9 @@ describe("fieldMetadata", () => {
     expect(getFieldDescription("trackNumber")).toBe(
       "The track number on the album",
     );
+    expect(getFieldDescription("releaseType")).toContain("album, EP, single");
+    expect(getFieldDescription("comment")).toContain("Free-form notes");
+    expect(getFieldDescription("description")).toContain("Additional");
   });
 
   it("returns an empty description for unknown fields", () => {
