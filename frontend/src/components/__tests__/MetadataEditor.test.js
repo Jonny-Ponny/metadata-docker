@@ -174,7 +174,27 @@ describe("MetadataEditor", () => {
 
     const composer = await screen.findByDisplayValue("Composer");
     expect(composer.closest(".field")).toBeTruthy();
-    expect(screen.getByLabelText("composer")).toBe(composer);
+    expect(screen.getByLabelText("Composer")).toBe(composer);
+  });
+
+  it("shows field descriptions as hover tooltips", async () => {
+    stubMetadata();
+
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    expect(screen.getByText("Title").getAttribute("title")).toContain(
+      "Song title",
+    );
+
+    await fireEvent.click(screen.getByText("▶ Other"));
+
+    expect(screen.getByText("Comment").getAttribute("title")).toContain(
+      "Free-form notes",
+    );
+    expect(screen.getByText("Composer").getAttribute("title")).toContain(
+      "writer",
+    );
   });
 
   it("reloads the metadata when a refresh event names the file", async () => {
@@ -946,7 +966,7 @@ describe("MetadataEditor editing actions", () => {
     await screen.findByDisplayValue("Song");
     await fireEvent.click(screen.getByText("▶ Other"));
 
-    const composer = screen.getByLabelText("composer");
+    const composer = screen.getByLabelText("Composer");
     await typeInto(composer, "Someone else");
 
     expect(
