@@ -313,6 +313,60 @@ def update_file_picture_from_url_endpoint():
         return _server_error(e)
 
 
+def _update_folder_cover_from_url(recursive):
+    """Set the cover from a remote URL on every file in a folder."""
+    data, error = _json_object()
+    if error:
+        return error
+    image_url = data.get('url')
+    folder_path = data.get('path')
+
+    if not image_url or folder_path is None:  # Allow empty string for root
+        return jsonify({'error': 'Missing url or path parameter'}), 400
+
+    try:
+        full_path = _path(folder_path)
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+
+        # Fetch once through the SSRF guard, then write the same image to
+        # every file instead of downloading it per track.
+        image_data, mime_type = fetch_image(
+            image_url, f'metadata-docker/{APP_VERSION}'
+        )
+
+        if recursive:
+            results = update_folder_pictures(full_path, image_data, mime_type)
+            suffix = ''
+        else:
+            results = update_folder_pictures_only_current(
+                full_path, image_data, mime_type
+            )
+            suffix = ' in current folder'
+
+        return jsonify({
+            'success': True,
+            'updated': results['updated'],
+            'failed': results['failed'],
+            'total': results['total'],
+            'message': (
+                f"Updated cover art for {results['updated']} of "
+                f"{results['total']} files{suffix}"
+            )
+        })
+
+    except ImageTooLargeError as e:
+        return jsonify({'error': str(e)}), 413
+    except UnsafeURLError as e:
+        return jsonify({'error': str(e)}), 400
+    except requests.exceptions.RequestException as e:
+        return _server_error(e, 'Could not download the image from the provided URL.')
+    except PermissionError as e:
+        return _permission_error(e)
+    except Exception as e:
+        return _server_error(e)
+
+
 # GET /api/metadata/picture/preview?url=<remote image URL>
 # Proxy a remote cover for display in the UI. This keeps the browser from
 # contacting arbitrary hosts directly and reuses the same SSRF guard as the
@@ -368,6 +422,24 @@ def update_folder_files_current_only():
 def update_folder_pictures_current_only_endpoint():
     """Update cover art for all files in a folder (current folder only, no subfolders)."""
     return _update_folder_cover(recursive=False)
+
+
+# POST /api/metadata/picture/url/folder
+# Update cover art for all files in a folder using a remote URL
+@bp.route('/api/metadata/picture/url/folder', methods=['POST'])
+@token_required
+def update_folder_pictures_from_url_endpoint():
+    """Update cover art for all files in a folder using a remote URL."""
+    return _update_folder_cover_from_url(recursive=True)
+
+
+# POST /api/metadata/picture/url/folder/current
+# Update cover art for all files in a folder using a remote URL (current folder only)
+@bp.route('/api/metadata/picture/url/folder/current', methods=['POST'])
+@token_required
+def update_folder_pictures_from_url_current_only_endpoint():
+    """Update cover art for all files in a folder using a remote URL (no subfolders)."""
+    return _update_folder_cover_from_url(recursive=False)
 
 
 # POST /api/metadata/field/delete

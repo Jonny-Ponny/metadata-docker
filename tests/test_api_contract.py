@@ -25,6 +25,8 @@ ROUTES = [
     "/api/metadata/folder/current",
     "/api/metadata/field/delete",
     "/api/metadata/picture/url",
+    "/api/metadata/picture/url/folder",
+    "/api/metadata/picture/url/folder/current",
     "/api/metadata/picture/delete",
     "/api/metadata/picture/save-as-file",
     "/api/mkdir",
