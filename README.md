@@ -102,11 +102,15 @@ healthcheck, volumes and troubleshooting.
 
 - Hover over the cover to reveal the actions.
 - Upload: file icon for one file, hold the folder icon for a batch.
+- Remote URL: use the link icon, paste a public `http(s)` image URL, then the
+  file icon applies it to the current file and holding the folder icon applies
+  it to every file in the folder (honours the "Recursive" toggle). Click the
+  link icon again to close the field. The server downloads the image through
+  the same SSRF-guarded proxy as addon covers.
 - Delete: hold the trash icon.
 - Save as file: extract the embedded cover to `cover.jpg` in the same folder.
-- Remote URLs: the editor has no URL field. Addon results (Fetch Song/Album
-  Metadata) can supply a remote cover URL; the fetched-metadata preview links
-  back to its source.
+- Addon results (Fetch Song/Album Metadata) can still supply a remote cover URL;
+  the fetched-metadata preview links back to its source.
 
 ### Smart rename
 
