@@ -2251,7 +2251,7 @@
     background: none;
     border: none;
     border-radius: 4px;
-    color: var(--color-primary);
+    color: #666;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2259,7 +2259,8 @@
   }
 
   .cover-url-actions .icon-btn:hover {
-    background: var(--color-primary-transparent);
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--color-primary);
   }
 
   .cover-url-actions .icon-btn:disabled {
@@ -2277,11 +2278,11 @@
     width: 28px;
     height: 28px;
     padding: 4px;
-    color: var(--color-primary);
+    color: #666;
   }
 
   :global(.hold-button.icon.cover-url-icon:hover:not(.disabled)) {
-    background: var(--color-primary-transparent);
+    background: rgba(0, 0, 0, 0.1);
     color: var(--color-primary);
   }
 
@@ -2791,11 +2792,21 @@
   }
 
   :global(body.dark) .cover-url-actions .icon-btn {
-    color: var(--color-primary-dark);
+    color: #aaa;
   }
 
   :global(body.dark) .cover-url-actions .icon-btn:hover {
-    background: var(--color-primary-transparent-dark);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark .hold-button.icon.cover-url-icon) {
+    color: #aaa;
+  }
+
+  :global(body.dark .hold-button.icon.cover-url-icon:hover:not(.disabled)) {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-primary-dark);
   }
 
   :global(body.dark) .lyrics-modal {
