@@ -11,6 +11,8 @@
     settings,
     sanitizeHoldDuration,
     DEFAULT_HOLD_DURATIONS,
+    isRemoteImageUrl,
+    setCoverFromUrl,
   } from "../utils/index.js";
 
   /**
@@ -107,6 +109,13 @@
   let pictureEditing = $state(false);
   let pictureFileInput = $state(/** @type {HTMLInputElement | null} */ (null));
   let isUploadingPicture = $state(false);
+
+  // Remote cover URL entry. The backend downloads the image through its SSRF
+  // guard, so the browser never contacts the remote host.
+  let coverUrl = $state("");
+  let coverUrlOpen = $state(false);
+  let isSavingCoverUrl = $state(false);
+  const canApplyCoverUrl = $derived(isRemoteImageUrl(coverUrl.trim()));
 
   let showFullImage = $state(false);
 
@@ -512,6 +521,66 @@
 
     input.click();
   }
+
+  function closeCoverUrl() {
+    if (isSavingCoverUrl) return;
+    coverUrlOpen = false;
+    coverUrl = "";
+  }
+
+  /**
+   * @param {boolean} [toFolder]
+   */
+  async function applyCoverUrl(toFolder = false) {
+    if (!filePath || readOnly || isSavingCoverUrl) return;
+
+    const url = coverUrl.trim();
+    if (!isRemoteImageUrl(url)) {
+      toast.warning("Enter a full http(s) image URL");
+      return;
+    }
+
+    const folderPath = filePath.split("/").slice(0, -1).join("/");
+    isSavingCoverUrl = true;
+    try {
+      const result = await setCoverFromUrl(
+        toFolder ? folderPath : filePath,
+        url,
+        {
+          toFolder,
+          recursive: toFolder && applyToSubfolders,
+        },
+      );
+
+      toast.success(
+        result?.message ||
+          (toFolder
+            ? `Updated cover art for folder (${result?.updated ?? 0} files)`
+            : "Updated cover art from URL"),
+      );
+      coverUrlOpen = false;
+      coverUrl = "";
+
+      if (toFolder) {
+        window.dispatchEvent(new CustomEvent("refreshFileTree"));
+      }
+      await fetchMetadata(filePath);
+    } catch (error) {
+      console.error("Error setting cover from URL:", error);
+      toast.error(
+        `Failed to set cover art: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      isSavingCoverUrl = false;
+    }
+  }
+
+  $effect(() => {
+    // A different file means any half-typed URL no longer applies.
+    filePath;
+    coverUrlOpen = false;
+    coverUrl = "";
+  });
 
   /**
    * @param {string} field
@@ -993,6 +1062,33 @@
             <div class="cover-art-actions">
               <button
                 class="icon-btn"
+                title="Set cover art from URL"
+                onclick={() => (coverUrlOpen = !coverUrlOpen)}
+                disabled={isUploadingPicture || isSavingCoverUrl}
+                aria-expanded={coverUrlOpen}
+              >
+                <!-- Link icon - remote URL -->
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L11 5"
+                  />
+                  <path
+                    d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07L13 19"
+                  />
+                </svg>
+              </button>
+              <button
+                class="icon-btn"
                 title="Upload cover art for this file only"
                 onclick={() => triggerPictureUpload(false)}
                 disabled={isUploadingPicture}
@@ -1107,6 +1203,81 @@
       </div>
     </div>
   </div>
+
+  {#if coverUrlOpen && !readOnly}
+    <div class="cover-url-field">
+      <label for="cover-url-input">Cover art URL</label>
+      <div class="cover-url-input-wrapper">
+        <input
+          id="cover-url-input"
+          type="url"
+          bind:value={coverUrl}
+          placeholder={isSavingCoverUrl
+            ? "Applying…"
+            : "https://example.com/cover.jpg"}
+          aria-label="Cover art image URL"
+          disabled={isSavingCoverUrl}
+          onkeydown={(e) => {
+            if (e.key === "Enter") applyCoverUrl(false);
+            if (e.key === "Escape") closeCoverUrl();
+          }}
+        />
+        <div class="cover-url-actions">
+          <button
+            class="icon-btn"
+            title="Apply this URL to the current file"
+            onclick={() => applyCoverUrl(false)}
+            disabled={!canApplyCoverUrl || isSavingCoverUrl}
+          >
+            <!-- File icon - matches the upload action -->
+            <svg
+              width="14"
+              height="16"
+              viewBox="0 0 14 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M2 1.5C2 1.22386 2.22386 1 2.5 1H9.5C9.77614 1 10 1.22386 10 1.5V3.5C10 3.77614 10.2239 4 10.5 4H12.5C12.7761 4 13 4.22386 13 4.5V14.5C13 14.7761 12.7761 15 12.5 15H2.5C2.22386 15 2 14.7761 2 14.5V1.5Z"
+                fill="currentColor"
+                fill-opacity="0.7"
+              />
+              <path
+                d="M10 1L12 3H10V1Z"
+                fill="currentColor"
+                fill-opacity="0.7"
+              />
+            </svg>
+          </button>
+          <HoldButton
+            variant="icon"
+            duration={holdApplyDuration}
+            onConfirm={() => applyCoverUrl(true)}
+            disabled={!canApplyCoverUrl || isSavingCoverUrl}
+            title={applyToSubfolders
+              ? "Hold to apply this URL to all files in folder (including subfolders)"
+              : "Hold to apply this URL to all files in folder (same level only)"}
+            class="cover-url-icon"
+          >
+            <!-- Folder icon - matches the folder upload action -->
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M2 4.5C2 3.94772 2.44772 3.5 3 3.5H6.5L8 5.5H13C13.5523 5.5 14 5.94772 14 6.5V11.5C14 12.0523 13.5523 12.5 13 12.5H3C2.44772 12.5 2 12.0523 2 11.5V4.5Z"
+                fill="currentColor"
+                fill-opacity="0.9"
+              />
+            </svg>
+          </HoldButton>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <!-- Main fields (all text inputs) -->
   <div class="fields-stack">
@@ -2027,6 +2198,93 @@
     display: block;
   }
 
+  .cover-url-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: -8px 0 16px;
+  }
+
+  .cover-url-field label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .cover-url-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  .cover-url-input-wrapper input {
+    width: 100%;
+    padding: 8px 76px 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background: white;
+    color: #333;
+    box-sizing: border-box;
+  }
+
+  .cover-url-actions {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    background: white;
+    border-radius: 4px;
+  }
+
+  .cover-url-actions .icon-btn {
+    width: 28px;
+    height: 28px;
+    padding: 4px;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: var(--color-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cover-url-actions .icon-btn:hover {
+    background: var(--color-primary-transparent);
+  }
+
+  .cover-url-actions .icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .cover-url-actions .icon-btn svg {
+    width: 14px;
+    height: 16px;
+    display: block;
+  }
+
+  :global(.hold-button.icon.cover-url-icon) {
+    width: 28px;
+    height: 28px;
+    padding: 4px;
+    color: var(--color-primary);
+  }
+
+  :global(.hold-button.icon.cover-url-icon:hover:not(.disabled)) {
+    background: var(--color-primary-transparent);
+    color: var(--color-primary);
+  }
+
   .uploading-indicator {
     color: white;
     font-size: 14px;
@@ -2516,6 +2774,28 @@
   :global(body.dark) .cover-art-expand .icon-btn:hover {
     background: var(--color-primary-dark);
     color: white;
+  }
+
+  :global(body.dark) .cover-url-field label {
+    color: #aaa;
+  }
+
+  :global(body.dark) .cover-url-input-wrapper input {
+    background: #3d3d3d;
+    border-color: #555;
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .cover-url-actions {
+    background: #3d3d3d;
+  }
+
+  :global(body.dark) .cover-url-actions .icon-btn {
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .cover-url-actions .icon-btn:hover {
+    background: var(--color-primary-transparent-dark);
   }
 
   :global(body.dark) .lyrics-modal {
