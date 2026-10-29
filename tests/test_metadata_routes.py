@@ -377,6 +377,134 @@ def test_folder_cover_missing_folder_is_404(
     assert response.status_code == 404
 
 
+def test_folder_cover_from_url_downloads_the_image_once(
+    client, auth_headers, audio_file, test_dir, music_root, tags_module, monkeypatch
+):
+    top = audio_file(".mp3", name="top.mp3")
+    nested = audio_file(".flac", name="sub/nested.flac")
+    fetched = []
+
+    def fake_fetch(url, user_agent, **kwargs):
+        fetched.append(url)
+        return PNG, "image/png"
+
+    monkeypatch.setattr(tags_module, "fetch_image", fake_fetch)
+
+    response = client.post(
+        "/api/metadata/picture/url/folder",
+        headers=auth_headers,
+        json={
+            "url": "https://example.com/cover.png",
+            "path": _relative(test_dir, music_root),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert (body["updated"], body["failed"], body["total"]) == (2, 0, 2)
+    assert fetched == ["https://example.com/cover.png"]
+    assert extract_metadata(top)["picture"].startswith("data:image/png;base64,")
+    assert extract_metadata(nested)["picture"].startswith("data:image/png;base64,")
+
+
+def test_folder_cover_from_url_current_only_skips_subfolders(
+    client, auth_headers, audio_file, test_dir, music_root, tags_module, monkeypatch
+):
+    top = audio_file(".mp3", name="top.mp3")
+    nested = audio_file(".flac", name="sub/nested.flac")
+    monkeypatch.setattr(
+        tags_module,
+        "fetch_image",
+        lambda url, user_agent, **kwargs: (JPEG, "image/jpeg"),
+    )
+
+    response = client.post(
+        "/api/metadata/picture/url/folder/current",
+        headers=auth_headers,
+        json={
+            "url": "https://example.com/cover.jpg",
+            "path": _relative(test_dir, music_root),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["updated"] == 1
+    assert extract_metadata(top)["picture"]
+    assert "picture" not in extract_metadata(nested)
+
+
+def test_folder_cover_from_url_rejects_an_unsafe_url(
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
+):
+    def unsafe(url, user_agent, **kwargs):
+        raise tags_module.UnsafeURLError("URL is not public")
+
+    monkeypatch.setattr(tags_module, "fetch_image", unsafe)
+
+    response = client.post(
+        "/api/metadata/picture/url/folder",
+        headers=auth_headers,
+        json={
+            "url": "http://127.0.0.1/secret",
+            "path": _relative(test_dir, music_root),
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "URL is not public"
+
+
+def test_folder_cover_from_url_rejects_an_oversized_image(
+    client, auth_headers, test_dir, music_root, tags_module, monkeypatch
+):
+    def too_large(url, user_agent, **kwargs):
+        raise tags_module.ImageTooLargeError("Image is too large")
+
+    monkeypatch.setattr(tags_module, "fetch_image", too_large)
+
+    response = client.post(
+        "/api/metadata/picture/url/folder",
+        headers=auth_headers,
+        json={
+            "url": "https://example.com/huge.png",
+            "path": _relative(test_dir, music_root),
+        },
+    )
+
+    assert response.status_code == 413
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"path": ""},
+        {"url": "https://example.com/cover.png"},
+    ],
+    ids=["missing-url", "missing-path"],
+)
+def test_folder_cover_from_url_requires_url_and_path(
+    client, auth_headers, body
+):
+    response = client.post(
+        "/api/metadata/picture/url/folder", headers=auth_headers, json=body
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Missing url or path parameter"
+
+
+def test_folder_cover_from_url_missing_folder_is_404(
+    client, auth_headers, music_root
+):
+    response = client.post(
+        "/api/metadata/picture/url/folder",
+        headers=auth_headers,
+        json={"url": "https://example.com/cover.png", "path": "missing"},
+    )
+
+    assert response.status_code == 404
+
+
 def test_delete_field_route_clears_a_tag(
     client, auth_headers, audio_file, music_root
 ):

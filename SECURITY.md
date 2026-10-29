@@ -88,9 +88,9 @@ Cover images fetched from a user-supplied URL go through an SSRF guard
 
 Browser cover previews are proxied through the same guard
 (`/api/metadata/picture/preview`). The CSP allows images only from the app
-itself, `data:` and `blob:`, so the browser does not contact addon-provided
-hosts directly. A hover link shows the original URL and opens it only on an
-explicit click.
+itself, `data:` and `blob:`, so the browser does not contact addon- or
+user-provided hosts directly. A hover link shows the original URL and opens it
+only on an explicit click.
 
 ## Addons
 

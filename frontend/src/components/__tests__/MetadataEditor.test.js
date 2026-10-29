@@ -619,6 +619,95 @@ describe("MetadataEditor editing actions", () => {
     );
   });
 
+  it("applies a cover URL to the current file", async () => {
+    const fetchMock = stubMetadata();
+    const successSpy = vi.spyOn(toast, "success");
+    const { container } = render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    await fireEvent.mouseEnter(
+      /** @type {Element} */ (container.querySelector(".cover-art-overlay")),
+    );
+    await fireEvent.click(screen.getByTitle("Set cover art from URL"));
+    await typeInto(
+      screen.getByLabelText("Cover art image URL"),
+      "https://example.com/cover.jpg",
+    );
+    await fireEvent.click(
+      screen.getByTitle("Apply this URL to the current file"),
+    );
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/metadata/picture/url",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            path: filePath,
+            url: "https://example.com/cover.jpg",
+          }),
+        }),
+      ),
+    );
+    expect(successSpy).toHaveBeenCalledWith("Updated cover art from URL");
+    expect(screen.queryByLabelText("Cover art image URL")).toBeNull();
+  });
+
+  it("applies a cover URL to the whole folder", async () => {
+    const fetchMock = stubMetadata();
+    const refreshHandler = vi.fn();
+    window.addEventListener("refreshFileTree", refreshHandler);
+    const { container } = render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    await fireEvent.mouseEnter(
+      /** @type {Element} */ (container.querySelector(".cover-art-overlay")),
+    );
+    await fireEvent.click(screen.getByTitle("Set cover art from URL"));
+    await typeInto(
+      screen.getByLabelText("Cover art image URL"),
+      "https://example.com/cover.jpg",
+    );
+    await hold(
+      screen.getByTitle(
+        "Hold to apply this URL to all files in folder (same level only)",
+      ),
+    );
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/metadata/picture/url/folder/current",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            path: "folder",
+            url: "https://example.com/cover.jpg",
+          }),
+        }),
+      ),
+    );
+    await waitFor(() => expect(refreshHandler).toHaveBeenCalledTimes(1));
+    window.removeEventListener("refreshFileTree", refreshHandler);
+  });
+
+  it("disables applying a URL that is not http(s)", async () => {
+    stubMetadata();
+    const { container } = render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    await fireEvent.mouseEnter(
+      /** @type {Element} */ (container.querySelector(".cover-art-overlay")),
+    );
+    await fireEvent.click(screen.getByTitle("Set cover art from URL"));
+    await typeInto(screen.getByLabelText("Cover art image URL"), "cover.jpg");
+
+    expect(
+      /** @type {HTMLButtonElement} */ (
+        screen.getByTitle("Apply this URL to the current file")
+      ).disabled,
+    ).toBe(true);
+  });
+
   it("deletes the cover art after a hold", async () => {
     const fetchMock = stubMetadata({ picture: "data:image/jpeg;base64,AAAA" });
     const { container } = render(MetadataEditor, { props: { filePath } });
