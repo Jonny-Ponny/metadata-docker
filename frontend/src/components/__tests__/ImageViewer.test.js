@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/svelte";
 
 import ImageViewer from "../ImageViewer.svelte";
 
@@ -47,6 +53,50 @@ describe("ImageViewer", () => {
     expect(URL.createObjectURL).toHaveBeenCalled();
   });
 
+  it("shows the natural image size under the image", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse(200)));
+
+    render(ImageViewer, { props: { filePath } });
+
+    const image = await screen.findByRole("img", { name: "cover.jpg" });
+    expect(screen.queryByText("600x450px")).toBeNull();
+
+    Object.defineProperty(image, "naturalWidth", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(image, "naturalHeight", {
+      value: 450,
+      configurable: true,
+    });
+    await fireEvent.load(image);
+
+    expect(screen.getByText("600x450px")).toBeTruthy();
+  });
+
+  it("reads the size from a detached probe when the displayed image does not fire load", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse(200)));
+
+    class ProbeImage {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      /** @type {(() => void) | null} */
+      onload = null;
+      /** @type {((event: Event) => void) | null} */
+      onerror = null;
+
+      /** @param {string} _value */
+      set src(_value) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("Image", ProbeImage);
+
+    render(ImageViewer, { props: { filePath } });
+
+    expect(await screen.findByText("800x600px")).toBeTruthy();
+  });
+
   it("shows the error and retries the load", async () => {
     const fetchMock = vi
       .fn()
@@ -65,6 +115,30 @@ describe("ImageViewer", () => {
       expect(screen.getByRole("img", { name: "cover.jpg" })).toBeTruthy(),
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the dimensions under the full-size image", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse(200)));
+    const { container } = render(ImageViewer, { props: { filePath } });
+    const image = await screen.findByRole("img", { name: "cover.jpg" });
+
+    Object.defineProperty(image, "naturalWidth", {
+      value: 900,
+      configurable: true,
+    });
+    Object.defineProperty(image, "naturalHeight", {
+      value: 900,
+      configurable: true,
+    });
+    await fireEvent.load(image);
+
+    await fireEvent.click(screen.getByTitle("View full size"));
+
+    const modal = /** @type {HTMLElement} */ (
+      container.querySelector(".full-image-modal")
+    );
+    expect(within(modal).getByText("900x900px")).toBeTruthy();
+    expect(modal.querySelector(".full-image-dimensions")).toBeTruthy();
   });
 
   it("opens and closes the full-size view", async () => {
