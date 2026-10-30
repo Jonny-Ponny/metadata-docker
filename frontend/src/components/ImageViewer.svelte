@@ -1,6 +1,10 @@
 <!-- src/components/ImageViewer.svelte -->
 <script>
-  import { toast } from "../utils/index.js";
+  import {
+    formatImageDimensions,
+    probeImageSize,
+    toast,
+  } from "../utils/index.js";
 
   /**
    * @typedef {Object} Props
@@ -11,9 +15,17 @@
   let { filePath } = $props();
 
   let imageUrl = $state(/** @type {string | null} */ (null));
+  let imageElement = $state(/** @type {HTMLImageElement | null} */ (null));
+  let imageSize = $state(
+    /** @type {{ width: number, height: number } | null} */ (null),
+  );
   let isLoading = $state(true);
   let error = $state(/** @type {string | null} */ (null));
   let showFullImage = $state(false);
+
+  const imageDimensions = $derived(
+    formatImageDimensions(imageSize?.width, imageSize?.height),
+  );
 
   let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
 
@@ -34,6 +46,7 @@
 
     isLoading = true;
     error = null;
+    imageSize = null;
 
     try {
       const url = `/api/image?path=${encodeURIComponent(filePath)}`;
@@ -47,7 +60,15 @@
       if (imageUrl?.startsWith("blob:")) {
         URL.revokeObjectURL(imageUrl);
       }
-      imageUrl = URL.createObjectURL(blob);
+
+      const objectUrl = URL.createObjectURL(blob);
+      imageUrl = objectUrl;
+
+      probeImageSize(objectUrl).then((size) => {
+        if (size && imageUrl === objectUrl) {
+          imageSize = size;
+        }
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       error = message;
@@ -56,6 +77,32 @@
       isLoading = false;
     }
   }
+
+  /**
+   * @param {HTMLImageElement} image
+   */
+  function updateImageSize(image) {
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      imageSize = {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      };
+    }
+  }
+
+  /**
+   * @param {Event} event
+   */
+  function handleImageLoad(event) {
+    updateImageSize(/** @type {HTMLImageElement} */ (event.currentTarget));
+  }
+
+  // Cached images can finish loading before the load listener is attached.
+  $effect(() => {
+    if (imageUrl && imageElement?.complete) {
+      updateImageSize(imageElement);
+    }
+  });
 
   function openFullImage() {
     showFullImage = true;
@@ -119,7 +166,12 @@
       </div>
     {:else if imageUrl}
       <div class="image-wrapper">
-        <img src={imageUrl} alt={filename} />
+        <img
+          bind:this={imageElement}
+          src={imageUrl}
+          alt={filename}
+          onload={handleImageLoad}
+        />
         <div class="image-overlay">
           <div class="expand-corner">
             <button
@@ -145,6 +197,9 @@
           </div>
         </div>
       </div>
+      {#if imageDimensions}
+        <p class="image-dimensions">{imageDimensions}</p>
+      {/if}
     {/if}
   </div>
 </div>
@@ -173,6 +228,9 @@
         </svg>
       </button>
       <img src={imageUrl} alt="Full size cover art" />
+      {#if imageDimensions}
+        <p class="full-image-dimensions">{imageDimensions}</p>
+      {/if}
     </div>
   </div>
 {/if}
@@ -221,6 +279,18 @@
     max-height: 500px;
     object-fit: contain;
     display: block;
+  }
+
+  .image-dimensions {
+    margin: 10px 0 0;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--color-badge-image-background);
+    color: var(--color-badge-image);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
   }
 
   .image-overlay {
@@ -325,10 +395,19 @@
 
   .modal-content img {
     max-width: 100%;
-    max-height: 85vh;
+    max-height: calc(85vh - 32px);
     object-fit: contain;
     border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .full-image-dimensions {
+    margin: 8px 0 0;
+    color: var(--color-primary);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
   }
 
   .modal-close-btn {
@@ -407,6 +486,15 @@
   :global(body.dark) .filename-badge {
     background: rgba(255, 255, 255, 0.1);
     color: #ccc;
+  }
+
+  :global(body.dark) .image-dimensions {
+    background: var(--color-badge-image-background-dark);
+    color: var(--color-badge-image-dark);
+  }
+
+  :global(body.dark) .full-image-dimensions {
+    color: var(--color-primary-dark);
   }
 
   :global(body.dark) .expand-corner .icon-btn {

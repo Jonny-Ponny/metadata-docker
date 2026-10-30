@@ -14,6 +14,7 @@
     DEFAULT_HOLD_DURATIONS,
     isRemoteImageUrl,
     setCoverFromUrl,
+    formatImageDimensions,
   } from "../utils/index.js";
 
   /**
@@ -110,6 +111,13 @@
   let pictureEditing = $state(false);
   let pictureFileInput = $state(/** @type {HTMLInputElement | null} */ (null));
   let isUploadingPicture = $state(false);
+  let coverSize = $state(
+    /** @type {{ width: number, height: number } | null} */ (null),
+  );
+
+  const coverDimensions = $derived(
+    formatImageDimensions(coverSize?.width, coverSize?.height),
+  );
 
   // Remote cover URL entry. The backend downloads the image through its SSRF
   // guard, so the browser never contacts the remote host.
@@ -285,6 +293,7 @@
 
     readOnly = false;
     readOnlyFormat = "";
+    coverSize = null;
 
     try {
       const URL = `/api/metadata?path=${encodeURIComponent(path)}`;
@@ -660,6 +669,19 @@
     }
   }
 
+  /**
+   * @param {Event} event
+   */
+  function handleCoverLoad(event) {
+    const image = /** @type {HTMLImageElement} */ (event.currentTarget);
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      coverSize = {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      };
+    }
+  }
+
   function openFullImage() {
     if (metadata.picture) {
       showFullImage = true;
@@ -1005,6 +1027,7 @@
           src={metadata.picture}
           alt="Cover Art"
           style="width:100%; height:100%; object-fit: cover;"
+          onload={handleCoverLoad}
         />
       {:else}
         <!-- Cover art placeholder -->
@@ -1202,6 +1225,10 @@
           </div>
         {/if}
       </div>
+
+      {#if coverDimensions}
+        <span class="cover-art-size">{coverDimensions}</span>
+      {/if}
     </div>
   </div>
 
@@ -1866,6 +1893,9 @@
           </svg>
         </button>
         <img src={metadata.picture} alt="Full size cover art" />
+        {#if coverDimensions}
+          <p class="full-image-dimensions">{coverDimensions}</p>
+        {/if}
       </div>
     </div>
   {/if}
@@ -2138,6 +2168,30 @@
     position: relative;
   }
 
+  .cover-art-size {
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    z-index: 2;
+    transform: translateX(-50%);
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: white;
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .cover-art:hover .cover-art-size,
+  .cover-art.editing .cover-art-size {
+    opacity: 1;
+  }
+
   .cover-art-overlay {
     position: absolute;
     top: 0;
@@ -2398,10 +2452,19 @@
 
   .modal-content img {
     max-width: 100%;
-    max-height: 85vh;
+    max-height: calc(85vh - 32px);
     object-fit: contain;
     border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .full-image-dimensions {
+    margin: 8px 0 0;
+    color: var(--color-primary);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
   }
 
   .modal-close-btn {
@@ -2760,6 +2823,11 @@
     background: var(--color-primary-transparent-dark);
   }
 
+  :global(body.dark) .cover-art-size {
+    background: #3d3d3d;
+    color: var(--color-primary-dark);
+  }
+
   :global(body.dark) .cover-art-actions .icon-btn {
     background: #3d3d3d;
     color: #e0e0e0;
@@ -2823,6 +2891,10 @@
 
   :global(body.dark) .lyrics-modal-header h3 {
     color: #e0e0e0;
+  }
+
+  :global(body.dark) .full-image-dimensions {
+    color: var(--color-primary-dark);
   }
 
   :global(body.dark) .modal-close-btn {

@@ -126,6 +126,7 @@
                 Hover over the image and click the expand button for full-size
                 view
               </li>
+              <li>The image resolution is shown below the image</li>
             </ul>
 
             <h3>Metadata Editing</h3>
@@ -204,7 +205,10 @@
 
             <h3>Cover Art</h3>
             <ul>
-              <li>Hover over cover art to reveal action buttons</li>
+              <li>
+                Hover over cover art to reveal action buttons and the image
+                resolution
+              </li>
               <li>
                 <strong>File icon</strong> - Upload cover for this file only
               </li>
