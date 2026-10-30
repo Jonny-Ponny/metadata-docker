@@ -1,6 +1,10 @@
 <!-- src/components/CoverPreview.svelte -->
 <script>
-  import { isRemoteImageUrl, loadPreviewImage } from "../utils/index.js";
+  import {
+    formatImageDimensions,
+    isRemoteImageUrl,
+    loadPreviewImage,
+  } from "../utils/index.js";
 
   /**
    * @typedef {Object} Props
@@ -37,11 +41,14 @@
   );
   // The size is only known once the browser has decoded the image, so the
   // tooltip starts as the bare URL and gains the dimensions afterwards.
+  const imageDimensions = $derived(
+    formatImageDimensions(imageSize?.width, imageSize?.height),
+  );
   const title = $derived(
     !isRemote || !url
       ? undefined
-      : imageSize
-        ? `${url}\n${imageSize.width}x${imageSize.height}px`
+      : imageDimensions
+        ? `${url}\n${imageDimensions}`
         : url,
   );
 
