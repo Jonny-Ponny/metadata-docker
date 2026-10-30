@@ -4,6 +4,7 @@
     formatImageDimensions,
     isRemoteImageUrl,
     loadPreviewImage,
+    probeImageSize,
   } from "../utils/index.js";
 
   /**
@@ -77,12 +78,21 @@
 
     if (!isRemote) {
       previewSrc = url;
-      return;
+      probeImageSize(url).then((size) => {
+        if (active && size) imageSize = size;
+      });
+      return () => {
+        active = false;
+      };
     }
 
     loadPreviewImage(url)
       .then((src) => {
-        if (active) previewSrc = src;
+        if (!active) return;
+        previewSrc = src;
+        probeImageSize(src).then((size) => {
+          if (active && size) imageSize = size;
+        });
       })
       .catch(() => {
         if (active) loadFailed = true;

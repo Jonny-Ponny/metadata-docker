@@ -16,3 +16,26 @@ export function formatImageDimensions(width, height) {
   if (width <= 0 || height <= 0) return null;
   return `${width}x${height}px`;
 }
+
+/**
+ * Read an image's natural size with a detached <img>, whose load listener is
+ * attached before `src` is set. This does not depend on a displayed element's
+ * load event, which some browsers can fire before it is wired up.
+ *
+ * @param {string} url
+ * @returns {Promise<{ width: number, height: number } | null>}
+ */
+export function probeImageSize(url) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      resolve(
+        image.naturalWidth > 0 && image.naturalHeight > 0
+          ? { width: image.naturalWidth, height: image.naturalHeight }
+          : null,
+      );
+    };
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}

@@ -101,6 +101,40 @@ describe("CoverPreview", () => {
     expect(preview?.getAttribute("title")).toBe(`${remote}\n600x450px`);
   });
 
+  it("reads dimensions with the detached image probe", async () => {
+    const remote = "https://example.test/cover.jpg";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse(200)));
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:cover"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    class ProbeImage {
+      naturalWidth = 320;
+      naturalHeight = 320;
+      /** @type {(() => void) | null} */
+      onload = null;
+      /** @type {((event: Event) => void) | null} */
+      onerror = null;
+
+      /** @param {string} _value */
+      set src(_value) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("Image", ProbeImage);
+
+    const { container } = render(CoverPreview, {
+      props: { url: remote, variant: "result" },
+    });
+    const preview = container.querySelector(".cover-preview");
+
+    await waitFor(() =>
+      expect(preview?.getAttribute("title")).toBe(`${remote}\n320x320px`),
+    );
+  });
+
   it("shows a failed marker when the remote cover cannot be loaded", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse(404)));
 

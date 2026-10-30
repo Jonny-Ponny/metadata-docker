@@ -1,6 +1,10 @@
 <!-- src/components/ImageViewer.svelte -->
 <script>
-  import { formatImageDimensions, toast } from "../utils/index.js";
+  import {
+    formatImageDimensions,
+    probeImageSize,
+    toast,
+  } from "../utils/index.js";
 
   /**
    * @typedef {Object} Props
@@ -72,29 +76,6 @@
     } finally {
       isLoading = false;
     }
-  }
-
-  /**
-   * Decode the image size with a detached <img>, whose load listener is
-   * attached before `src` is set. This does not depend on the displayed
-   * element's load event, which some browsers can fire before it is wired up.
-   *
-   * @param {string} url
-   * @returns {Promise<{ width: number, height: number } | null>}
-   */
-  function probeImageSize(url) {
-    return new Promise((resolve) => {
-      const image = new Image();
-      image.onload = () => {
-        resolve(
-          image.naturalWidth > 0 && image.naturalHeight > 0
-            ? { width: image.naturalWidth, height: image.naturalHeight }
-            : null,
-        );
-      };
-      image.onerror = () => resolve(null);
-      image.src = url;
-    });
   }
 
   /**
