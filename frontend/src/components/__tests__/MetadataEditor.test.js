@@ -772,6 +772,54 @@ describe("MetadataEditor editing actions", () => {
     window.removeEventListener("refreshFileTree", refreshHandler);
   });
 
+  it("shows the cover dimensions after the image loads", async () => {
+    stubMetadata({ picture: "data:image/jpeg;base64,AAAA" });
+    render(MetadataEditor, { props: { filePath } });
+
+    const image = await screen.findByAltText("Cover Art");
+    expect(screen.queryByText("1234x1234px")).toBeNull();
+
+    Object.defineProperty(image, "naturalWidth", {
+      value: 1234,
+      configurable: true,
+    });
+    Object.defineProperty(image, "naturalHeight", {
+      value: 1234,
+      configurable: true,
+    });
+    await fireEvent.load(image);
+
+    expect(screen.getByText("1234x1234px")).toBeTruthy();
+  });
+
+  it("shows the cover dimensions under the full-size image", async () => {
+    stubMetadata({ picture: "data:image/jpeg;base64,AAAA" });
+    const { container } = render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    const cover = await screen.findByAltText("Cover Art");
+    Object.defineProperty(cover, "naturalWidth", {
+      value: 700,
+      configurable: true,
+    });
+    Object.defineProperty(cover, "naturalHeight", {
+      value: 700,
+      configurable: true,
+    });
+    await fireEvent.load(cover);
+
+    await fireEvent.mouseEnter(
+      /** @type {Element} */ (container.querySelector(".cover-art-overlay")),
+    );
+    await fireEvent.click(screen.getByTitle("View full size"));
+
+    const modal = /** @type {HTMLElement} */ (
+      container.querySelector(".full-image-modal")
+    );
+    expect(within(modal).getByText("700x700px")).toBeTruthy();
+    expect(modal.querySelector(".full-image-dimensions")).toBeTruthy();
+  });
+
   it("opens the full-size cover and closes it", async () => {
     stubMetadata({ picture: "data:image/jpeg;base64,AAAA" });
     const { container } = render(MetadataEditor, { props: { filePath } });
