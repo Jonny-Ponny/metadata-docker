@@ -15,6 +15,7 @@
     isRemoteImageUrl,
     setCoverFromUrl,
     formatImageDimensions,
+    probeImageSize,
   } from "../utils/index.js";
 
   /**
@@ -371,6 +372,8 @@
         ),
       );
 
+      const picture = data.picture || null;
+
       // Update the main metadata object
       metadata = {
         title: data.title || "",
@@ -387,8 +390,19 @@
         unsyncedLyrics: data.unsyncedLyrics || "",
         // @ts-ignore
         otherFields: other,
-        picture: data.picture || null,
+        picture,
       };
+
+      if (picture) {
+        // Tracks in one album usually share the same data URL. The browser can
+        // reuse the existing <img> and skip its load event when switching
+        // tracks, so resolve the size independently of that event.
+        probeImageSize(picture).then((size) => {
+          if (size && metadata.picture === picture) {
+            coverSize = size;
+          }
+        });
+      }
 
       customFields = [];
 
@@ -408,7 +422,7 @@
         unsyncedLyrics: data.unsyncedLyrics || "",
         otherFields: { ...other },
         customFields: [...customFields],
-        picture: data.picture || null,
+        picture,
       };
 
       // Clear dirty fields when new metadata loads

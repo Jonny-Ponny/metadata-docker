@@ -792,6 +792,39 @@ describe("MetadataEditor editing actions", () => {
     expect(screen.getByText("1234x1234px")).toBeTruthy();
   });
 
+  it("shows dimensions for tracks that reuse the same cover art", async () => {
+    const picture = "data:image/jpeg;base64,AAAA";
+    stubMetadata({ picture });
+
+    let probes = 0;
+    class ProbeImage {
+      naturalWidth = 1200;
+      naturalHeight = 1200;
+      /** @type {(() => void) | null} */
+      onload = null;
+      /** @type {((event: Event) => void) | null} */
+      onerror = null;
+
+      constructor() {
+        probes += 1;
+      }
+
+      /** @param {string} _value */
+      set src(_value) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("Image", ProbeImage);
+
+    const { rerender } = render(MetadataEditor, { props: { filePath } });
+    await waitFor(() => expect(screen.getByText("1200x1200px")).toBeTruthy());
+    expect(probes).toBe(1);
+
+    await rerender({ filePath: "folder/other.mp3" });
+    await waitFor(() => expect(probes).toBe(2));
+    expect(await screen.findByText("1200x1200px")).toBeTruthy();
+  });
+
   it("shows the cover dimensions under the full-size image", async () => {
     stubMetadata({ picture: "data:image/jpeg;base64,AAAA" });
     const { container } = render(MetadataEditor, { props: { filePath } });
