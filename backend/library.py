@@ -210,3 +210,47 @@ def build_directory(current_path, relative_path, music_root):
         'file_count': file_count,
         'file_size': file_size,
     }
+
+
+def _format_label(name):
+    """Extension label used by the tooltip, e.g. ``FLAC`` or ``UNKNOWN``."""
+    last_dot = name.rfind('.')
+    return name[last_dot + 1:].upper() if last_dot != -1 else 'UNKNOWN'
+
+
+def summarize_tree(current_path, relative_path, music_root):
+    """Recursively total a folder for the hover tooltip.
+
+    Returns the deep counts the tree tooltip always showed: every descendant
+    folder and file, the total byte size, and a per-extension count. This is
+    the one place that pays for a full walk, and only when the user hovers a
+    folder, so the lazy listing stays cheap.
+
+    The walk uses ``_scan_entries``, so skipped uploads, symlink rules and
+    unreadable entries behave exactly like the tree itself.
+    """
+    totals = {
+        'path': relative_path.replace('\\', '/'),
+        'folder_count': 0,
+        'file_count': 0,
+        'file_size': 0,
+        'format_counts': {},
+    }
+    _summarize_into(current_path, relative_path, music_root, totals)
+    return totals
+
+
+def _summarize_into(current_path, relative_path, music_root, totals):
+    """Accumulate one level into *totals* and recurse into subfolders."""
+    for entry, full, rel, info, is_directory in _scan_entries(
+        current_path, relative_path, music_root
+    ):
+        if is_directory:
+            totals['folder_count'] += 1
+            _summarize_into(full, rel, music_root, totals)
+        else:
+            totals['file_count'] += 1
+            totals['file_size'] += info.st_size
+            label = _format_label(entry)
+            counts = totals['format_counts']
+            counts[label] = counts.get(label, 0) + 1

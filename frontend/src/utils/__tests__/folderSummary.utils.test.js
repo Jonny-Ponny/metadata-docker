@@ -4,6 +4,7 @@ import {
   formatFileSize,
   formatFolderSummary,
   getFolderSummary,
+  MAX_FORMAT_LINES,
 } from "../folderSummary.utils.js";
 
 /**
@@ -102,6 +103,55 @@ describe("formatFolderSummary", () => {
     });
 
     expect(text).toBe("0 B\nfolders x1");
+  });
+
+  it("says Calculating… while the deep totals are on the way", () => {
+    expect(
+      formatFolderSummary(
+        { children: [], folder_count: 0, file_count: 0 },
+        {
+          loading: true,
+        },
+      ),
+    ).toBe("Calculating…");
+
+    expect(
+      formatFolderSummary(
+        { children: null, folder_count: 2, file_count: 3, file_size: 1024 },
+        { loading: true },
+      ),
+    ).toBe("Calculating…\n1 KB\nfolders x2");
+  });
+
+  it("prefers the deep format counts from the summary endpoint", () => {
+    const text = formatFolderSummary({
+      children: [{ name: "a.mp3", type: "file", size: 1024 }],
+      folder_count: 3,
+      file_count: 40,
+      file_size: 3072,
+      format_counts: { FLAC: 39, MP3: 1 },
+    });
+
+    expect(text).toBe("3 KB\nfolders x3\nflac x39\nmp3 x1");
+  });
+
+  it("collapses the format list past the cap", () => {
+    /** @type {Record<string, number>} */
+    const format_counts = {};
+    for (let index = 0; index < 9; index += 1) {
+      format_counts[`F${index}`] = 9 - index;
+    }
+
+    const lines = formatFolderSummary({
+      folder_count: 0,
+      file_count: 45,
+      file_size: 0,
+      format_counts,
+    }).split("\n");
+
+    // size + five formats + the collapsed remainder
+    expect(lines).toHaveLength(1 + MAX_FORMAT_LINES + 1);
+    expect(lines.at(-1)).toBe("+4 more formats");
   });
 });
 

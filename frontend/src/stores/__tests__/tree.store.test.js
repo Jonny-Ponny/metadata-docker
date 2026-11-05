@@ -4,10 +4,12 @@ import { get } from "svelte/store";
 import {
   childPath,
   childrenByPath,
+  folderSummaries,
   getChildren,
   invalidateDirectory,
   isDirectoryLoaded,
   loadDirectory,
+  loadFolderSummary,
   loadTree,
   parentPath,
   refreshDirectories,
@@ -249,5 +251,91 @@ describe("invalidateDirectory", () => {
     expect(isDirectoryLoaded("Albums/CD2")).toBe(false);
     expect(isDirectoryLoaded("")).toBe(true);
     expect([...get(childrenByPath).keys()]).toEqual([""]);
+  });
+});
+
+describe("folder summaries", () => {
+  /**
+   * @param {string} path
+   * @param {Record<string, number>} [formatCounts]
+   */
+  function stubSummary(path, formatCounts = { MP3: 2 }) {
+    const url = path
+      ? `/api/files/summary?path=${encodeURIComponent(path)}`
+      : "/api/files/summary";
+    replies.set(
+      url,
+      jsonResponse({
+        path,
+        folder_count: 1,
+        file_count: 2,
+        file_size: 99,
+        format_counts: formatCounts,
+      }),
+    );
+    return url;
+  }
+
+  it("fetches deep totals once and reuses them", async () => {
+    stubSummary("Albums");
+
+    const first = await loadFolderSummary("Albums");
+    const second = await loadFolderSummary("Albums");
+
+    expect(first?.file_size).toBe(99);
+    expect(second).toBe(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(get(folderSummaries).get("Albums")?.format_counts).toEqual({
+      MP3: 2,
+    });
+  });
+
+  it("shares one request between concurrent hovers", async () => {
+    stubSummary("Albums");
+
+    await Promise.all([
+      loadFolderSummary("Albums"),
+      loadFolderSummary("Albums"),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves to null when the request fails", async () => {
+    replies.set(
+      "/api/files/summary?path=Albums",
+      jsonResponse({ error: "nope" }, { status: 500 }),
+    );
+
+    await expect(loadFolderSummary("Albums")).resolves.toBeNull();
+    expect(get(folderSummaries).has("Albums")).toBe(false);
+  });
+
+  it("drops the folder, its subtree and its ancestors after a mutation", async () => {
+    const urls = ["", "Albums", "Albums/CD2", "Other"].map((path) =>
+      stubSummary(path),
+    );
+    await Promise.all(
+      ["", "Albums", "Albums/CD2", "Other"].map((path) =>
+        loadFolderSummary(path),
+      ),
+    );
+    expect(get(folderSummaries).size).toBe(4);
+
+    // A change inside Albums/CD2 moves the size of it, of Albums, and of the
+    // library root - but not of an unrelated folder.
+    await refreshDirectories(["Albums"]);
+
+    expect([...get(folderSummaries).keys()]).toEqual(["Other"]);
+    expect(urls).toHaveLength(4);
+  });
+
+  it("forgets everything on reset", async () => {
+    stubSummary("Albums");
+    await loadFolderSummary("Albums");
+
+    resetTree();
+
+    expect(get(folderSummaries).size).toBe(0);
   });
 });
