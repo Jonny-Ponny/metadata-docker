@@ -13,7 +13,7 @@ from auth import token_required
 from config import MUSIC_ROOT, STORAGE_HEADROOM_BYTES
 from errors import _json_object, _permission_error, _server_error
 from formats import is_supported_audio
-from library import build_tree
+import library
 from logger_config import log_info
 from metadata_extractor import extract_metadata
 from paths import (
@@ -201,8 +201,43 @@ DEFAULT_MKDIR_CONFLICT = MKDIR_CONFLICT_RENAME
 @token_required
 def list_files():
     try:
-        tree = build_tree(MUSIC_ROOT, '', MUSIC_ROOT)
+        # Call the library helper directly rather than the re-export in
+        # ``app``. A route-level monkeypatch of ``app.build_tree`` used to call
+        # a function that no route ran, so the failure-injection tests passed
+        # without exercising anything.
+        tree = library.build_tree(MUSIC_ROOT, '', MUSIC_ROOT)
         return jsonify(tree)
+    except Exception as e:
+        return _server_error(e)
+
+
+# GET /api/files/dir?path=<folder>
+# Fetch one folder for the lazily loaded filetree
+@bp.route('/api/files/dir', methods=['GET'])
+@token_required
+def list_directory():
+    """Return a single directory's entries plus direct-child aggregates.
+
+    The SPA loads the root once and fetches each folder when it is expanded,
+    so opening the app no longer walks the whole library. ``path`` is empty or
+    omitted for the library root.
+    """
+    relative_path = request.args.get('path') or ''
+
+    try:
+        full_path = _path(relative_path)
+        # safe_path() follows symlinks, so a link that escapes the library is
+        # already rejected. A folder that disappeared is a 404, not an empty
+        # listing.
+        if not os.path.exists(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Path is not a folder'}), 400
+
+        directory = library.build_directory(full_path, relative_path, MUSIC_ROOT)
+        return jsonify(directory)
+    except PermissionError as e:
+        return _permission_error(e)
     except Exception as e:
         return _server_error(e)
 

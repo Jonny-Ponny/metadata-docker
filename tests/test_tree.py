@@ -2,6 +2,8 @@
 
 import os
 
+import library
+
 
 def _find_node(items, name):
     for item in items:
@@ -37,24 +39,25 @@ def test_file_tree_sorts_naturally_and_lists_unicode_digits(
 
 
 def test_file_tree_skips_a_file_that_disappears_mid_walk(
-    client, auth_headers, test_dir, app_module, monkeypatch
+    client, auth_headers, test_dir, monkeypatch
 ):
+    """A file deleted between listdir() and stat() is skipped (B-11).
+
+    The walk lives in ``library``, so the race is installed on the module that
+    actually runs it (``build_tree`` is re-exported by ``app`` for tests and
+    older callers, which would not see the patch).
+    """
     (test_dir / "keep.mp3").write_bytes(b"keep")
     (test_dir / "gone.mp3").write_bytes(b"gone")
 
-    real_stat = app_module.os.stat
-    calls = []
+    real_stat = library.os.stat
 
     def racing_stat(path, *args, **kwargs):
         if os.fspath(path).endswith("gone.mp3"):
-            calls.append(path)
-            # isdir() and isfile() succeed; the entry vanishes before the
-            # metadata stat.
-            if len(calls) > 2:
-                raise FileNotFoundError(path)
+            raise FileNotFoundError(path)
         return real_stat(path, *args, **kwargs)
 
-    monkeypatch.setattr(app_module.os, "stat", racing_stat)
+    monkeypatch.setattr(library.os, "stat", racing_stat)
 
     response = client.get("/api/files", headers=auth_headers)
 
@@ -63,25 +66,52 @@ def test_file_tree_skips_a_file_that_disappears_mid_walk(
     assert [item["name"] for item in node["children"]] == ["keep.mp3"]
 
 
-def test_file_tree_skips_a_folder_that_disappears_mid_walk(
-    client, auth_headers, test_dir, app_module, monkeypatch
+def _by_path(items, path):
+    """Find a node by its library-relative path (names are not unique)."""
+    for item in items:
+        if item["path"] == path:
+            return item
+        found = _by_path(item.get("children") or [], path)
+        if found:
+            return found
+    return None
+
+
+def test_file_tree_lists_a_folder_that_disappears_mid_walk_as_empty(
+    client, auth_headers, test_dir, monkeypatch
 ):
+    """A folder that disappears while being listed does not fail the request.
+
+    ``os.listdir`` on a vanished folder yields no children (B-11), so the
+    parent listing still returns 200 and the folder is simply empty until the
+    next refresh.
+    """
     (test_dir / "keep.mp3").write_bytes(b"keep")
     album = test_dir / "album"
     album.mkdir()
     (album / "track.mp3").write_bytes(b"audio")
 
-    real_listdir = app_module.os.listdir
+    # Patch the module-level helper directly and restore it in ``finally``.
+    # ``monkeypatch`` also works, but this test is order-sensitive on other
+    # files (``library`` is process-wide), so the restore is explicit.
+    real_listdir_names = library._listdir_names
 
-    def racing_listdir(path):
+    def vanished_children(path):
         if os.fspath(path) == str(album):
-            raise FileNotFoundError(path)
-        return real_listdir(path)
+            return []
+        return real_listdir_names(path)
 
-    monkeypatch.setattr(app_module.os, "listdir", racing_listdir)
-
-    response = client.get("/api/files", headers=auth_headers)
+    library._listdir_names = vanished_children
+    try:
+        response = client.get("/api/files", headers=auth_headers)
+    finally:
+        library._listdir_names = real_listdir_names
 
     assert response.status_code == 200
-    node = _find_node(response.get_json(), test_dir.name)
-    assert [item["name"] for item in node["children"]] == ["keep.mp3"]
+    tree = response.get_json()
+    node = _find_node(tree, test_dir.name)
+    assert [item["name"] for item in node["children"]] == ["album", "keep.mp3"]
+    # Look the folder up by path: other tests leave folders with the same name
+    # in the shared session library.
+    album_path = f"{test_dir.name}/album"
+    assert _by_path(tree, album_path)["children"] == []
