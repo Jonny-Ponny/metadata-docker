@@ -268,6 +268,42 @@ def folder_summary():
         return _server_error(e)
 
 
+# GET /api/files/search?q=<text>&limit=<n>
+# Filename search across the whole library
+@bp.route('/api/files/search', methods=['GET'])
+@token_required
+def search_files():
+    """Search file and folder names across the library.
+
+    The SPA only lists folders the user opened, so it cannot search the rest
+    of the library on its own. Results stop at ``limit`` and the response says
+    whether the cut was hit.
+    """
+    query = (request.args.get('q') or '').strip()
+    if not query:
+        return jsonify({'error': 'Missing search query'}), 400
+
+    try:
+        limit = request.args.get('limit', library.DEFAULT_SEARCH_LIMIT, type=int)
+        limit = max(1, min(limit, library.DEFAULT_SEARCH_LIMIT))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid limit'}), 400
+
+    try:
+        # One extra row detects the cut without a second pass.
+        matches = library.search_tree(query, MUSIC_ROOT, limit=limit + 1)
+        truncated = len(matches) > limit
+        return jsonify({
+            'query': query,
+            'results': matches[:limit],
+            'truncated': truncated,
+        })
+    except PermissionError as e:
+        return _permission_error(e)
+    except Exception as e:
+        return _server_error(e)
+
+
 # POST /api/upload
 # Upload file or folder via drag and drop
 @bp.route('/api/upload', methods=['POST'])

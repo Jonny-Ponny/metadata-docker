@@ -24,6 +24,11 @@ from formats import IMAGE_EXTENSIONS, TEXT_EXTENSIONS, is_supported_audio
 from paths import is_within
 
 
+# Upper bound on `/api/files/search` hits. A broad query in a large library
+# must not return thousands of rows; the endpoint flags the cut instead.
+DEFAULT_SEARCH_LIMIT = 200
+
+
 def natural_key(text):
     """Convert text into a list of strings and numbers for natural sorting.
 
@@ -216,6 +221,52 @@ def _format_label(name):
     """Extension label used by the tooltip, e.g. ``FLAC`` or ``UNKNOWN``."""
     last_dot = name.rfind('.')
     return name[last_dot + 1:].upper() if last_dot != -1 else 'UNKNOWN'
+
+
+def search_tree(query, music_root, limit=DEFAULT_SEARCH_LIMIT):
+    """Find files and folders whose name contains *query*.
+
+    The tree is loaded lazily, so the browser only knows the folders the user
+    opened. Searching the whole library has to happen here, where every folder
+    is visible.
+
+    Each hit carries its ``parents`` (the folder paths above it) so the client
+    can expand and load those folders before rendering the match. Results stop
+    at *limit*; the caller reports ``truncated`` when the list is full.
+    """
+    needle = str(query or '').strip().lower()
+    if not needle:
+        return []
+
+    results = []
+
+    def walk(current_path, relative_path, ancestors):
+        if len(results) >= limit:
+            return
+        for entry, full, rel, info, is_directory in _scan_entries(
+            current_path, relative_path, music_root
+        ):
+            if len(results) >= limit:
+                return
+            if is_directory:
+                if needle in entry.lower():
+                    results.append({
+                        'name': entry,
+                        'path': rel,
+                        'type': 'directory',
+                        'size': 0,
+                        'parents': list(ancestors),
+                    })
+                # A folder may contain matches even when its own name misses.
+                walk(full, rel, [*ancestors, rel])
+            elif needle in entry.lower():
+                results.append(_classify_file(entry, rel, info) | {
+                    'type': 'file',
+                    'parents': list(ancestors),
+                })
+
+    walk(music_root, '', [])
+    return results
 
 
 def summarize_tree(current_path, relative_path, music_root):

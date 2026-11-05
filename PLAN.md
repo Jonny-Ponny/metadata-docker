@@ -93,9 +93,10 @@ No open items.
 - **Batch jobs** - move folder-wide tag/cover updates out of the request into
   `POST /api/jobs` + `GET /api/jobs/<id>` with progress, cancel and a list of
   failed files. Make uploads resumable so they survive a closed tab.
-- **Library-wide tag search** - replace the client-side filename filter with an
-  mtime-invalidated tag index, and reuse it for reports (missing fields, missing
-  covers, duplicate artist/title).
+- **Library-wide tag search** - filename search already covers the whole
+  library (`/api/files/search`). Extend it with an mtime-invalidated tag index
+  so titles, artists and albums match too, and reuse the index for reports
+  (missing fields, missing covers, duplicate artist/title).
 - **Multi-select** in the tree with batch actions, plus copy/paste tags from one
   file onto a selection.
 - **UX and performance** - smart-rename dry-run preview with a conflict
