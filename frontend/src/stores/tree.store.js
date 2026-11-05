@@ -49,6 +49,16 @@ import { readApiError } from "../utils/api.utils.js";
  * @property {number} file_size
  */
 
+/**
+ * Deep totals for one folder, as returned by `/api/files/summary`.
+ * @typedef {Object} FolderSummaryResponse
+ * @property {string} path
+ * @property {number} folder_count
+ * @property {number} file_count
+ * @property {number} file_size
+ * @property {Record<string, number>} format_counts
+ */
+
 /** @type {TreeState} */
 const initialState = {
   root: [],
@@ -66,6 +76,16 @@ export const childrenByPath = writable(new Map());
 // Latest cache contents, so a request can be answered without reading a store.
 /** @type {Map<string, TreeEntryLike[]>} */
 let cache = new Map();
+// Deep folder totals for the hover tooltip, keyed by folder path. A tooltip
+// walks the whole subtree on the server, so results are reused for the session
+// and dropped whenever a mutation touches the folder or one of its ancestors.
+/** @type {Map<string, FolderSummaryResponse>} */
+let summaryCache = new Map();
+// Folder tooltips that are being calculated right now.
+/** @type {Map<string, Promise<FolderSummaryResponse | null>>} */
+let summaryInFlight = new Map();
+/** @type {import("svelte/store").Writable<Map<string, FolderSummaryResponse>>} */
+export const folderSummaries = writable(new Map());
 // One promise per folder so concurrent expands share a request.
 /** @type {Map<string, Promise<void>>} */
 let inFlight = new Map();
@@ -207,6 +227,49 @@ export async function loadTree() {
 }
 
 /**
+ * Deep totals for a folder tooltip. Results are cached for the session; a
+ * concurrent hover reuses the in-flight request, and a failure resolves to
+ * `null` so the tooltip can fall back to the direct-child counts.
+ *
+ * @param {string} [path]
+ * @returns {Promise<FolderSummaryResponse | null>}
+ */
+export function loadFolderSummary(path = "") {
+  const key = path || "";
+  const cached = summaryCache.get(key);
+  if (cached) return Promise.resolve(cached);
+
+  const pending = summaryInFlight.get(key);
+  if (pending) return pending;
+
+  const requestGeneration = generation;
+  const query = key ? `?path=${encodeURIComponent(key)}` : "";
+  const request = fetch(`/api/files/summary${query}`, {
+    headers: getAuthHeaders(),
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(
+          await readApiError(response, "Could not size the folder"),
+        );
+      }
+      /** @type {FolderSummaryResponse} */
+      const body = await response.json();
+      if (requestGeneration !== generation) return null;
+      summaryCache.set(key, body);
+      folderSummaries.set(new Map(summaryCache));
+      return body;
+    })
+    .catch(() => null)
+    .finally(() => {
+      if (summaryInFlight.get(key) === request) summaryInFlight.delete(key);
+    });
+
+  summaryInFlight.set(key, request);
+  return request;
+}
+
+/**
  * Re-fetch folders whose contents a mutation may have changed. Folders that
  * were never loaded are skipped because nothing renders them yet.
  *
@@ -214,6 +277,10 @@ export async function loadTree() {
  * @returns {Promise<void>}
  */
 export async function refreshDirectories(paths = []) {
+  // A mutation changes the deep total of the folder and of every ancestor, so
+  // drop those tooltips instead of serving a stale size.
+  for (const path of paths) invalidateSummaries(path);
+
   /** @type {string[]} */
   const targets = [];
   for (const path of paths) {
@@ -224,6 +291,28 @@ export async function refreshDirectories(paths = []) {
   await Promise.all(
     targets.map((path) => loadDirectory(path, { force: true })),
   );
+}
+
+/**
+ * Drop the cached deep totals for a folder, its subtree and its ancestors.
+ * @param {string} path
+ */
+function invalidateSummaries(path) {
+  const key = path || "";
+  /** @type {Map<string, FolderSummaryResponse>} */
+  const next = new Map();
+  for (const [existing, summary] of summaryCache) {
+    // The folder itself and anything below it changed...
+    const below =
+      existing === key || (key === "" ? true : existing.startsWith(`${key}/`));
+    // ...and so did the total of every folder above it.
+    const above =
+      key !== "" && key.startsWith(existing === "" ? "" : `${existing}/`);
+    if (below || above) continue;
+    next.set(existing, summary);
+  }
+  summaryCache = next;
+  folderSummaries.set(new Map(summaryCache));
 }
 
 /**
@@ -240,6 +329,7 @@ export function invalidateDirectory(path) {
     if (existing === key || existing.startsWith(prefix)) continue;
     next.set(existing, entries);
   }
+  invalidateSummaries(key);
   publish(next);
 }
 
@@ -247,6 +337,9 @@ export function invalidateDirectory(path) {
 export function resetTree() {
   generation += 1;
   inFlight = new Map();
+  summaryInFlight = new Map();
+  summaryCache = new Map();
+  folderSummaries.set(new Map());
   publish(new Map());
   tree.set({ ...initialState });
 }

@@ -17,11 +17,17 @@
     applyRenamingScheme,
     toast,
     childrenByPath,
+    folderSummaries,
+    loadFolderSummary,
     formatFolderSummary,
     isAudioFile,
     getAudioFormatLabel,
     readApiError,
   } from "../utils/index.js";
+
+  // How long the pointer must rest on a folder before its deep totals are
+  // requested. Crossing several rows must not start several subtree walks.
+  const HOVER_SUMMARY_DELAY_MS = 150;
 
   /**
    * One node of the library tree, as returned by /api/files.
@@ -116,16 +122,64 @@
     ),
   );
 
-  // Calculate hint for folders. The counts come with the folder listing, so a
-  // tooltip no longer walks the subtree just to show a size.
+  // Deep totals for the tooltip. The listing only knows direct children, so
+  // the real recursive size is fetched on hover and cached for the session.
+  // `summaryRequested` debounces the sweep of mouseenter events when the
+  // pointer crosses several rows.
+  let summaryRequested = $state(false);
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let summaryTimer = null;
+
+  let deepSummary = $derived(
+    item.type === "directory" ? $folderSummaries.get(item.path) : undefined,
+  );
+
+  let summaryLoading = $derived(
+    item.type === "directory" && summaryRequested && deepSummary === undefined,
+  );
+
+  function handleDirectoryEnter() {
+    if (item.type !== "directory" || deepSummary) return;
+    if (summaryTimer) return;
+    summaryTimer = setTimeout(() => {
+      summaryTimer = null;
+      summaryRequested = true;
+      loadFolderSummary(item.path).finally(() => {
+        summaryRequested = !!$folderSummaries.get(item.path);
+      });
+    }, HOVER_SUMMARY_DELAY_MS);
+  }
+
+  function handleDirectoryLeave() {
+    if (!summaryTimer) return;
+    clearTimeout(summaryTimer);
+    summaryTimer = null;
+  }
+
+  $effect(() => () => {
+    if (summaryTimer) clearTimeout(summaryTimer);
+  });
+
+  // Tooltip for folders. Deep totals replace the direct-child counts as soon as
+  // they arrive; "Calculating…" covers the walk in between.
   let folderSummaryText = $derived(
     item.type === "directory"
-      ? formatFolderSummary({
-          children,
-          folder_count: item.folder_count,
-          file_count: item.file_count,
-          file_size: item.file_size,
-        })
+      ? formatFolderSummary(
+          deepSummary
+            ? {
+                folder_count: deepSummary.folder_count,
+                file_count: deepSummary.file_count,
+                file_size: deepSummary.file_size,
+                format_counts: deepSummary.format_counts,
+              }
+            : {
+                children,
+                folder_count: item.folder_count,
+                file_count: item.file_count,
+                file_size: item.file_size,
+              },
+          { loading: summaryLoading },
+        )
       : "", // Return empty string for files (non-folders)
   );
 
@@ -519,6 +573,8 @@
       class:selected={item.path === selectedFolder}
       style="--level: {level}"
       title={folderSummaryText}
+      onmouseenter={handleDirectoryEnter}
+      onmouseleave={handleDirectoryLeave}
       onclick={handleDirectoryClick}
       oncontextmenu={(e) => {
         e.preventDefault();

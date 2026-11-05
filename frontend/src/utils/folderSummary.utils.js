@@ -112,17 +112,26 @@ function countFormats(children) {
   return formatCounts;
 }
 
+/** Format lines kept in a tooltip before the rest are collapsed. */
+export const MAX_FORMAT_LINES = 5;
+
 /**
  * Tooltip text for a folder row.
  *
- * Uses `folder_count`/`file_count`/`file_size` from the folder listing when
- * they are present, so it is O(1) even when the subtree is not loaded. Returns
- * `"Empty folder"` for a folder with no direct children.
+ * Uses the deep totals from `/api/files/summary` when they are available and
+ * falls back to the direct-child counts from the folder listing otherwise.
+ * `loading` prepends a "Calculating…" line so the tooltip does not appear to
+ * settle on a number and then change.
  *
- * @param {{ children?: TreeEntry[] | null, folder_count?: number, file_count?: number, file_size?: number }} folderNode
+ * At most `MAX_FORMAT_LINES` format lines are shown; the rest are collapsed
+ * into a "+N more" line so a folder with many extensions cannot grow the
+ * tooltip past the viewport.
+ *
+ * @param {{ children?: TreeEntry[] | null, folder_count?: number, file_count?: number, file_size?: number, format_counts?: Record<string, number> }} folderNode
+ * @param {{ loading?: boolean }} [options]
  * @returns {string}
  */
-export function formatFolderSummary(folderNode) {
+export function formatFolderSummary(folderNode, { loading = false } = {}) {
   const summary = getFolderSummary(
     /** @type {TreeEntry} */ ({
       name: "",
@@ -131,18 +140,28 @@ export function formatFolderSummary(folderNode) {
       type: "directory",
     }),
   );
-  if (!summary || summary.totalItems === 0) return "Empty folder";
 
-  const lines = [formatFileSize(summary.totalSize)];
+  if (!summary || summary.totalItems === 0) {
+    return loading ? "Calculating…" : "Empty folder";
+  }
+
+  const lines = [];
+  if (loading) lines.push("Calculating…");
+
+  lines.push(formatFileSize(summary.totalSize));
   if (summary.folderCount > 0) {
     lines.push(`folders x${summary.folderCount}`);
   }
 
-  const formats = Object.entries(summary.formatCounts).sort(
-    (a, b) => b[1] - a[1],
+  const counts = folderNode.format_counts ?? summary.formatCounts;
+  const formats = Object.entries(counts).sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
   );
-  for (const [format, count] of formats) {
+  for (const [format, count] of formats.slice(0, MAX_FORMAT_LINES)) {
     lines.push(`${format.toLowerCase()} x${count}`);
+  }
+  if (formats.length > MAX_FORMAT_LINES) {
+    lines.push(`+${formats.length - MAX_FORMAT_LINES} more formats`);
   }
   return lines.join("\n");
 }

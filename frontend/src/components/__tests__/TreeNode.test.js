@@ -389,7 +389,100 @@ describe("TreeNode", () => {
 
     expect(
       /** @type {HTMLElement} */ (container.querySelector(".directory")).title,
-    ).toBe("4 KB\nfolders x1\nmp3 x1\njpg x1\nflac x1");
+    ).toBe("4 KB\nfolders x1\nflac x1\njpg x1\nmp3 x1");
+  });
+
+  it("collapses the format list when a folder has many extensions", () => {
+    /** @type {TreeItem[]} */
+    const many = ["mp3", "flac", "ogg", "m4a", "wav", "aiff", "opus"].map(
+      (ext, index) => ({
+        name: `track-${index}.${ext}`,
+        path: `folder/track-${index}.${ext}`,
+        type: "file",
+        file_type: "audio",
+        size: 1024,
+      }),
+    );
+    const { container } = setup({ ...folderItem, children: many });
+
+    const title = /** @type {HTMLElement} */ (
+      container.querySelector(".directory")
+    ).title;
+    const lines = title.split("\n");
+    // size + five formats + the collapsed remainder (no subfolder line here)
+    expect(lines).toHaveLength(7);
+    expect(lines[1]).toBe("aiff x1");
+    expect(lines[6]).toBe("+2 more formats");
+  });
+
+  it("shows Calculating… while the deep totals load, then the deep figures", async () => {
+    vi.useFakeTimers();
+    /** @type {(value: unknown) => void} */
+    let release = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      ),
+    );
+
+    /** @type {TreeItem} */
+    const lazy = {
+      name: "folder",
+      path: "folder",
+      type: "directory",
+      has_children: true,
+      folder_count: 1,
+      file_count: 2,
+      file_size: 100,
+    };
+    const { container } = setup(lazy);
+    const row = /** @type {HTMLElement} */ (
+      container.querySelector(".directory")
+    );
+
+    await fireEvent.mouseEnter(row);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(row.title).toBe("Calculating…\n100 B\nfolders x1");
+
+    release(
+      jsonResponse(200, {
+        path: "folder",
+        folder_count: 4,
+        file_count: 40,
+        file_size: 2048,
+        format_counts: { FLAC: 40 },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(10);
+    expect(row.title).toBe("2 KB\nfolders x4\nflac x40");
+    vi.useRealTimers();
+  });
+
+  it("does not request the summary before the hover delay", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(200, {})));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = setup({
+      name: "folder",
+      path: "folder/hover",
+      type: "directory",
+      has_children: true,
+    });
+    const row = /** @type {HTMLElement} */ (
+      container.querySelector(".directory")
+    );
+
+    await fireEvent.mouseEnter(row);
+    await vi.advanceTimersByTimeAsync(100);
+    await fireEvent.mouseLeave(row);
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it("renders sorted children when the folder is expanded", () => {
