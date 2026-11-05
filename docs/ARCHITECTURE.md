@@ -37,7 +37,8 @@ backend/
   errors.py              AccessDenied, public error mapping, JSON handlers
   paths.py               containment, safe_path, unique/generated names
   auth.py                login, token_required, rate limiter
-  library.py             build_tree, build_directory, natural_key, classification
+  library.py             build_tree, build_directory, summarize_tree,
+                         search_tree, natural_key, classification
   renaming.py            scheme parsing and name generation
   formats.py             audio format registry, image/text registries
   tag_backends.py        FIELD_SCHEMA + ID3/FLAC/Vorbis/MP4 backends
@@ -50,8 +51,9 @@ backend/
   logger_config.py       logging setup
   routes/
     __init__.py          register_blueprints(app)
-    files.py             listing (full tree and per-folder), upload, storage,
-                         mkdir, rename, move, copy, delete, smart rename
+    files.py             listing (full tree, per-folder, summary, search),
+                         upload, storage, mkdir, rename, move, copy, delete,
+                         smart rename
     tags.py              metadata, cover art, audio/image serving
     text.py              .txt/.lrc read and atomic save
     logs.py              log read/clear
@@ -148,14 +150,28 @@ vanishes mid-walk yields an empty listing rather than a 500.
 
 Every directory node carries `folder_count`, `file_count` and `file_size`
 describing its **direct** children, computed from the listing already in hand.
-They feed the folder tooltip without a recursive walk; `file_size` is not a
-deep total. Directory entries from `/api/files/dir` have no `children` and set
+Directory entries from `/api/files/dir` have no `children` and set
 `has_children` so the client can tell an empty folder from an unloaded one.
 
+The tooltip still shows **deep** totals. Hovering a folder for 150 ms requests
+`GET /api/files/summary?path=<folder>` (`library.summarize_tree`), which walks
+that subtree once and returns the recursive folder/file counts, total size and
+per-extension counts. The client shows `Calculating…` above the direct-child
+numbers until that answer arrives, caches the result for the session, and drops
+it whenever a mutation touches the folder or one of its ancestors. At most five
+format lines are shown; the rest collapse into `+N more formats` so a folder
+with many extensions cannot grow the tooltip past the viewport.
+
+Search is server-side: `GET /api/files/search?q=<text>&limit=<n>`
+(`library.search_tree`) walks the library and returns name matches with the
+`parents` chain above each hit. Results stop at `DEFAULT_SEARCH_LIMIT` (200)
+and the response sets `truncated`. The SPA debounces input by 250 ms,
+cancels a superseded request, loads the folders above every hit and expands
+them, so a match inside a collapsed folder is still reachable. An active search
+never shows "No music files found"; it shows `No matches for "<query>"`.
+
 On the client, `stores/tree.store.js` keeps the per-path cache, one in-flight
-request per folder, and re-fetches only the folders a mutation touched. Search
-and the recursive folder overview only see folders that have been loaded;
-library-wide search needs the tag index in [PLAN.md](../PLAN.md).
+request per folder, and re-fetches only the folders a mutation touched.
 
 Symlink policy: symlinked directories are never listed, symlinked files are
 listed only when they resolve inside the library, and bulk tag/cover
