@@ -246,7 +246,7 @@ The frontend is built once per build in a stage pinned to `$BUILDPLATFORM`, so
 the bundle is not recompiled under QEMU for each target. The bundle is
 platform-independent and is copied into every architecture's final stage. That
 stage stays on `node:22-bookworm-slim`: Node 24 and newer publish no
-`linux/arm/v7` image, while the final `python:3.12-alpine` stage does. The
+`linux/arm/v7` image, while the final `python:3.15-alpine` stage does. The
 frontend installs with `npm ci` from `frontend/package-lock.json`, and
 `frontend/.nvmrc` plus the `engines` field in `frontend/package.json` document
 the Node range the tooling needs.
