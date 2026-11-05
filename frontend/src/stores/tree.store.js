@@ -10,7 +10,7 @@
 // Paths are library-relative with `/` separators and no leading slash. The
 // library root is `""`; a child path is `<parent>/<name>`.
 
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 
 import { getAuthHeaders } from "./auth.store.js";
 import { readApiError } from "../utils/api.utils.js";
@@ -91,6 +91,121 @@ export const folderSummaries = writable(new Map());
 let inFlight = new Map();
 // Bumped on every reset so a late response cannot repopulate a cleared cache.
 let generation = 0;
+
+/**
+ * Library-wide filename search state. The browser only lists folders the user
+ * opened, so a real search runs on the server.
+ * @typedef {Object} SearchHit
+ * @property {string} name
+ * @property {string} path
+ * @property {"file" | "directory"} type
+ * @property {string} [file_type]
+ * @property {number} [size]
+ * @property {string[]} parents folder paths above the hit
+ */
+
+/**
+ * @typedef {Object} SearchState
+ * @property {string} query the query the current results belong to
+ * @property {SearchHit[]} results
+ * @property {boolean} truncated
+ * @property {boolean} loading
+ * @property {string} [error]
+ */
+
+export const searchResults = writable(
+  /** @type {SearchState} */ ({
+    query: "",
+    results: [],
+    truncated: false,
+    loading: false,
+  }),
+);
+
+/** In-flight search request, cancelled when the query changes. */
+/** @type {AbortController | null} */
+let activeSearch = null;
+
+/**
+ * Search file and folder names across the whole library.
+ *
+ * The browser only knows the folders the user opened, so this asks the server.
+ * Folders above each hit are loaded afterwards so the match can be shown
+ * inside the normal tree.
+ *
+ * @param {string} query
+ * @returns {Promise<SearchState>}
+ */
+export async function searchLibrary(query) {
+  const trimmed = String(query || "").trim();
+  if (!trimmed) {
+    activeSearch?.abort();
+    activeSearch = null;
+    searchResults.set({
+      query: "",
+      results: [],
+      truncated: false,
+      loading: false,
+    });
+    return { query: "", results: [], truncated: false, loading: false };
+  }
+
+  activeSearch?.abort();
+  const controller = new AbortController();
+  activeSearch = controller;
+  const requestGeneration = generation;
+
+  // Keep the previous results visible while the next query is in flight; the
+  // loading flag is what the UI reacts to.
+  searchResults.update((state) => ({ ...state, loading: true }));
+
+  try {
+    const response = await fetch(
+      `/api/files/search?q=${encodeURIComponent(trimmed)}`,
+      { headers: getAuthHeaders(), signal: controller.signal },
+    );
+    if (!response.ok) {
+      throw new Error(await readApiError(response, "Search failed"));
+    }
+    /** @type {{ results: SearchHit[], truncated: boolean }} */
+    const body = await response.json();
+    if (requestGeneration !== generation || activeSearch !== controller) {
+      return get(searchResults);
+    }
+
+    const next = {
+      query: trimmed,
+      results: body.results || [],
+      truncated: !!body.truncated,
+      loading: false,
+    };
+    searchResults.set(next);
+
+    // Make the hits renderable in the normal tree: every folder above a hit
+    // has to be loaded (and expanded) or the row would have no place to sit.
+    const folders = new Set();
+    for (const hit of next.results) {
+      for (const parent of hit.parents) folders.add(parent);
+      if (hit.type === "directory") folders.add(hit.path);
+    }
+    await Promise.all(
+      [...folders].map((path) => loadDirectory(path).catch(() => undefined)),
+    );
+    return next;
+  } catch (error) {
+    if (controller.signal.aborted) return get(searchResults);
+    searchResults.set({
+      query: trimmed,
+      results: [],
+      truncated: false,
+      loading: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return get(searchResults);
+  } finally {
+    if (activeSearch === controller) activeSearch = null;
+  }
+}
 
 /**
  * @param {string | null | undefined} parentPath
@@ -340,6 +455,14 @@ export function resetTree() {
   summaryInFlight = new Map();
   summaryCache = new Map();
   folderSummaries.set(new Map());
+  activeSearch?.abort();
+  activeSearch = null;
+  searchResults.set({
+    query: "",
+    results: [],
+    truncated: false,
+    loading: false,
+  });
   publish(new Map());
   tree.set({ ...initialState });
 }

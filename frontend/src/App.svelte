@@ -44,7 +44,13 @@
     resetTree,
     parentPath,
     getChildren,
+    searchResults,
+    searchLibrary,
+    childrenByPath,
   } from "./utils/index.js";
+
+  // Wait for the user to stop typing before asking the server.
+  const SEARCH_DEBOUNCE_MS = 250;
 
   import "./app.css";
 
@@ -176,14 +182,37 @@
   // ========== SEARCH STATE ==========
   let searchQuery = $state("");
 
+  // The tree is loaded lazily, so a local filter can only see the folders the
+  // user opened. A non-empty query is answered by the server instead.
+  $effect(() => {
+    const query = searchQuery.trim();
+    if (!query) return;
+    const timer = setTimeout(() => {
+      searchLibrary(query).then((state) => {
+        // Expand the folders above each hit so the matches are visible.
+        for (const hit of state.results) {
+          for (const parent of hit.parents) expandedDirs.add(parent);
+        }
+      });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  });
+
+  // Hits from the last completed search, grouped by their own path.
+  let searchHitPaths = $derived(
+    new Set($searchResults.results.map((hit) => hit.path)),
+  );
+
   let showHelpModal = $state(false);
 
   let showLogViewer = $state(false);
 
-  // First apply search filter, then sort
+  // While searching, show only the matches (and the folders leading to them).
+  // The full tree otherwise. `$childrenByPath` is read so the view refreshes
+  // once the folders above a hit have loaded.
   let filteredTreeData = $derived(
-    searchQuery && searchQuery.trim() !== ""
-      ? filterTreeBySearch(treeData, searchQuery)
+    searchQuery.trim() !== ""
+      ? filterTreeToHits(treeData, searchHitPaths, $childrenByPath)
       : treeData,
   );
 
@@ -1342,50 +1371,37 @@
 
   // ========== SEARCH FUNCTION ==========
   /**
-   * Filter the tree by file or folder name.
+   * Keep only the folders leading to a search hit.
    *
-   * Only folders the user has opened are searched: the tree is loaded lazily,
-   * so anything below a collapsed folder has not been fetched. A library-wide
-   * search needs the tag index in PLAN.md.
+   * A folder is kept when it is a hit itself or contains one, so the matches
+   * render in their normal place in the tree with their ancestor folders.
+   * `folderIndex` is the reactive `childrenByPath` map: reading it keeps the
+   * filtered view in sync as the search loads the folders above each hit.
    * @param {TreeItem[]} nodes
-   * @param {string} query
-   * @returns {TreeItem[] | null}
+   * @param {Set<string>} hitPaths
+   * @param {Map<string, TreeItem[]>} folderIndex
+   * @returns {TreeItem[]}
    */
-  function filterTreeBySearch(nodes, query) {
-    if (!query || query.trim() === "") return null;
-
-    const lowerQuery = query.toLowerCase().trim();
+  function filterTreeToHits(nodes, hitPaths, folderIndex) {
+    if (hitPaths.size === 0) return [];
 
     /**
      * @param {TreeItem} node
      * @returns {TreeItem | null}
      */
     function filterNode(node) {
-      // Check if current node matches
-      const nameMatch = node.name.toLowerCase().includes(lowerQuery);
-
-      // For directories, check children
-      if (node.type === "directory") {
-        const cached = getChildren(node.path);
-        const children = cached.length ? cached : (node.children ?? []);
-        if (children.length) {
-          const filteredChildren = children
-            .map(filterNode)
-            .filter((child) => child !== null);
-
-          // Include directory if it matches OR has matching children
-          if (nameMatch || filteredChildren.length > 0) {
-            return {
-              ...node,
-              children:
-                filteredChildren.length > 0 ? filteredChildren : children,
-            };
-          }
-        }
+      if (node.type !== "directory") {
+        return hitPaths.has(node.path) ? node : null;
       }
 
-      // For files or directories without matching children
-      return nameMatch ? node : null;
+      const cached = folderIndex.get(node.path) ?? getChildren(node.path);
+      const children = cached.length ? cached : (node.children ?? []);
+      const kept = children.map(filterNode).filter((child) => child !== null);
+
+      if (hitPaths.has(node.path) || kept.length > 0) {
+        return { ...node, children: kept.length > 0 ? kept : children };
+      }
+      return null;
     }
 
     return nodes.map(filterNode).filter((node) => node !== null);
@@ -1900,7 +1916,7 @@
             </div>
           {:else}
             <div class="file-tree-container">
-              {#if treeData.length === 0}
+              {#if sortedTreeData.length === 0}
                 <div class="empty-state">
                   <svg
                     width="48"
@@ -1914,7 +1930,17 @@
                       d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
                     />
                   </svg>
-                  <p>No music files found</p>
+                  {#if searchQuery.trim() !== ""}
+                    <p>
+                      {#if $searchResults.loading}
+                        Searching…
+                      {:else}
+                        No matches for "{searchQuery.trim()}"
+                      {/if}
+                    </p>
+                  {:else}
+                    <p>No music files found</p>
+                  {/if}
                 </div>
               {:else}
                 <!-- Update TreeNode usage to pass folder path data attributes -->

@@ -14,6 +14,8 @@ import {
   parentPath,
   refreshDirectories,
   resetTree,
+  searchLibrary,
+  searchResults,
   tree,
 } from "../tree.store.js";
 
@@ -337,5 +339,123 @@ describe("folder summaries", () => {
     resetTree();
 
     expect(get(folderSummaries).size).toBe(0);
+  });
+});
+
+describe("searchLibrary", () => {
+  /** @param {string} query @param {Record<string, unknown>[]} results */
+  function stubSearch(query, results, truncated = false) {
+    replies.set(
+      `/api/files/search?q=${encodeURIComponent(query)}`,
+      jsonResponse({ query, results, truncated }),
+    );
+  }
+
+  it("clears the results for an empty query without a request", async () => {
+    await searchLibrary("   ");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(get(searchResults)).toEqual({
+      query: "",
+      results: [],
+      truncated: false,
+      loading: false,
+    });
+  });
+
+  it("stores the matches and loads the folders above them", async () => {
+    stubSearch("song", [
+      {
+        name: "song.mp3",
+        path: "Albums/CD2/song.mp3",
+        type: "file",
+        file_type: "audio",
+        size: 20,
+        parents: ["Albums", "Albums/CD2"],
+      },
+    ]);
+    stubFolder("Albums", []);
+    stubFolder("Albums/CD2", []);
+
+    const state = await searchLibrary("song");
+
+    expect(state.results).toHaveLength(1);
+    expect(get(searchResults).query).toBe("song");
+    expect(isDirectoryLoaded("Albums"));
+    expect(isDirectoryLoaded("Albums/CD2"));
+  });
+
+  it("reports truncation from the server", async () => {
+    stubSearch(
+      "a",
+      [{ name: "a.mp3", path: "a.mp3", type: "file", parents: [] }],
+      true,
+    );
+
+    const state = await searchLibrary("a");
+
+    expect(state.truncated).toBe(true);
+  });
+
+  it("ignores a stale response after a newer query", async () => {
+    /** @type {((value: unknown) => void)[]} */
+    const releases = [];
+    fetchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releases.push(resolve);
+        }),
+    );
+
+    const first = searchLibrary("old");
+    const second = searchLibrary("new");
+
+    // Answer the newer query first, then the stale one.
+    releases[1](
+      jsonResponse({
+        results: [
+          { name: "new.mp3", path: "new.mp3", type: "file", parents: [] },
+        ],
+        truncated: false,
+      }),
+    );
+    releases[0](
+      jsonResponse({
+        results: [
+          { name: "old.mp3", path: "old.mp3", type: "file", parents: [] },
+        ],
+        truncated: false,
+      }),
+    );
+    await Promise.all([first, second]);
+
+    expect(get(searchResults).query).toBe("new");
+    expect(get(searchResults).results.map((hit) => hit.name)).toEqual([
+      "new.mp3",
+    ]);
+  });
+
+  it("keeps an error message instead of throwing", async () => {
+    replies.set(
+      "/api/files/search?q=boom",
+      jsonResponse({ error: "search exploded" }, { status: 500 }),
+    );
+
+    const state = await searchLibrary("boom");
+
+    expect(state.results).toEqual([]);
+    expect(state.error).toBe("search exploded");
+    expect(state.loading).toBe(false);
+  });
+
+  it("is cleared by resetTree", async () => {
+    stubSearch("song", [
+      { name: "song.mp3", path: "song.mp3", type: "file", parents: [] },
+    ]);
+    await searchLibrary("song");
+
+    resetTree();
+
+    expect(get(searchResults).results).toEqual([]);
   });
 });

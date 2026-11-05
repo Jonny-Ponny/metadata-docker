@@ -213,6 +213,9 @@ function rootDirectoryCalls() {
   );
 }
 
+/** @type {{ results: unknown[], truncated: boolean } | null} */
+let searchReply = null;
+
 /**
  * The lazy endpoint serves one folder. Derive it from the same fixture tree so
  * every existing test keeps its full hierarchy.
@@ -354,6 +357,11 @@ function stubApi() {
           : makeDirectoryReply(directoryPathOf(url)),
       );
     }
+    if (url.startsWith("/api/files/search?")) {
+      return Promise.resolve(
+        makeResponse(searchReply ?? { results: [], truncated: false }),
+      );
+    }
     if (url === "/api/addons") {
       return Promise.resolve(makeResponse({ fetchers: [] }));
     }
@@ -447,6 +455,7 @@ describe("App", () => {
     filesReply = () => makeResponse(makeTree());
     apiOverrides = {};
     treeOverride = null;
+    searchReply = null;
     stubApi();
   });
 
@@ -841,6 +850,19 @@ describe("App", () => {
 
   it("filters the tree by search and clears it", async () => {
     isAuthenticated.set(true);
+    searchReply = {
+      results: [
+        {
+          name: "loose.flac",
+          path: "loose.flac",
+          type: "file",
+          file_type: "audio",
+          size: 30,
+          parents: [],
+        },
+      ],
+      truncated: false,
+    };
     const view = await renderAuthenticated();
     const search = /** @type {HTMLInputElement} */ (
       screen.getByPlaceholderText("Search files...")
@@ -848,6 +870,9 @@ describe("App", () => {
 
     await fireEvent.input(search, { target: { value: "loose" } });
 
+    await waitFor(() =>
+      expect(callsStartingWith("/api/files/search?")).toHaveLength(1),
+    );
     await waitFor(() => expect(node(view, "loose.flac")).toBeTruthy());
     expect(
       view.container.querySelector('[data-folder-path="Albums"]'),
@@ -857,6 +882,49 @@ describe("App", () => {
 
     await waitFor(() => expect(node(view, "Albums")).toBeTruthy());
     expect(search.value).toBe("");
+  });
+
+  it("searches the whole library and expands the folders above a hit", async () => {
+    isAuthenticated.set(true);
+    searchReply = {
+      results: [
+        {
+          name: "song.mp3",
+          path: "Albums/song.mp3",
+          type: "file",
+          file_type: "audio",
+          size: 20,
+          parents: ["Albums"],
+        },
+      ],
+      truncated: false,
+    };
+    const view = await renderAuthenticated();
+    const search = /** @type {HTMLInputElement} */ (
+      screen.getByPlaceholderText("Search files...")
+    );
+
+    // Albums starts collapsed; the hit must still be reachable.
+    await fireEvent.input(search, { target: { value: "song" } });
+
+    await waitFor(() => expect(node(view, "Albums/song.mp3")).toBeTruthy());
+    expect(callsStartingWith("/api/files/dir?path=Albums")).toHaveLength(1);
+  });
+
+  it("says no matches instead of an empty library during a search", async () => {
+    isAuthenticated.set(true);
+    searchReply = { results: [], truncated: false };
+    await renderAuthenticated();
+    const search = /** @type {HTMLInputElement} */ (
+      screen.getByPlaceholderText("Search files...")
+    );
+
+    await fireEvent.input(search, { target: { value: "nothing-here" } });
+
+    expect(
+      await screen.findByText('No matches for "nothing-here"'),
+    ).toBeTruthy();
+    expect(screen.queryByText("No music files found")).toBeNull();
   });
 
   it("clears the search with Escape", async () => {
