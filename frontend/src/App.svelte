@@ -37,6 +37,13 @@
     startDrop,
     buildExistingIndex,
     loadUploadLimit,
+    tree,
+    loadTree,
+    loadDirectory,
+    refreshDirectories,
+    resetTree,
+    parentPath,
+    getChildren,
   } from "./utils/index.js";
 
   import "./app.css";
@@ -54,6 +61,10 @@
    * @property {string} [file_type]
    * @property {number} [size]
    * @property {TreeItem[]} [children]
+   * @property {boolean} [has_children]
+   * @property {number} [folder_count]
+   * @property {number} [file_count]
+   * @property {number} [file_size]
    */
 
   /**
@@ -81,10 +92,13 @@
 
   // ========== STATE VARIABLES ==========
   let isLoading = $state(false);
-  let treeData = $state(/** @type {TreeItem[]} */ ([])); // Store the file tree
+  // The tree lives in the tree store, which loads folders lazily. `treeData`
+  // is the library root from that store; subtrees come from the path cache, so
+  // selection, search and the upload index still see what is loaded.
+  let treeData = $derived($tree.root);
   let error = $state("");
   // The authenticated effect loads the tree once. Without this guard an empty
-  // library re-runs the effect on every `treeData = []`, looping /api/files.
+  // library re-runs the effect on every reset, looping /api/files/dir.
   let treeRequested = false;
 
   // Panel states
@@ -189,10 +203,27 @@
   let isTextDrag = $state(false);
 
   /**
-   * @param {TreeItem} node
-   * @returns {FolderAudioFile[]}
+   * @param {TreeItem[]} nodes
+   * @param {string} path
+   * @returns {TreeItem | null}
    */
-  function collectAudioFilesRecursively(node) {
+  function findNodeByPath(nodes, path) {
+    for (const node of nodes) {
+      if (node.path === path) return node;
+      const found = findNodeByPath(node.children ?? [], path);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  /**
+   * Collect audio files under a folder. Folders that the lazy cache has not
+   * loaded yet are fetched first, so the recursive overview still sees the
+   * whole subtree instead of only the folders the user expanded.
+   * @param {TreeItem} node
+   * @returns {Promise<FolderAudioFile[]>}
+   */
+  async function collectAudioFilesRecursively(node) {
     /** @type {FolderAudioFile[]} */
     const result = [];
     const limit = 500; // safety limit
@@ -201,7 +232,7 @@
      * @param {TreeItem} currentNode
      * @param {string} [currentRelativePath]
      */
-    function walk(currentNode, currentRelativePath = "") {
+    async function walk(currentNode, currentRelativePath = "") {
       if (result.length >= limit) return;
 
       if (currentNode.type === "file" && currentNode.file_type === "audio") {
@@ -213,67 +244,98 @@
         });
       }
 
-      if (currentNode.type === "directory" && currentNode.children) {
-        for (const child of currentNode.children) {
-          if (result.length >= limit) break;
-          const childRelPath = currentRelativePath
-            ? `${currentRelativePath}/${child.name}`
-            : child.name;
-          walk(child, childRelPath);
+      if (currentNode.type !== "directory") return;
+
+      // Prefer the lazy cache; fall back to a nested tree from /api/files.
+      /** @type {TreeItem[]} */
+      let next = getChildren(currentNode.path);
+      if (
+        !next.length &&
+        currentNode.children == null &&
+        currentNode.has_children !== false
+      ) {
+        try {
+          await loadDirectory(currentNode.path);
+          next = getChildren(currentNode.path);
+        } catch (e) {
+          console.warn("Could not load a folder for the overview:", e);
         }
+      }
+      if (!next.length) {
+        next = /** @type {TreeItem[]} */ (currentNode.children ?? []);
+      }
+
+      for (const child of next) {
+        if (result.length >= limit) break;
+        const childRelPath = currentRelativePath
+          ? `${currentRelativePath}/${child.name}`
+          : child.name;
+        await walk(child, childRelPath);
       }
     }
 
-    walk(node, "");
+    await walk(node, "");
     return result;
   }
 
-  /**
-   * @returns {FolderAudioFile[]}
-   */
-  function getAudioFilesInFolder() {
+  // Folder overview list. The direct-children case is derived from the tree,
+  // so it is correct on the first render after a folder loads; the recursive
+  // case fills in the list from the effect below once nested folders arrive.
+  let directAudioFiles = $derived.by(() => {
     if (!selectedFolder) return [];
-
-    /**
-     * @param {TreeItem[]} nodes
-     * @param {string} path
-     * @returns {TreeItem | null}
-     */
-    function findNode(nodes, path) {
-      for (const node of nodes) {
-        if (node.path === path) return node;
-        if (node.children) {
-          const found = findNode(node.children, path);
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-
-    const folderNode = findNode(treeData, selectedFolder);
-    if (!folderNode) return [];
-
-    if ($settings.recursiveOverview) {
-      const files = collectAudioFilesRecursively(folderNode);
-      if (files.length >= 500) {
-        toast.warning(
-          "Folder overview limited to 500 files. Some subfolders may be incomplete.",
-        );
-      }
-      return files;
-    }
-
-    // Non‑recursive: direct children only, relativePath is just the filename
-    return (folderNode.children ?? [])
+    return getChildren(selectedFolder)
       .filter((child) => child.type === "file" && child.file_type === "audio")
       .map((child) => ({
         path: child.path,
         name: child.name,
         relativePath: child.name,
       }));
-  }
+  });
 
-  let audioFilesInFolder = $derived(getAudioFilesInFolder());
+  let recursiveAudioFiles = $state(
+    /** @type {{ folderPath: string, files: FolderAudioFile[] } | null} */ (
+      null
+    ),
+  );
+
+  let audioFilesInFolder = $derived(
+    $settings.recursiveOverview
+      ? // Until the recursive walk finishes, report nothing rather than the
+        // direct-only list, which would make the overview fetch the same files
+        // twice as the list grows.
+        recursiveAudioFiles?.folderPath === selectedFolder
+        ? recursiveAudioFiles.files
+        : []
+      : directAudioFiles,
+  );
+
+  $effect(() => {
+    if (!selectedFolder || !$settings.recursiveOverview) {
+      recursiveAudioFiles = null;
+      return;
+    }
+    const folderPath = selectedFolder;
+    // Once the walk for this folder is complete there is nothing left to do.
+    if (recursiveAudioFiles?.folderPath === folderPath) return;
+    // Reading the tree makes this effect re-run after each folder load, so a
+    // recursive overview keeps resolving deeper until the subtree is complete.
+    const folderNode = findNodeByPath(treeData, folderPath);
+    if (!folderNode) return;
+
+    let cancelled = false;
+    collectAudioFilesRecursively(folderNode).then((files) => {
+      if (cancelled) return;
+      recursiveAudioFiles = { folderPath, files };
+      if (files.length >= 500) {
+        toast.warning(
+          "Folder overview limited to 500 files. Some subfolders may be incomplete.",
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
 
   // ========== DRAG AND DROP HANDLERS ==========
   // Only `dragenter` arms the overlay; `dragover` merely keeps an active drag
@@ -794,18 +856,22 @@
       })
       .filter((entry) => entry !== null);
 
-    startDrop({
-      entries,
-      files,
-      targetPath,
-      existing: buildExistingIndex(treeData),
-      conflict: $settings.uploadDuplicates || "skip-identical",
-      onComplete: loadFileTree,
-    }).catch((error) => {
-      console.error("Upload failed:", error);
-      toast.error(
-        `Upload failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    // The conflict index needs the target folder loaded; the drop event is
+    // still valid here, so collect the entries first and read the folder after.
+    existingIndexFor(targetPath).then((existing) => {
+      startDrop({
+        entries,
+        files,
+        targetPath,
+        existing,
+        conflict: $settings.uploadDuplicates || "skip-identical",
+        onComplete: () => refreshFolders(targetPath),
+      }).catch((error) => {
+        console.error("Upload failed:", error);
+        toast.error(
+          `Upload failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
     });
   }
 
@@ -818,12 +884,14 @@
     input.value = ""; // allow picking the same folder twice
     if (!files.length) return;
 
+    const targetPath = selectedFolder || "";
+    const existing = await existingIndexFor(targetPath);
     startDrop({
       files,
-      targetPath: selectedFolder || "",
-      existing: buildExistingIndex(treeData),
+      targetPath,
+      existing,
       conflict: $settings.uploadDuplicates || "skip-identical",
-      onComplete: loadFileTree,
+      onComplete: () => refreshFolders(targetPath),
     }).catch((error) => {
       console.error("Upload failed:", error);
       toast.error(
@@ -837,28 +905,47 @@
     isLoading = true;
     error = "";
     try {
-      const api_url = "/api/files"; // build
-      const res = await fetch(api_url);
-      if (!res.ok) {
-        throw new Error(
-          await readApiError(res, "Could not load the file tree"),
-        );
-      }
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error(
-          `Expected a JSON response but received ${contentType || "an unknown content type"}`,
-        );
-      }
-      treeData = await res.json();
-
-      // Initial sort will be applied by the TreeNode components via the store
+      await loadTree();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
       toast.error(`Failed to load files: ${error}`);
     } finally {
       isLoading = false;
     }
+  }
+
+  /**
+   * Reload the folders a mutation touched. Unknown folders are loaded lazily
+   * when expanded, so only already-visible ones need a refresh.
+   * @param {...string} paths
+   */
+  async function refreshFolders(...paths) {
+    try {
+      await refreshDirectories(paths);
+      error = "";
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      toast.error(`Failed to refresh files: ${error}`);
+    }
+  }
+
+  /**
+   * Children of a folder for the upload conflict check. Loads the folder when
+   * the user targets one that has not been expanded yet, so an existing file
+   * is still detected.
+   * @param {string} path
+   * @returns {Promise<Map<string, number | undefined>>}
+   */
+  async function existingIndexFor(path) {
+    if (!path) return buildExistingIndex(treeData);
+    try {
+      await loadDirectory(path);
+    } catch (e) {
+      // A missing or unreadable target folder just means "nothing there"; the
+      // upload request reports the real error.
+      console.warn("Could not preload the upload target:", e);
+    }
+    return buildExistingIndex(getChildren(path));
   }
 
   // ========== TREE HANDLERS ==========
@@ -1063,8 +1150,9 @@
       if (selectedFolder === oldPath) selectedFolder = data.newPath;
       if (selectedFile === oldPath) selectedFile = data.newPath;
 
-      // Reload tree to reflect changes (simple but loses child expansions)
-      await loadFileTree();
+      // Only the two folders involved changed; reloading the whole library
+      // would throw away every other expansion.
+      await refreshFolders(parentPath(oldPath), parentPath(data.newPath));
       toast.success("Renamed successfully");
     } catch (e) {
       toast.error(
@@ -1097,7 +1185,7 @@
         expandedDirs.delete(path);
       }
 
-      await loadFileTree();
+      await refreshFolders(parentPath(path));
       toast.success("Deleted successfully");
     } catch (e) {
       toast.error(
@@ -1125,8 +1213,8 @@
         throw new Error(await readApiError(res));
       }
       toast.success("Moved successfully");
-      // Reload tree to reflect changes
-      await loadFileTree();
+      // Reload the source and the destination folders.
+      await refreshFolders(parentPath(sourcePath), destFolderPath);
     } catch (e) {
       toast.error(`Move failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -1163,7 +1251,8 @@
       selectedFile = null;
 
       toast.success(`Folder created: ${data.path}`);
-      await loadFileTree(); // refresh the tree to show the new folder
+      // The parent is expanded above, so make sure its children are loaded.
+      await loadDirectory(parentPath, { force: true });
     } catch (e) {
       toast.error(
         `Create folder failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -1190,7 +1279,7 @@
       if (selectedFolder === path) selectedFolder = null;
       if (selectedFile === path) selectedFile = null;
 
-      await loadFileTree();
+      await refreshFolders(parentPath(path));
       toast.success("Copied successfully");
     } catch (e) {
       toast.error(`Copy failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -1253,6 +1342,11 @@
 
   // ========== SEARCH FUNCTION ==========
   /**
+   * Filter the tree by file or folder name.
+   *
+   * Only folders the user has opened are searched: the tree is loaded lazily,
+   * so anything below a collapsed folder has not been fetched. A library-wide
+   * search needs the tag index in PLAN.md.
    * @param {TreeItem[]} nodes
    * @param {string} query
    * @returns {TreeItem[] | null}
@@ -1271,18 +1365,22 @@
       const nameMatch = node.name.toLowerCase().includes(lowerQuery);
 
       // For directories, check children
-      if (node.type === "directory" && node.children) {
-        const filteredChildren = node.children
-          .map(filterNode)
-          .filter((child) => child !== null);
+      if (node.type === "directory") {
+        const cached = getChildren(node.path);
+        const children = cached.length ? cached : (node.children ?? []);
+        if (children.length) {
+          const filteredChildren = children
+            .map(filterNode)
+            .filter((child) => child !== null);
 
-        // Include directory if it matches OR has matching children
-        if (nameMatch || filteredChildren.length > 0) {
-          return {
-            ...node,
-            children:
-              filteredChildren.length > 0 ? filteredChildren : node.children,
-          };
+          // Include directory if it matches OR has matching children
+          if (nameMatch || filteredChildren.length > 0) {
+            return {
+              ...node,
+              children:
+                filteredChildren.length > 0 ? filteredChildren : children,
+            };
+          }
         }
       }
 
@@ -1473,8 +1571,10 @@
 
   $effect(() => {
     if (!$isAuthenticated) {
-      // Reset so the next login loads a fresh tree.
+      // Reset so the next login loads a fresh tree, and drop cached folders so
+      // another account never sees them.
       treeRequested = false;
+      resetTree();
       return;
     }
     if (treeRequested) return;
@@ -1832,6 +1932,7 @@
                       onDelete={handleDelete}
                       onCreateFolder={handleCreateFolder}
                       onCopy={handleCopyItem}
+                      onLoad={loadDirectory}
                     />
                   {/each}
                 </ul>

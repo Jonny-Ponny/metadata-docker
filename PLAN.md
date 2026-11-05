@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-14`, `B-39`. Next:
-  `T-15`, `B-40`.
+- IDs are permanent and never reused. Last used: `T-15`, `B-39`. Next:
+  `T-16`, `B-40`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -53,6 +53,11 @@ image build. What remains is optional hardening and new features.
   coverage moved from 86% to 92%. The `frontend` CI job already runs the suite;
   branch protection must list it as a required check for a failure to block a
   merge.
+- **Lazy file tree (T-15).** Complete: `GET /api/files/dir` lists one folder
+  with direct-child counts, and `stores/tree.store.js` caches folders per path
+  so the root loads once and every folder loads on expansion. Mutations refresh
+  the affected folders instead of the whole tree. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#library-tree).
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are
@@ -93,10 +98,10 @@ No open items.
   covers, duplicate artist/title).
 - **Multi-select** in the tree with batch actions, plus copy/paste tags from one
   file onto a selection.
-- **UX and performance** - lazy per-directory tree loading, a smart-rename
-  dry-run preview with a conflict strategy, addon reload from Settings,
-  responsive/mobile layout, more keyboard shortcuts and modal focus handling,
-  metadata CSV/JSON export-import and library normalisation tools.
+- **UX and performance** - smart-rename dry-run preview with a conflict
+  strategy, addon reload from Settings, responsive/mobile layout, more keyboard
+  shortcuts and modal focus handling, metadata CSV/JSON export-import and
+  library normalisation tools.
 - **More audio formats** - extend `formats.py` and `tag_backends.py`.
 
 ### Housekeeping

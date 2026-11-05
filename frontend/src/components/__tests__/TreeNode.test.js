@@ -5,6 +5,7 @@ import { get } from "svelte/store";
 
 import TreeNode from "../TreeNode.svelte";
 import { contextMenu, renamingPath } from "../../stores/context.store.js";
+import { childrenByPath, resetTree } from "../../stores/tree.store.js";
 import { settings } from "../../utils/settings.utils.js";
 import { toast } from "../../stores/toast.store.js";
 
@@ -16,6 +17,10 @@ import { toast } from "../../stores/toast.store.js";
  * @property {string} [file_type]
  * @property {number} [size]
  * @property {TreeItem[]} [children]
+ * @property {boolean} [has_children]
+ * @property {number} [folder_count]
+ * @property {number} [file_count]
+ * @property {number} [file_size]
  */
 
 /** @type {TreeItem} */
@@ -130,6 +135,7 @@ describe("TreeNode", () => {
 
   beforeEach(() => {
     originalSettings = get(settings);
+    resetTree();
     contextMenu.set({ isOpen: false, path: null, x: 0, y: 0, type: null });
     renamingPath.set(null);
   });
@@ -742,5 +748,93 @@ describe("TreeNode", () => {
         name: "Fetch Album Metadata (Folder Batch)",
       }),
     ).toBeTruthy();
+  });
+
+  it("asks the parent to load a folder that is expanded but not loaded", async () => {
+    const onLoad = vi.fn();
+    /** @type {TreeItem} */
+    const lazyFolder = {
+      name: "folder",
+      path: "folder",
+      type: "directory",
+      has_children: true,
+    };
+    setup(lazyFolder, {
+      expanded: { has: (/** @type {string} */ path) => path === "folder" },
+      onLoad,
+    });
+
+    await waitFor(() => expect(onLoad).toHaveBeenCalledWith("folder"));
+    expect(screen.getByText("Loading…")).toBeTruthy();
+  });
+
+  it("does not request a folder that is known to be empty", async () => {
+    const onLoad = vi.fn();
+    setup(
+      {
+        name: "folder",
+        path: "folder",
+        type: "directory",
+        has_children: false,
+      },
+      {
+        expanded: { has: (/** @type {string} */ path) => path === "folder" },
+        onLoad,
+      },
+    );
+
+    await tick();
+    expect(onLoad).not.toHaveBeenCalled();
+  });
+
+  it("renders children from the lazy cache once the folder arrives", async () => {
+    /** @type {TreeItem} */
+    const lazyFolder = {
+      name: "folder",
+      path: "folder",
+      type: "directory",
+      has_children: true,
+    };
+    const { container } = setup(lazyFolder, {
+      expanded: { has: (/** @type {string} */ path) => path === "folder" },
+      onLoad: vi.fn(),
+    });
+
+    childrenByPath.set(
+      new Map([
+        [
+          "folder",
+          [
+            {
+              name: "song.mp3",
+              path: "folder/song.mp3",
+              type: "file",
+              file_type: "audio",
+              size: 10,
+            },
+          ],
+        ],
+      ]),
+    );
+    await tick();
+
+    expect(screen.getByText("song.mp3")).toBeTruthy();
+    expect(container.querySelector(".tree-loading")).toBeNull();
+  });
+
+  it("uses direct-child counts for the folder tooltip", () => {
+    const { container } = setup({
+      name: "folder",
+      path: "folder",
+      type: "directory",
+      has_children: true,
+      folder_count: 2,
+      file_count: 1,
+      file_size: 2048,
+    });
+
+    expect(
+      /** @type {HTMLElement} */ (container.querySelector(".directory")).title,
+    ).toBe("2 KB\nfolders x2");
   });
 });

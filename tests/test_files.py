@@ -238,7 +238,9 @@ def test_file_tree_reports_a_listing_failure(
     def broken(*args, **kwargs):
         raise RuntimeError("unexpected")
 
-    monkeypatch.setattr(files_module, "build_tree", broken)
+    # ``list_files`` calls the library helper, so the failure has to be
+    # injected there.
+    monkeypatch.setattr(files_module.library, "build_tree", broken)
 
     response = client.get("/api/files", headers=auth_headers)
 

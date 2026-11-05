@@ -16,8 +16,8 @@
     DEFAULT_HOLD_DURATIONS,
     applyRenamingScheme,
     toast,
-    getFolderSummary,
-    formatFileSize,
+    childrenByPath,
+    formatFolderSummary,
     isAudioFile,
     getAudioFormatLabel,
     readApiError,
@@ -31,7 +31,11 @@
    * @property {string} type
    * @property {string} [file_type]
    * @property {number} [size]
-   * @property {TreeItem[]} [children]
+   * @property {TreeItem[] | null} [children]
+   * @property {boolean} [has_children]
+   * @property {number} [folder_count] direct-child count from /api/files/dir
+   * @property {number} [file_count] direct-child count from /api/files/dir
+   * @property {number} [file_size] direct files only, not recursive
    */
 
   /**
@@ -48,6 +52,7 @@
    * @property {(path: string) => Promise<void>} onDelete
    * @property {(path: string) => void} onCreateFolder
    * @property {(path: string) => void} onCopy
+   * @property {(path: string) => Promise<void> | void} [onLoad] fetch a folder
    */
 
   /** @type {Props} */
@@ -64,16 +69,41 @@
     onDelete,
     onCreateFolder,
     onCopy,
+    onLoad,
   } = $props();
 
   // Input state
   let inputRef = $state(/** @type {HTMLInputElement | null} */ (null));
   let newName = $derived(item.name);
 
+  // Children come from the path-keyed cache when it has the folder, so an
+  // expanded folder renders its entries without a nested copy. The node's own
+  // `children` stay supported for a fully loaded tree (/api/files).
+  let children = $derived(
+    item.type === "directory"
+      ? ($childrenByPath.get(item.path) ?? item.children ?? [])
+      : [],
+  );
+
+  // A folder with `has_children: false` is known to be empty, so expanding it
+  // needs no request. Anything else may still be unloaded.
+  let needsLoad = $derived(
+    item.type === "directory" &&
+      item.children == null &&
+      !$childrenByPath.has(item.path) &&
+      item.has_children !== false,
+  );
+
+  $effect(() => {
+    if (expanded.has(item.path) && needsLoad && onLoad) {
+      onLoad(item.path);
+    }
+  });
+
   // Derived sorted children
   let sortedChildren = $derived(
-    item.children
-      ? sortItems(item.children, $sortConfig.by, $sortConfig.direction)
+    children.length
+      ? sortItems(children, $sortConfig.by, $sortConfig.direction)
       : [],
   );
 
@@ -86,44 +116,16 @@
     ),
   );
 
-  // Calculate hint for folders
+  // Calculate hint for folders. The counts come with the folder listing, so a
+  // tooltip no longer walks the subtree just to show a size.
   let folderSummaryText = $derived(
     item.type === "directory"
-      ? (() => {
-          // Get summary data for this folder
-          const summary = getFolderSummary(item);
-
-          // If folder is empty, show empty message
-          if (!summary || summary.totalItems === 0) {
-            return "Empty folder";
-          }
-
-          // Build the tooltip content line by line
-          let lines = [];
-
-          // Line 1: Total size (e.g., "1.2 GB")
-          lines.push(formatFileSize(summary.totalSize));
-
-          // Line 2: Folders count (only if there are subfolders)
-          if (summary.folderCount > 0) {
-            lines.push(`folders x${summary.folderCount}`);
-          }
-
-          // Lines 3+: File formats, sorted by count (highest first)
-          const formats = Object.entries(summary.formatCounts);
-          if (formats.length > 0) {
-            // Sort formats by count (highest to lowest)
-            formats.sort((a, b) => b[1] - a[1]);
-
-            // Add each format to the tooltip (e.g., "flac x20")
-            for (const [format, count] of formats) {
-              lines.push(`${format.toLowerCase()} x${count}`);
-            }
-          }
-
-          // Join all lines with newline characters for multi-line tooltip
-          return lines.join("\n");
-        })()
+      ? formatFolderSummary({
+          children,
+          folder_count: item.folder_count,
+          file_count: item.file_count,
+          file_size: item.file_size,
+        })
       : "", // Return empty string for files (non-folders)
   );
 
@@ -595,25 +597,32 @@
         <span class="name">{item.name}</span>
       {/if}
     </div>
-    {#if expanded.has(item.path) && item.children?.length}
-      <ul>
-        {#each sortedChildren as child (child.path)}
-          <Self
-            item={child}
-            {expanded}
-            {toggleDir}
-            {selectFile}
-            {selectFolder}
-            {selectedFolder}
-            {selectedFile}
-            level={level + 1}
-            {onRename}
-            {onDelete}
-            {onCreateFolder}
-            {onCopy}
-          />
-        {/each}
-      </ul>
+    {#if expanded.has(item.path)}
+      {#if needsLoad && !sortedChildren.length && item.has_children !== false}
+        <ul>
+          <li class="tree-loading" style="--level: {level + 1}">Loading…</li>
+        </ul>
+      {:else if sortedChildren.length}
+        <ul>
+          {#each sortedChildren as child (child.path)}
+            <Self
+              item={child}
+              {expanded}
+              {toggleDir}
+              {selectFile}
+              {selectFolder}
+              {selectedFolder}
+              {selectedFile}
+              level={level + 1}
+              {onRename}
+              {onDelete}
+              {onCreateFolder}
+              {onCopy}
+              {onLoad}
+            />
+          {/each}
+        </ul>
+      {/if}
     {/if}
     {#if $contextMenu.isOpen && $contextMenu.path === item.path}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -837,6 +846,13 @@
   li {
     list-style: none;
     margin: 2px 2px;
+  }
+
+  .tree-loading {
+    padding: 8px 12px 8px calc(12px + var(--level, 0) * 16px);
+    color: #888;
+    font-size: 13px;
+    font-style: italic;
   }
 
   .directory,

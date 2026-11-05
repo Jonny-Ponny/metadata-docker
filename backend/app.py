@@ -62,6 +62,8 @@ STATIC_DIR = os.path.join(BASE_DIR, 'static')
 
 
 def build_tree(current_path, relative_path):
+    # ``_build_tree`` is looked up on this module so a test can patch either
+    # ``app.build_tree`` or the helper. Do not capture it in a default argument.
     return _build_tree(current_path, relative_path, MUSIC_ROOT)
 
 

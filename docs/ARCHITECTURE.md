@@ -19,7 +19,7 @@ Flask (gunicorn, 1 worker / 8 threads)
    ├── routes/        HTTP layer: validation, status codes, JSON shapes
    ├── auth.py        login, token scopes, per-IP login limiter
    ├── paths.py       safe_path(), is_within() and rename-name guards
-   ├── library.py     build_tree() and natural sorting
+   ├── library.py     build_tree(), build_directory() and natural sorting
    ├── formats.py     audio format registry + image/text type registry
    ├── tag_backends.py  FIELD_SCHEMA and the mutagen backends
    ├── metadata_*.py  read/write entry points
@@ -37,7 +37,7 @@ backend/
   errors.py              AccessDenied, public error mapping, JSON handlers
   paths.py               containment, safe_path, unique/generated names
   auth.py                login, token_required, rate limiter
-  library.py             build_tree, natural_key, file classification
+  library.py             build_tree, build_directory, natural_key, classification
   renaming.py            scheme parsing and name generation
   formats.py             audio format registry, image/text registries
   tag_backends.py        FIELD_SCHEMA + ID3/FLAC/Vorbis/MP4 backends
@@ -50,8 +50,8 @@ backend/
   logger_config.py       logging setup
   routes/
     __init__.py          register_blueprints(app)
-    files.py             listing, upload, storage, mkdir, rename, move, copy,
-                         delete, smart rename
+    files.py             listing (full tree and per-folder), upload, storage,
+                         mkdir, rename, move, copy, delete, smart rename
     tags.py              metadata, cover art, audio/image serving
     text.py              .txt/.lrc read and atomic save
     logs.py              log read/clear
@@ -132,12 +132,30 @@ API as read-only `read_only_metadata()` payloads.
 
 ## Library tree
 
-`library.build_tree(current_path, relative_path, music_root)` walks the library
-on every `/api/files` request and classifies each entry as `audio`, `image`,
-`text` or `other` (everything else is listed read-only). Sorting is natural
-(`a2` before `a10`), including filenames with Unicode digits that `int()`
-rejects. Entries that disappear during the walk are skipped instead of failing
-the request; a permission error yields an empty list for that directory.
+The tree is loaded lazily. `GET /api/files/dir?path=<folder>` lists one folder
+(`library.build_directory`); the SPA fetches the root once, then each folder
+when it is expanded, so opening the app no longer walks the whole library.
+`GET /api/files` still returns the full nested tree (`library.build_tree`) for
+callers that want it in one request.
+
+Both endpoints share `_scan_entries`, so classification, natural sorting,
+symlink handling and the hidden `.upload-*.part` rule cannot drift. Entries are
+classified as `audio`, `image`, `text` or `other` (everything else is listed
+read-only). Sorting is natural (`a2` before `a10`), including filenames with
+Unicode digits that `int()` rejects. Entries that disappear during the walk are
+skipped instead of failing the request; a permission error or a folder that
+vanishes mid-walk yields an empty listing rather than a 500.
+
+Every directory node carries `folder_count`, `file_count` and `file_size`
+describing its **direct** children, computed from the listing already in hand.
+They feed the folder tooltip without a recursive walk; `file_size` is not a
+deep total. Directory entries from `/api/files/dir` have no `children` and set
+`has_children` so the client can tell an empty folder from an unloaded one.
+
+On the client, `stores/tree.store.js` keeps the per-path cache, one in-flight
+request per folder, and re-fetches only the folders a mutation touched. Search
+and the recursive folder overview only see folders that have been loaded;
+library-wide search needs the tag index in [PLAN.md](../PLAN.md).
 
 Symlink policy: symlinked directories are never listed, symlinked files are
 listed only when they resolve inside the library, and bulk tag/cover
@@ -147,7 +165,7 @@ selected folder.
 Uploads write a hidden `.upload-*.part` file and claim the destination with an
 atomic `os.link()` (falling back to `os.replace()`), so an interrupted upload
 leaves no truncated track in the tree and two concurrent uploads cannot
-overwrite each other. `build_tree()` hides `.upload-*.part` files.
+overwrite each other. Both listing functions hide `.upload-*.part` files.
 
 ## Frontend
 
@@ -174,6 +192,8 @@ once per session, with the plugin manager pointed at the throwaway working
 directory. Tests that patch a module-level global must target the module that
 reads it (`routes/files.py`, `routes/tags.py`, `routes/logs.py`,
 `routes/system.py`), not `app` - see the fixtures in `conftest.py`.
+`build_tree` runs in `library.py` (and `app.build_tree` is only a wrapper), so
+the B-11 race tests patch `library`, not `app`.
 
 `tests/` covers path containment, auth/token scopes, the JSON contract, upload
 races, rename/move/copy/delete, tag round-trips for every format and field,
