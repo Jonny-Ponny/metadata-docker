@@ -241,6 +241,33 @@ def list_directory():
     except Exception as e:
         return _server_error(e)
 
+# GET /api/files/summary?path=<folder>
+# Recursive totals for a folder tooltip
+@bp.route('/api/files/summary', methods=['GET'])
+@token_required
+def folder_summary():
+    """Return the deep totals the tree tooltip shows for one folder.
+
+    The lazy listing only knows a folder's direct children, so the deep size
+    and per-format counts are computed on hover instead of eager-loading the
+    whole library.
+    """
+    relative_path = request.args.get('path') or ''
+
+    try:
+        full_path = _path(relative_path)
+        if not os.path.exists(full_path):
+            return jsonify({'error': 'Folder not found'}), 404
+        if not os.path.isdir(full_path):
+            return jsonify({'error': 'Path is not a folder'}), 400
+
+        return jsonify(library.summarize_tree(full_path, relative_path, MUSIC_ROOT))
+    except PermissionError as e:
+        return _permission_error(e)
+    except Exception as e:
+        return _server_error(e)
+
+
 # POST /api/upload
 # Upload file or folder via drag and drop
 @bp.route('/api/upload', methods=['POST'])
