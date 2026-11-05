@@ -1894,7 +1894,7 @@
               <input
                 type="text"
                 class="search-input"
-                placeholder="Search files... (Enter or pause)"
+                placeholder="Search files..."
                 bind:value={searchQuery}
                 onkeydown={(e) => {
                   if (e.key === "Enter") {
