@@ -49,8 +49,10 @@
     childrenByPath,
   } from "./utils/index.js";
 
-  // Wait for the user to stop typing before asking the server.
-  const SEARCH_DEBOUNCE_MS = 250;
+  // Wait for the user to stop typing before asking the server, and ignore
+  // queries that are too short to be useful.
+  const SEARCH_DEBOUNCE_MS = 400;
+  const MIN_SEARCH_LENGTH = 3;
 
   import "./app.css";
 
@@ -181,21 +183,81 @@
 
   // ========== SEARCH STATE ==========
   let searchQuery = $state("");
+  // The query the current results were requested for. Searching happens on
+  // Enter or after a pause in typing, not on every keystroke.
+  let submittedQuery = $state("");
+  // Folders opened only so the current matches are visible. They are kept
+  // apart from `expandedDirs` so clearing the search restores the tree the
+  // user actually had open.
+  let searchExpanded = new SvelteSet();
 
-  // The tree is loaded lazily, so a local filter can only see the folders the
-  // user opened. A non-empty query is answered by the server instead.
+  /** Replace the search-only expansion. */
+  /**
+   * @param {Iterable<string>} paths
+   */
+  function setSearchExpanded(paths) {
+    searchExpanded.clear();
+    for (const path of paths) searchExpanded.add(path);
+  }
+
+  // Wait for a pause in typing before searching, so an 8-character query does
+  // not fire 8 requests. One or two characters are not searched at all: they
+  // match most of the library and cost a full walk on the server.
   $effect(() => {
     const query = searchQuery.trim();
-    if (!query) return;
+    if (query.length < MIN_SEARCH_LENGTH) {
+      submittedQuery = "";
+      return;
+    }
+    if (query === submittedQuery) return;
     const timer = setTimeout(() => {
-      searchLibrary(query).then((state) => {
-        // Expand the folders above each hit so the matches are visible.
-        for (const hit of state.results) {
-          for (const parent of hit.parents) expandedDirs.add(parent);
-        }
-      });
+      submittedQuery = query;
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
+  });
+
+  // Fetch the results for whatever query was submitted. Enter sets
+  // `submittedQuery` directly, which skips the minimum-length rule.
+  $effect(() => {
+    const query = submittedQuery.trim();
+    if (!query) {
+      searchLibrary("");
+      return;
+    }
+
+    let cancelled = false;
+    searchLibrary(query).then((state) => {
+      if (cancelled) return;
+      // Open the folders above each hit, but only for the search view.
+      setSearchExpanded(state.results.flatMap((hit) => hit.parents));
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  /** Run the pending query now instead of waiting for the pause. */
+  function submitSearch() {
+    // Enter searches exactly what was typed, even a short query.
+    submittedQuery = searchQuery.trim();
+  }
+
+  // Clearing the query drops the search-only expansion straight away.
+  $effect(() => {
+    if (searchQuery.trim() === "") setSearchExpanded([]);
+  });
+
+  // Added to the tree rows so a match deep inside a collapsed folder is
+  // visible without permanently expanding the user's tree.
+  // A single set the tree can query: the user's expansion plus the folders
+  // opened only to show the current matches. Building a plain Set here keeps
+  // the dependency explicit, so the tree re-renders when either source
+  // changes (a closure reading the sets later would not be tracked).
+  let expandedForDisplay = $derived.by(() => {
+    const open = [...new Set([...expandedDirs, ...searchExpanded])];
+    return {
+      has: (/** @type {string} */ path) => open.includes(path),
+    };
   });
 
   // Hits from the last completed search, grouped by their own path.
@@ -207,11 +269,17 @@
 
   let showLogViewer = $state(false);
 
+  // A search view is active once a query has actually been sent. Typing
+  // without committing (too short, or still pausing) keeps the normal tree.
+  let isSearching = $derived(
+    searchQuery.trim() !== "" && submittedQuery.trim() !== "",
+  );
+
   // While searching, show only the matches (and the folders leading to them).
   // The full tree otherwise. `$childrenByPath` is read so the view refreshes
   // once the folders above a hit have loaded.
   let filteredTreeData = $derived(
-    searchQuery.trim() !== ""
+    isSearching
       ? filterTreeToHits(treeData, searchHitPaths, $childrenByPath)
       : treeData,
   );
@@ -1826,10 +1894,13 @@
               <input
                 type="text"
                 class="search-input"
-                placeholder="Search files..."
+                placeholder="Search files... (Enter or pause)"
                 bind:value={searchQuery}
                 onkeydown={(e) => {
-                  if (e.key === "Escape") {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitSearch();
+                  } else if (e.key === "Escape") {
                     searchQuery = "";
                   }
                 }}
@@ -1930,12 +2001,12 @@
                       d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
                     />
                   </svg>
-                  {#if searchQuery.trim() !== ""}
+                  {#if isSearching}
                     <p>
                       {#if $searchResults.loading}
                         Searching…
                       {:else}
-                        No matches for "{searchQuery.trim()}"
+                        No matches for "{submittedQuery.trim()}"
                       {/if}
                     </p>
                   {:else}
@@ -1948,7 +2019,7 @@
                   {#each sortedTreeData as item (item.path)}
                     <TreeNode
                       {item}
-                      expanded={expandedDirs}
+                      expanded={expandedForDisplay}
                       {toggleDir}
                       {selectFile}
                       {selectFolder}

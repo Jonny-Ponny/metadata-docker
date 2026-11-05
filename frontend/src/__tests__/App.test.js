@@ -865,10 +865,11 @@ describe("App", () => {
     };
     const view = await renderAuthenticated();
     const search = /** @type {HTMLInputElement} */ (
-      screen.getByPlaceholderText("Search files...")
+      screen.getByPlaceholderText(/Search files/)
     );
 
     await fireEvent.input(search, { target: { value: "loose" } });
+    await fireEvent.keyDown(search, { key: "Enter" });
 
     await waitFor(() =>
       expect(callsStartingWith("/api/files/search?")).toHaveLength(1),
@@ -901,14 +902,84 @@ describe("App", () => {
     };
     const view = await renderAuthenticated();
     const search = /** @type {HTMLInputElement} */ (
-      screen.getByPlaceholderText("Search files...")
+      screen.getByPlaceholderText(/Search files/)
     );
 
     // Albums starts collapsed; the hit must still be reachable.
     await fireEvent.input(search, { target: { value: "song" } });
+    await fireEvent.keyDown(search, { key: "Enter" });
 
     await waitFor(() => expect(node(view, "Albums/song.mp3")).toBeTruthy());
     expect(callsStartingWith("/api/files/dir?path=Albums")).toHaveLength(1);
+  });
+
+  it("does not search on a single character", async () => {
+    isAuthenticated.set(true);
+    await renderAuthenticated();
+    const search = /** @type {HTMLInputElement} */ (
+      screen.getByPlaceholderText(/Search files/)
+    );
+
+    await fireEvent.input(search, { target: { value: "s" } });
+    // Longer than the debounce: still no request for a short query.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(callsStartingWith("/api/files/search?")).toHaveLength(0);
+  });
+
+  it("waits for a pause in typing before searching", async () => {
+    isAuthenticated.set(true);
+    searchReply = { results: [], truncated: false };
+    await renderAuthenticated();
+    const search = /** @type {HTMLInputElement} */ (
+      screen.getByPlaceholderText(/Search files/)
+    );
+
+    await fireEvent.input(search, { target: { value: "son" } });
+    await fireEvent.input(search, { target: { value: "song" } });
+    await fireEvent.input(search, { target: { value: "songs" } });
+
+    // Nothing sent while the user is still typing.
+    expect(callsStartingWith("/api/files/search?")).toHaveLength(0);
+
+    await waitFor(
+      () => expect(callsStartingWith("/api/files/search?")).toHaveLength(1),
+      { timeout: 2000 },
+    );
+    expect(callsStartingWith("/api/files/search?")[0][0]).toContain("q=songs");
+  });
+
+  it("searching does not permanently expand the tree", async () => {
+    isAuthenticated.set(true);
+    searchReply = {
+      results: [
+        {
+          name: "song.mp3",
+          path: "Albums/song.mp3",
+          type: "file",
+          file_type: "audio",
+          size: 20,
+          parents: ["Albums"],
+        },
+      ],
+      truncated: false,
+    };
+    const view = await renderAuthenticated();
+    const search = /** @type {HTMLInputElement} */ (
+      screen.getByPlaceholderText(/Search files/)
+    );
+
+    await fireEvent.input(search, { target: { value: "song" } });
+    await fireEvent.keyDown(search, { key: "Enter" });
+    await waitFor(() => expect(node(view, "Albums/song.mp3")).toBeTruthy());
+
+    await fireEvent.click(screen.getByTitle("Clear search"));
+
+    // The folder is closed again: opening it was only for the search view.
+    await waitFor(() => expect(node(view, "Albums")).toBeTruthy());
+    expect(
+      view.container.querySelector('[data-file-path="Albums/song.mp3"]'),
+    ).toBeNull();
   });
 
   it("says no matches instead of an empty library during a search", async () => {
@@ -916,10 +987,11 @@ describe("App", () => {
     searchReply = { results: [], truncated: false };
     await renderAuthenticated();
     const search = /** @type {HTMLInputElement} */ (
-      screen.getByPlaceholderText("Search files...")
+      screen.getByPlaceholderText(/Search files/)
     );
 
     await fireEvent.input(search, { target: { value: "nothing-here" } });
+    await fireEvent.keyDown(search, { key: "Enter" });
 
     expect(
       await screen.findByText('No matches for "nothing-here"'),
@@ -931,7 +1003,7 @@ describe("App", () => {
     isAuthenticated.set(true);
     await renderAuthenticated();
     const search = /** @type {HTMLInputElement} */ (
-      screen.getByPlaceholderText("Search files...")
+      screen.getByPlaceholderText(/Search files/)
     );
 
     await fireEvent.input(search, { target: { value: "loose" } });
@@ -1674,7 +1746,7 @@ describe("App", () => {
     const container = /** @type {HTMLElement} */ (
       view.container.querySelector(".container")
     );
-    const search = screen.getByPlaceholderText("Search files...");
+    const search = screen.getByPlaceholderText(/Search files/);
 
     await fireEvent.dragStart(search);
     await fireEvent.dragEnter(container, {
