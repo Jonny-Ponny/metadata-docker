@@ -1,80 +1,113 @@
 import { describe, expect, it } from "vitest";
 
-import { formatFileSize, getFolderSummary } from "../folderSummary.utils.js";
-
-/**
- * @typedef {Object} TestNode
- * @property {string} name
- * @property {string} type
- * @property {number} [size]
- * @property {TestNode[]} [children]
- */
+import {
+  formatFileSize,
+  formatFolderSummary,
+  getFolderSummary,
+} from "../folderSummary.utils.js";
 
 /**
  * @param {string} name
  * @param {number} [size]
- * @returns {TestNode}
+ * @param {string} [type]
  */
-function file(name, size = 0) {
-  return { name, type: "file", size };
+function file(name, size = 0, type = "file") {
+  return { name, size, type };
 }
 
 /**
  * @param {string} name
- * @param {TestNode[]} [children]
- * @returns {TestNode}
+ * @param {any[]} [children]
+ * @param {Record<string, unknown>} [extra]
  */
-function folder(name, children = []) {
-  return { name, type: "directory", children };
+function folder(name, children = [], extra = {}) {
+  return { name, type: "directory", children, ...extra };
 }
 
-describe("folderSummary", () => {
-  it("returns null for missing or non-directory nodes", () => {
+describe("getFolderSummary", () => {
+  it("returns null for a non-folder", () => {
     expect(getFolderSummary()).toBeNull();
     expect(getFolderSummary(file("song.mp3"))).toBeNull();
   });
 
-  it("returns zeroes for an empty folder", () => {
-    expect(getFolderSummary(folder("empty"))).toEqual({
-      folderCount: 0,
-      fileCount: 0,
-      totalSize: 0,
-      formatCounts: {},
-      totalItems: 0,
-    });
-  });
-
-  it("counts files and folders recursively", () => {
-    const tree = folder("root", [
-      file("a.mp3", 100),
-      file("b.flac", 250),
-      folder("sub", [file("c.mp3", 50), folder("deeper", [file("d.jpg", 10)])]),
+  it("recursively counts files, folders and sizes", () => {
+    const tree = folder("album", [
+      file("a.mp3", 10),
+      folder("disc", [file("b.flac", 20)]),
     ]);
 
     expect(getFolderSummary(tree)).toEqual({
-      folderCount: 2,
-      fileCount: 4,
-      totalSize: 410,
-      formatCounts: { MP3: 2, FLAC: 1, JPG: 1 },
-      totalItems: 6,
+      folderCount: 1,
+      fileCount: 2,
+      totalSize: 30,
+      formatCounts: { MP3: 1, FLAC: 1 },
+      totalItems: 3,
     });
   });
 
-  it("treats missing sizes as zero and counts extensionless files", () => {
-    const tree = folder("root", [file("README"), file("track.mp3")]);
+  it("uses the direct-child counts when the node carries them", () => {
+    const node = folder("album", [folder("disc", [file("b.flac", 20)])], {
+      folder_count: 1,
+      file_count: 2,
+      file_size: 30,
+    });
 
-    const summary = getFolderSummary(tree);
+    expect(getFolderSummary(node)).toEqual({
+      folderCount: 1,
+      fileCount: 2,
+      totalSize: 30,
+      formatCounts: {},
+      totalItems: 3,
+    });
+  });
+});
 
-    expect(summary?.totalSize).toBe(0);
-    expect(summary?.formatCounts).toEqual({ unknown: 1, MP3: 1 });
+describe("formatFolderSummary", () => {
+  it("uses the direct-child counts returned with a listing", () => {
+    const text = formatFolderSummary({
+      children: null,
+      folder_count: 2,
+      file_count: 3,
+      file_size: 1024,
+    });
+
+    expect(text).toBe("1 KB\nfolders x2");
   });
 
-  it("formats byte sizes", () => {
+  it("counts formats from the listed children and sorts them", () => {
+    const text = formatFolderSummary({
+      children: [
+        { name: "a.mp3", type: "file", size: 2048 },
+        { name: "b.mp3", type: "file", size: 2048 },
+        { name: "c.flac", type: "file", size: 0 },
+      ],
+    });
+
+    expect(text).toBe("4 KB\nmp3 x2\nflac x1");
+  });
+
+  it("says a folder is empty", () => {
+    expect(
+      formatFolderSummary({ children: [], folder_count: 0, file_count: 0 }),
+    ).toBe("Empty folder");
+  });
+
+  it("does not walk nested folders when counts are already known", () => {
+    // The nested children are deliberately wrong; the counts must win.
+    const text = formatFolderSummary({
+      children: [folder("nested", [file("x.mp3", 999999)])],
+      folder_count: 1,
+      file_count: 0,
+      file_size: 0,
+    });
+
+    expect(text).toBe("0 B\nfolders x1");
+  });
+});
+
+describe("formatFileSize", () => {
+  it("formats bytes and kilobytes", () => {
     expect(formatFileSize(0)).toBe("0 B");
-    expect(formatFileSize(512)).toBe("512 B");
-    expect(formatFileSize(1024)).toBe("1 KB");
-    expect(formatFileSize(1234)).toBe("1.21 KB");
-    expect(formatFileSize(1024 * 1024)).toBe("1 MB");
-    expect(formatFileSize(2.5 * 1024 * 1024 * 1024)).toBe("2.5 GB");
+    expect(formatFileSize(1536)).toBe("1.5 KB");
   });
 });

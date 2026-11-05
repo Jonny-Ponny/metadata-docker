@@ -83,6 +83,7 @@ const metadata = {
  * @property {string} [file_type]
  * @property {number} [size]
  * @property {TreeItem[]} [children]
+ * @property {boolean} [has_children]
  */
 
 /**
@@ -200,12 +201,159 @@ function callsStartingWith(prefix) {
   );
 }
 
+/**
+ * Requests for the library root. Loading the tree now means one root fetch
+ * plus per-folder fetches, so a test that counts "tree loads" counts these.
+ */
+function rootDirectoryCalls() {
+  return fetchMock.mock.calls.filter(
+    ([input]) =>
+      urlOf(input) === "/api/files/dir" ||
+      urlOf(input) === "/api/files/dir?path=",
+  );
+}
+
+/**
+ * The lazy endpoint serves one folder. Derive it from the same fixture tree so
+ * every existing test keeps its full hierarchy.
+ * @param {string} folderPath
+ * @returns {unknown}
+ */
+function makeDirectoryReply(folderPath) {
+  /**
+   * @param {TreeItem[]} nodes
+   * @param {string} path
+   * @returns {TreeItem | null}
+   */
+  function find(nodes, path) {
+    for (const node of nodes) {
+      if (node.path === path) return node;
+      const found = find(node.children ?? [], path);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const tree = makeTree();
+  const folder = folderPath ? find(tree, folderPath) : null;
+  const entries = folder ? (folder.children ?? []) : tree;
+  if (folderPath && !folder) {
+    return makeResponse({ error: "Folder not found" }, { status: 404 });
+  }
+
+  // Match the backend: directory entries have no children until fetched.
+  // Every entry in this fixture is served at any depth, so a nested node still
+  // renders with children.
+  /** @param {TreeItem[]} nodes @returns {TreeItem[]} */
+  const stripAll = (nodes) => nodes.map(strip);
+  /** @param {TreeItem} entry @returns {TreeItem} */
+  const strip = (entry) =>
+    entry.type === "directory"
+      ? {
+          ...entry,
+          children: stripAll(entry.children ?? []),
+          has_children: !!entry.children?.length,
+        }
+      : entry;
+  const stripped = stripAll(folderPath ? entries : tree);
+
+  return makeResponse({
+    path: folderPath,
+    entries: stripped,
+    folder_count: stripped.filter((entry) => entry.type === "directory").length,
+    file_count: stripped.filter((entry) => entry.type === "file").length,
+    file_size: 0,
+  });
+}
+
+/**
+ * Serve *tree* from the lazy directory endpoint as well, for tests that build
+ * their own fixture instead of `makeTree()`.
+ * @param {TreeItem[]} tree
+ */
+/** @type {TreeItem[] | null} */
+let treeOverride = null;
+
+/**
+ * Serve *tree* from the lazy directory endpoint, for tests that build their own
+ * fixture instead of `makeTree()`. The override is cleared in `beforeEach`.
+ * @param {TreeItem[]} tree
+ */
+function useTree(tree) {
+  filesReply = () => makeResponse(tree);
+  treeOverride = tree;
+}
+
+/**
+ * Children of one folder in a synthetic tree.
+ * @param {TreeItem[]} nodes
+ * @param {string} path
+ * @returns {TreeItem[] | null}
+ */
+function childrenOf(nodes, path) {
+  for (const node of nodes) {
+    if (node.path === path) return node.children ?? [];
+    if (node.type !== "directory") continue;
+    const found = childrenOf(node.children ?? [], path);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * @param {string} folderPath
+ * @returns {unknown}
+ */
+function makeOverrideReply(folderPath) {
+  const tree = treeOverride ?? [];
+  const entries = folderPath ? childrenOf(tree, folderPath) : tree;
+  if (!entries) {
+    return makeResponse({ error: "Folder not found" }, { status: 404 });
+  }
+  return makeResponse({
+    path: folderPath,
+    // Match the backend: directories come back without children and only
+    // signal whether expanding is worthwhile.
+    entries: entries.map((entry) =>
+      entry.type === "directory"
+        ? {
+            ...entry,
+            children: undefined,
+            has_children: !!entry.children?.length,
+          }
+        : entry,
+    ),
+    folder_count: entries.filter((entry) => entry.type === "directory").length,
+    file_count: entries.filter((entry) => entry.type === "file").length,
+    file_size: 0,
+  });
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+function directoryPathOf(url) {
+  const query = url.split("?")[1] ?? "";
+  return new URLSearchParams(query).get("path") ?? "";
+}
+
+/**
+ * Stub covering every lazy folder request, plus the old full tree.
+ */
 function stubApi() {
   fetchMock = vi.fn((/** @type {string | URL | Request} */ input) => {
     const url = urlOf(input);
 
     if (apiOverrides[url]) return Promise.resolve(apiOverrides[url]);
     if (url === "/api/files") return Promise.resolve(filesReply());
+    if (url.startsWith("/api/files/dir")) {
+      return Promise.resolve(
+        treeOverride
+          ? makeOverrideReply(directoryPathOf(url))
+          : makeDirectoryReply(directoryPathOf(url)),
+      );
+    }
     if (url === "/api/addons") {
       return Promise.resolve(makeResponse({ fetchers: [] }));
     }
@@ -276,7 +424,7 @@ function node(view, path) {
 
 async function renderAuthenticated() {
   const view = render(App);
-  await waitFor(() => expect(callsTo("/api/files")).toHaveLength(1));
+  await waitFor(() => expect(rootDirectoryCalls()).toHaveLength(1));
   await waitFor(() =>
     expect(view.container.querySelector(".file-tree-container")).toBeTruthy(),
   );
@@ -298,6 +446,7 @@ describe("App", () => {
     startDropMock.mockResolvedValue(undefined);
     filesReply = () => makeResponse(makeTree());
     apiOverrides = {};
+    treeOverride = null;
     stubApi();
   });
 
@@ -630,29 +779,54 @@ describe("App", () => {
 
   it("shows an empty library state", async () => {
     isAuthenticated.set(true);
-    filesReply = () => makeResponse([]);
+    filesReply = () => makeResponse(makeTree());
+    apiOverrides["/api/files/dir"] = makeResponse({
+      path: "",
+      entries: [],
+      folder_count: 0,
+      file_count: 0,
+      file_size: 0,
+    });
 
     render(App);
 
     expect(await screen.findByText("No music files found")).toBeTruthy();
-    expect(callsTo("/api/files")).toHaveLength(1);
+    expect(rootDirectoryCalls()).toHaveLength(1);
 
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(callsTo("/api/files")).toHaveLength(1);
+    expect(rootDirectoryCalls()).toHaveLength(1);
   });
 
   it("reports a tree load failure and retries", async () => {
     isAuthenticated.set(true);
     let attempts = 0;
-    filesReply = () => {
+    apiOverrides["/api/files/dir"] = makeResponse({
+      path: "",
+      entries: [],
+      folder_count: 0,
+      file_count: 0,
+      file_size: 0,
+    });
+    const originalFetch = () => {
       attempts += 1;
       return attempts === 1
         ? makeResponse("Library unavailable", {
             status: 500,
             contentType: "text/plain",
           })
-        : makeResponse(makeTree());
+        : makeDirectoryReply("");
     };
+    fetchMock.mockImplementation(
+      (/** @type {string | URL | Request} */ input) => {
+        const url = urlOf(input);
+        if (url.startsWith("/api/files/dir")) {
+          return Promise.resolve(originalFetch());
+        }
+        return Promise.resolve(
+          makeResponse({ error: "Not found" }, { status: 404 }),
+        );
+      },
+    );
 
     const view = render(App);
 
@@ -662,7 +836,7 @@ describe("App", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     await waitFor(() => expect(node(view, "loose.flac")).toBeTruthy());
-    expect(callsTo("/api/files")).toHaveLength(2);
+    expect(rootDirectoryCalls()).toHaveLength(2);
   });
 
   it("filters the tree by search and clears it", async () => {
@@ -773,7 +947,7 @@ describe("App", () => {
       body: JSON.stringify({ path: "New Folder" }),
     });
     expect(await screen.findByText("Folder created: New Folder")).toBeTruthy();
-    expect(callsTo("/api/files")).toHaveLength(2);
+    expect(rootDirectoryCalls()).toHaveLength(2);
   });
 
   it("renames and deletes the selected item with the keyboard", async () => {
@@ -814,7 +988,7 @@ describe("App", () => {
 
     window.dispatchEvent(new Event("refreshFileTree"));
 
-    await waitFor(() => expect(callsTo("/api/files")).toHaveLength(2));
+    await waitFor(() => expect(rootDirectoryCalls()).toHaveLength(2));
   });
 
   it("uploads dropped files to the hovered folder", async () => {
@@ -882,7 +1056,7 @@ describe("App", () => {
       isAuthenticated.set(true);
     });
 
-    await waitFor(() => expect(callsTo("/api/files")).toHaveLength(2));
+    await waitFor(() => expect(rootDirectoryCalls()).toHaveLength(2));
   });
 
   it("shows the upload progress bar", async () => {
@@ -919,7 +1093,10 @@ describe("App", () => {
 
   it("logs out when the API answers 401", async () => {
     isAuthenticated.set(true);
-    filesReply = () => makeResponse({ error: "expired" }, { status: 401 });
+    apiOverrides["/api/files/dir"] = makeResponse(
+      { error: "expired" },
+      { status: 401 },
+    );
 
     render(App);
 
@@ -929,8 +1106,9 @@ describe("App", () => {
 
   it("rejects a file tree response that is not JSON", async () => {
     isAuthenticated.set(true);
-    filesReply = () =>
-      makeResponse("plain text", { contentType: "text/plain" });
+    apiOverrides["/api/files/dir"] = makeResponse("plain text", {
+      contentType: "text/plain",
+    });
 
     render(App);
 
@@ -961,7 +1139,7 @@ describe("App", () => {
       body: JSON.stringify({ oldPath: "loose.flac", newName: "renamed.flac" }),
     });
     expect(await screen.findByText("Renamed successfully")).toBeTruthy();
-    expect(callsTo("/api/files")).toHaveLength(2);
+    expect(rootDirectoryCalls()).toHaveLength(2);
   });
 
   it("reports a rename failure", async () => {
@@ -1477,83 +1655,89 @@ describe("App", () => {
   it("includes nested audio in the recursive folder overview", async () => {
     isAuthenticated.set(true);
     settings.update((current) => ({ ...current, recursiveOverview: true }));
-    filesReply = () =>
-      makeResponse([
-        {
-          name: "Albums",
-          path: "Albums",
-          type: "directory",
-          children: [
-            {
-              name: "song.mp3",
-              path: "Albums/song.mp3",
-              type: "file",
-              file_type: "audio",
-              size: 20,
-            },
-            {
-              name: "CD2",
-              path: "Albums/CD2",
-              type: "directory",
-              children: [
-                {
-                  name: "deep.flac",
-                  path: "Albums/CD2/deep.flac",
-                  type: "file",
-                  file_type: "audio",
-                  size: 20,
-                },
-              ],
-            },
-          ],
-        },
-      ]);
+    useTree([
+      {
+        name: "Albums",
+        path: "Albums",
+        type: "directory",
+        children: [
+          {
+            name: "song.mp3",
+            path: "Albums/song.mp3",
+            type: "file",
+            file_type: "audio",
+            size: 20,
+          },
+          {
+            name: "CD2",
+            path: "Albums/CD2",
+            type: "directory",
+            children: [
+              {
+                name: "deep.flac",
+                path: "Albums/CD2/deep.flac",
+                type: "file",
+                file_type: "audio",
+                size: 20,
+              },
+            ],
+          },
+        ],
+      },
+    ]);
     const view = await renderAuthenticated();
 
     await fireEvent.click(node(view, "Albums"));
     await fireEvent.click(screen.getByTitle("Toggle folder metadata overview"));
 
+    // The nested folder is not expanded, so the recursive overview loads it on
+    // demand. Both audio files must then be checked exactly once each.
     await waitFor(() =>
-      expect(callsStartingWith("/api/metadata?path=")).toHaveLength(2),
+      expect(callsStartingWith("/api/metadata?path=")).toContainEqual(
+        expect.arrayContaining([
+          expect.stringContaining("Albums%2FCD2%2Fdeep.flac"),
+        ]),
+      ),
     );
-    expect(
-      callsStartingWith("/api/metadata?path=Albums%2FCD2%2Fdeep.flac"),
-    ).toHaveLength(1);
+    /** @param {string} path */
+    const metadataCallsFor = (path) =>
+      callsStartingWith(`/api/metadata?path=${encodeURIComponent(path)}`);
+    expect(metadataCallsFor("Albums/song.mp3").length).toBe(1);
+    expect(metadataCallsFor("Albums/CD2/deep.flac").length).toBe(1);
   });
 
   it("only checks direct children without recursive overview", async () => {
     isAuthenticated.set(true);
-    filesReply = () =>
-      makeResponse([
-        {
-          name: "Albums",
-          path: "Albums",
-          type: "directory",
-          children: [
-            {
-              name: "song.mp3",
-              path: "Albums/song.mp3",
-              type: "file",
-              file_type: "audio",
-              size: 20,
-            },
-            {
-              name: "CD2",
-              path: "Albums/CD2",
-              type: "directory",
-              children: [
-                {
-                  name: "deep.flac",
-                  path: "Albums/CD2/deep.flac",
-                  type: "file",
-                  file_type: "audio",
-                  size: 20,
-                },
-              ],
-            },
-          ],
-        },
-      ]);
+    useTree([
+      {
+        name: "Albums",
+        path: "Albums",
+        type: "directory",
+        children: [
+          {
+            name: "song.mp3",
+            path: "Albums/song.mp3",
+            type: "file",
+            file_type: "audio",
+            size: 20,
+          },
+          {
+            name: "CD2",
+            path: "Albums/CD2",
+            type: "directory",
+            children: [
+              {
+                name: "deep.flac",
+                path: "Albums/CD2/deep.flac",
+                type: "file",
+                file_type: "audio",
+                size: 20,
+              },
+            ],
+          },
+        ],
+      },
+    ]);
     const view = await renderAuthenticated();
 
     await fireEvent.click(node(view, "Albums"));

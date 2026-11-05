@@ -6,7 +6,10 @@
  * @property {string} name
  * @property {string} type
  * @property {number} [size]
- * @property {TreeEntry[]} [children]
+ * @property {TreeEntry[] | null} [children]
+ * @property {number} [folder_count] direct child folders, from /api/files/dir
+ * @property {number} [file_count] direct child files
+ * @property {number} [file_size] size of the direct child files only
  */
 
 /**
@@ -19,7 +22,11 @@
  */
 
 /**
- * Recursively count folders, files, and calculate total size
+ * Recursively count folders, files, and calculate total size.
+ *
+ * Prefers the direct-child counts the backend returns with a folder listing
+ * (`folder_count`, `file_count`, `file_size`), so a tooltip does not walk the
+ * subtree. Nodes without those fields fall back to the recursive walk.
  * @param {TreeEntry} [folderNode] - The folder node from treeData
  * @returns {FolderSummary | null} Summary object with counts and total size
  */
@@ -27,6 +34,20 @@ export function getFolderSummary(folderNode) {
   // Safety check - make sure we have a valid folder
   if (!folderNode || folderNode.type !== "directory") {
     return null;
+  }
+
+  // A lazy folder listing knows its direct-child counts already.
+  if (typeof folderNode.folder_count === "number") {
+    const folderCount = folderNode.folder_count;
+    const fileCount = folderNode.file_count || 0;
+    const totalSize = folderNode.file_size || 0;
+    return {
+      folderCount,
+      fileCount,
+      totalSize,
+      formatCounts: countFormats(folderNode.children),
+      totalItems: folderCount + fileCount,
+    };
   }
 
   let totalSize = 0; // Total size in bytes
@@ -73,6 +94,57 @@ export function getFolderSummary(folderNode) {
     formatCounts, // Object with format counts
     totalItems: folderCount + fileCount, // Total items count
   };
+}
+
+/**
+ * Count file extensions in one level of children.
+ * @param {TreeEntry[] | null | undefined} children
+ * @returns {Record<string, number>}
+ */
+function countFormats(children) {
+  /** @type {Record<string, number>} */
+  const formatCounts = {};
+  for (const child of children || []) {
+    if (child.type !== "file") continue;
+    const ext = getFileExtension(child.name);
+    if (ext) formatCounts[ext] = (formatCounts[ext] || 0) + 1;
+  }
+  return formatCounts;
+}
+
+/**
+ * Tooltip text for a folder row.
+ *
+ * Uses `folder_count`/`file_count`/`file_size` from the folder listing when
+ * they are present, so it is O(1) even when the subtree is not loaded. Returns
+ * `"Empty folder"` for a folder with no direct children.
+ *
+ * @param {{ children?: TreeEntry[] | null, folder_count?: number, file_count?: number, file_size?: number }} folderNode
+ * @returns {string}
+ */
+export function formatFolderSummary(folderNode) {
+  const summary = getFolderSummary(
+    /** @type {TreeEntry} */ ({
+      name: "",
+      children: folderNode?.children ?? [],
+      ...folderNode,
+      type: "directory",
+    }),
+  );
+  if (!summary || summary.totalItems === 0) return "Empty folder";
+
+  const lines = [formatFileSize(summary.totalSize)];
+  if (summary.folderCount > 0) {
+    lines.push(`folders x${summary.folderCount}`);
+  }
+
+  const formats = Object.entries(summary.formatCounts).sort(
+    (a, b) => b[1] - a[1],
+  );
+  for (const [format, count] of formats) {
+    lines.push(`${format.toLowerCase()} x${count}`);
+  }
+  return lines.join("\n");
 }
 
 /**
