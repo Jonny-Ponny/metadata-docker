@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-15`, `B-39`. Next:
-  `T-16`, `B-40`.
+- IDs are permanent and never reused. Last used: `T-15`, `B-41`. Next:
+  `T-16`, `B-42`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -39,8 +39,8 @@ image build. What remains is optional hardening and new features.
   `npm run build` are a separate CI job that gates the image build.
 - **Frontend component, store and utility tests (T-04).** Complete: every
   component including `App.svelte`, every store and the remaining utilities
-  have Vitest coverage. The suite runs 41 files / 531 tests and includes the
-  regression tests for B-33 to B-35.
+  have Vitest coverage. The suite runs 44 files / 606 tests and includes the
+  regression tests for B-33 to B-41.
 - **Frontend coverage and CI parity (T-05).** Complete: `npm run test:coverage`
   uses `@vitest/coverage-v8` to print a summary and write HTML/LCOV reports.
   The pull-request and main-branch `frontend` job runs the report in a
