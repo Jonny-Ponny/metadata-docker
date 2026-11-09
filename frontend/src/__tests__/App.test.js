@@ -460,8 +460,11 @@ describe("App", () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    // Restore spies before dropping fake timers: restoring a spy that wrapped
+    // the fake setTimeout would otherwise put the fake back on the global.
     vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
     document.body.className = "";
     document.querySelector('link[rel="icon"][type="image/svg+xml"]')?.remove();
   });
@@ -482,6 +485,30 @@ describe("App", () => {
     expect(node(view, "Albums")).toBeTruthy();
     expect(node(view, "loose.flac")).toBeTruthy();
     expect(screen.queryByText("No music files found")).toBeNull();
+  });
+
+  it("clears a pending selection scroll when unmounted", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+
+    vi.useFakeTimers();
+    const setSpy = vi.spyOn(globalThis, "setTimeout");
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+
+    // Selecting a row schedules a delayed scroll (a 50 ms timer, and possibly
+    // a retry chain afterwards).
+    await fireEvent.click(node(view, "loose.flac"));
+
+    const scrollTimerIds = setSpy.mock.results
+      .filter((_, index) => setSpy.mock.calls[index][1] === 50)
+      .map((result) => result.value);
+    expect(scrollTimerIds.length).toBeGreaterThan(0);
+
+    // Unmounting must cancel it; otherwise it can fire after the DOM is gone.
+    view.unmount();
+    expect(clearSpy).toHaveBeenCalledWith(
+      scrollTimerIds[scrollTimerIds.length - 1],
+    );
   });
 
   it("scrolls the file tree with the wheel while an item is dragged", async () => {

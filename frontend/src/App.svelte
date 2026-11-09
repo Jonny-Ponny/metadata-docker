@@ -1383,6 +1383,19 @@
     }
   }
 
+  // Only one scroll retry chain may be pending: a new selection or tree update
+  // replaces the previous one, and unmounting clears it so no timer can fire
+  // after the component (or the test DOM) is gone.
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let scrollTimer = null;
+
+  function clearScrollTimer() {
+    if (scrollTimer) {
+      clearTimeout(scrollTimer);
+      scrollTimer = null;
+    }
+  }
+
   // Function to scroll selected item into view
   function scrollSelectedIntoView() {
     if (!selectedFile && !selectedFolder) return;
@@ -1407,12 +1420,22 @@
         });
       } else {
         // Element not found yet, try again
-        setTimeout(() => tryScroll(attempt + 1), 50 * (attempt + 1));
+        scrollTimer = setTimeout(
+          () => {
+            scrollTimer = null;
+            tryScroll(attempt + 1);
+          },
+          50 * (attempt + 1),
+        );
       }
     };
 
-    // Start trying
-    setTimeout(() => tryScroll(), 50);
+    // Start trying. A chain started for an older selection is obsolete.
+    clearScrollTimer();
+    scrollTimer = setTimeout(() => {
+      scrollTimer = null;
+      tryScroll();
+    }, 50);
   }
 
   // Watch for sort config changes
@@ -1427,6 +1450,9 @@
   $effect(() => {
     if (selectedFile || selectedFolder) {
       scrollSelectedIntoView();
+    } else {
+      // Drop a retry chain for a selection that no longer exists.
+      clearScrollTimer();
     }
   });
 
@@ -1625,6 +1651,7 @@
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      clearScrollTimer();
       resetDragState();
       window.fetch = originalFetch; // Restore original fetch
       window.removeEventListener("refreshFileTree", loadFileTree);
