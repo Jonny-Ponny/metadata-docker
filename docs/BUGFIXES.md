@@ -344,6 +344,20 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/__tests__/App.test.js` - `shows an empty library
     state`; `loads the tree again after logging out and back in`.
 
+- [x] **B-41 (P1) A pending selection-scroll timer could outlive the app.**
+      `scrollSelectedIntoView()` in `App.svelte` started a retry chain with
+      `setTimeout` but never kept its id, so unmounting left the callback in the
+      event loop. When the retry fired after the page (or the test DOM) was gone,
+      `document.querySelector()` threw `ReferenceError: document is not defined`.
+      The lazy tree made this reachable: a selected row can be in a folder that is
+      not loaded yet, so the chain actually retries. It surfaced as flaky
+      frontend CI failures after all tests had passed.
+      **Fix:** keep one `scrollTimer` id, clear it before starting a new chain,
+      clear it when the selection disappears, and clear it in the `onMount`
+      cleanup.
+      **Test:** `frontend/src/__tests__/App.test.js` - `clears a pending
+      selection scroll when unmounted`.
+
 ## Lyrics editor
 
 - [x] **B-36 (P2) Synced-lyrics timestamps lagged behind the live playback position.**
@@ -447,3 +461,4 @@ silently.
 | B-38 | `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps the current line in view when syncing with the c shortcut` |
 | B-39 | `frontend/src/components/__tests__/Player.test.js` - `performs a seek requested before the metadata loads` |
 | B-40 | `frontend/src/components/__tests__/TreeNode.test.js` - `smart renames audio files from the lazy folder cache` |
+| B-41 | `frontend/src/__tests__/App.test.js` - `clears a pending selection scroll when unmounted` |
