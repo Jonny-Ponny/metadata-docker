@@ -306,6 +306,17 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/components/__tests__/TimestampEditModal.test.js` -
       `saves on Enter and closes on Escape`.
 
+- [x] **B-40 (P2) Smart rename all audio reported an empty folder after lazy tree loading.**
+      `handleSmartRenameAllFiles()` (`TreeNode.svelte`) filtered `item.children`,
+      but `/api/files/dir` returns directory entries without children; the tree
+      renders them from `childrenByPath`. A lazily loaded folder therefore looked
+      empty and the action only showed "No supported audio files found".
+      **Fix:** load the folder through `onLoad` when it is not cached, then filter
+      its cached children.
+      **Test:** `frontend/src/components/__tests__/TreeNode.test.js` - `smart
+      renames audio files from the lazy folder cache` and `loads an unexpanded
+      folder before smart renaming all audio`.
+
 ## Frontend dialogs
 
 - [x] **B-34 (P2) A failed addon fetch made the settings dialog retry forever.**
@@ -435,3 +446,4 @@ silently.
 | B-37 | `frontend/src/components/__tests__/TimestampEditModal.test.js` - `does not label the current-time button with a stale timestamp` |
 | B-38 | `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps the current line in view when syncing with the c shortcut` |
 | B-39 | `frontend/src/components/__tests__/Player.test.js` - `performs a seek requested before the metadata loads` |
+| B-40 | `frontend/src/components/__tests__/TreeNode.test.js` - `smart renames audio files from the lazy folder cache` |
