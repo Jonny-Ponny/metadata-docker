@@ -413,12 +413,24 @@
         return;
       }
 
+      // Folders from /api/files/dir arrive without children. Load the folder
+      // on demand so this action also works on one that was never expanded.
+      if (
+        item.children == null &&
+        !$childrenByPath.has(item.path) &&
+        item.has_children !== false &&
+        onLoad
+      ) {
+        await onLoad(item.path);
+      }
+
       // Filter for supported audio files only.
-      const audioFiles =
-        item.children?.filter(
-          (child) =>
-            child.type === "file" && isAudioFile(child.name, child.file_type),
-        ) || [];
+      const folderChildren =
+        $childrenByPath.get(item.path) ?? item.children ?? [];
+      const audioFiles = folderChildren.filter(
+        (child) =>
+          child.type === "file" && isAudioFile(child.name, child.file_type),
+      );
 
       if (audioFiles.length === 0) {
         toast.info("No supported audio files found in this folder");

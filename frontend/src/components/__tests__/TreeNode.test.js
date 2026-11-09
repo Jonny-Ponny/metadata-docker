@@ -749,6 +749,77 @@ describe("TreeNode", () => {
     window.removeEventListener("refreshFileTree", refreshHandler);
   });
 
+  it("smart renames audio files from the lazy folder cache", async () => {
+    const successSpy = vi.spyOn(toast, "success");
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse(200, { success: true, newName: "renamed", newPath: "x" }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    childrenByPath.set(
+      new Map([
+        [
+          "folder",
+          [
+            audioItem,
+            { ...audioItem, name: "two.flac", path: "folder/two.flac" },
+            imageItem,
+          ],
+        ],
+      ]),
+    );
+    setup({
+      name: "folder",
+      path: "folder",
+      type: "directory",
+      has_children: true,
+    });
+
+    await openMenu("folder");
+    await fireEvent.click(screen.getByText("Smart Rename All Audio"));
+
+    await waitFor(() =>
+      expect(successSpy).toHaveBeenCalledWith(
+        "Successfully renamed all 2 audio file(s)",
+      ),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads an unexpanded folder before smart renaming all audio", async () => {
+    const successSpy = vi.spyOn(toast, "success");
+    const onLoad = vi.fn(async (/** @type {string} */ path) => {
+      childrenByPath.set(new Map([[path, [audioItem]]]));
+    });
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse(200, { success: true, newName: "renamed", newPath: "x" }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    setup(
+      {
+        name: "folder",
+        path: "folder",
+        type: "directory",
+        has_children: true,
+      },
+      { onLoad },
+    );
+
+    await openMenu("folder");
+    await fireEvent.click(screen.getByText("Smart Rename All Audio"));
+
+    await waitFor(() =>
+      expect(successSpy).toHaveBeenCalledWith(
+        "Successfully renamed all 1 audio file(s)",
+      ),
+    );
+    expect(onLoad).toHaveBeenCalledWith("folder");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("reports when a folder has no audio to smart rename", async () => {
     const infoSpy = vi.spyOn(toast, "info");
     const fetchMock = vi.fn();
