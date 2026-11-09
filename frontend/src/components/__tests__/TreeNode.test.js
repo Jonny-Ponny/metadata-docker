@@ -13,7 +13,7 @@ import { toast } from "../../stores/toast.store.js";
  * @typedef {Object} TreeItem
  * @property {string} name
  * @property {string} path
- * @property {string} type
+ * @property {"file" | "directory"} type
  * @property {string} [file_type]
  * @property {number} [size]
  * @property {TreeItem[]} [children]
@@ -368,6 +368,7 @@ describe("TreeNode", () => {
   });
 
   it("summarises folder contents in its tooltip", () => {
+    /** @type {TreeItem} */
     const nested = {
       name: "nested",
       path: "folder/nested",
