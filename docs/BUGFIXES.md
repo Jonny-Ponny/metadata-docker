@@ -358,6 +358,19 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/__tests__/App.test.js` - `clears a pending
       selection scroll when unmounted`.
 
+- [x] **B-42 (P1) Folder overview stayed empty for folders loaded after selection.**
+      `directAudioFiles` in `App.svelte` built the overview list with
+      `getChildren(selectedFolder)`. That helper reads a plain module variable,
+      so the derived list did not re-run when the lazy tree finished loading the
+      selected folder. Selecting a folder that was not loaded yet left the
+      overview with no files, and it showed "All files have selected metadata
+      fields" even though the folder had audio. Refresh and toggling the
+      overview could not fix it because the prop never updated.
+      **Fix:** read `$childrenByPath.get(selectedFolder)` in the derived list so
+      it re-runs when the folder arrives.
+      **Test:** `frontend/src/__tests__/App.test.js` - `fills the direct folder
+      overview after a lazy folder arrives`.
+
 ## Lyrics editor
 
 - [x] **B-36 (P2) Synced-lyrics timestamps lagged behind the live playback position.**
@@ -462,3 +475,4 @@ silently.
 | B-39 | `frontend/src/components/__tests__/Player.test.js` - `performs a seek requested before the metadata loads` |
 | B-40 | `frontend/src/components/__tests__/TreeNode.test.js` - `smart renames audio files from the lazy folder cache` |
 | B-41 | `frontend/src/__tests__/App.test.js` - `clears a pending selection scroll when unmounted` |
+| B-42 | `frontend/src/__tests__/App.test.js` - `fills the direct folder overview after a lazy folder arrives` |

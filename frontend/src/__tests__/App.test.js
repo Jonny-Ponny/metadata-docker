@@ -1917,4 +1917,29 @@ describe("App", () => {
       callsStartingWith("/api/metadata?path=Albums%2FCD2%2Fdeep.flac"),
     ).toHaveLength(0);
   });
+
+  it("fills the direct folder overview after a lazy folder arrives", async () => {
+    isAuthenticated.set(true);
+    /** @type {(value: unknown) => void} */
+    let resolveAlbums = () => {};
+    const albumsReply = new Promise((resolve) => {
+      resolveAlbums = resolve;
+    });
+    apiOverrides["/api/files/dir?path=Albums"] = albumsReply;
+    const view = await renderAuthenticated();
+
+    // Select and expand Albums while its listing is still in flight.
+    await fireEvent.click(node(view, "Albums"));
+    await fireEvent.click(screen.getByTitle("Toggle folder metadata overview"));
+
+    // The folder arrives after the overview already rendered its empty state.
+    // The direct list must update and fetch the audio metadata.
+    resolveAlbums(makeDirectoryReply("Albums"));
+
+    await waitFor(() =>
+      expect(
+        callsStartingWith("/api/metadata?path=Albums%2Fsong.mp3"),
+      ).toHaveLength(1),
+    );
+  });
 });
