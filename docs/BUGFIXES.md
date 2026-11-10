@@ -371,6 +371,19 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/__tests__/App.test.js` - `fills the direct folder
       overview after a lazy folder arrives`.
 
+- [x] **B-43 (P1) Recursive folder overview reported no missing fields for nested folders.**
+      With `recursiveOverview` enabled, the overview effect in `App.svelte` looked
+      the selected folder up with `findNodeByPath(treeData, folderPath)`. The
+      lazy tree only keeps root entries in `treeData`, so a nested folder was
+      never found. The effect returned without starting the walk,
+      `audioFilesInFolder` stayed empty, and the overview showed "All files have
+      selected metadata fields" even when files were missing fields. Toggling the
+      overview could not recover because the lookup failed the same way.
+      **Fix:** fall back to a synthetic directory node built from the selected
+      path, which `collectAudioFilesRecursively` then loads from the lazy cache.
+      **Test:** `frontend/src/__tests__/App.test.js` - `keeps the recursive
+      overview accurate for a nested selected folder`.
+
 ## Lyrics editor
 
 - [x] **B-36 (P2) Synced-lyrics timestamps lagged behind the live playback position.**
@@ -476,3 +489,4 @@ silently.
 | B-40 | `frontend/src/components/__tests__/TreeNode.test.js` - `smart renames audio files from the lazy folder cache` |
 | B-41 | `frontend/src/__tests__/App.test.js` - `clears a pending selection scroll when unmounted` |
 | B-42 | `frontend/src/__tests__/App.test.js` - `fills the direct folder overview after a lazy folder arrives` |
+| B-43 | `frontend/src/__tests__/App.test.js` - `keeps the recursive overview accurate for a nested selected folder` |
