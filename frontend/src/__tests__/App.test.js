@@ -1873,6 +1873,66 @@ describe("App", () => {
     expect(metadataCallsFor("Albums/CD2/deep.flac").length).toBe(1);
   });
 
+  it("keeps the recursive overview accurate for a nested selected folder", async () => {
+    isAuthenticated.set(true);
+    settings.update((current) => ({ ...current, recursiveOverview: true }));
+    useTree([
+      {
+        name: "Albums",
+        path: "Albums",
+        type: "directory",
+        children: [
+          {
+            name: "song.mp3",
+            path: "Albums/song.mp3",
+            type: "file",
+            file_type: "audio",
+            size: 20,
+          },
+          {
+            name: "CD2",
+            path: "Albums/CD2",
+            type: "directory",
+            children: [
+              {
+                name: "deep.flac",
+                path: "Albums/CD2/deep.flac",
+                type: "file",
+                file_type: "audio",
+                size: 20,
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    // Simulate a file that is missing a field so the overview has something to
+    // report instead of the "all fields present" empty state.
+    apiOverrides[
+      "/api/metadata?path=Albums%2FCD2%2Fdeep.flac&includePicture=false"
+    ] = makeResponse({ ...metadata, title: "" });
+    const view = await renderAuthenticated();
+
+    // Open Albums so the nested folder is rendered, then switch the overview to
+    // it. The lazy tree only keeps root entries in `treeData`, so the recursive
+    // walk has to start from the selected path itself.
+    await fireEvent.click(node(view, "Albums"));
+    await fireEvent.click(screen.getByTitle("Toggle folder metadata overview"));
+    await waitFor(() =>
+      expect(
+        view.container.querySelector('[data-folder-path="Albums/CD2"]'),
+      ).toBeTruthy(),
+    );
+    await fireEvent.click(node(view, "Albums/CD2"));
+
+    expect(
+      await screen.findByText(/1 of 1 files have missing fields/),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText("All files have selected metadata fields"),
+    ).toBeNull();
+  });
+
   it("only checks direct children without recursive overview", async () => {
     isAuthenticated.set(true);
     useTree([

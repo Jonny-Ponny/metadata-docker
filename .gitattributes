@@ -1,1 +1,8 @@
 *.sh text eol=lf
+
+# Keep test code out of GitHub's language statistics.
+tests/** linguist-detectable=false
+**/__tests__/** linguist-detectable=false
+*.test.js linguist-detectable=false
+frontend/src/test/** linguist-detectable=false
+frontend/vitest.config.js linguist-detectable=false

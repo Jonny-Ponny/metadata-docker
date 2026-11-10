@@ -418,10 +418,16 @@
     const folderPath = selectedFolder;
     // Once the walk for this folder is complete there is nothing left to do.
     if (recursiveAudioFiles?.folderPath === folderPath) return;
-    // Reading the tree makes this effect re-run after each folder load, so a
-    // recursive overview keeps resolving deeper until the subtree is complete.
-    const folderNode = findNodeByPath(treeData, folderPath);
-    if (!folderNode) return;
+    // `treeData` only holds the root entries of the lazy tree, so a nested
+    // folder is usually not reachable from it. Fall back to a synthetic node
+    // for the selected path; the walk loads that folder (and its subtree) from
+    // the cache on demand.
+    const folderNode = findNodeByPath(treeData, folderPath) ?? {
+      name: folderPath.split("/").pop() ?? folderPath,
+      path: folderPath,
+      type: "directory",
+      has_children: true,
+    };
 
     let cancelled = false;
     collectAudioFilesRecursively(folderNode).then((files) => {
