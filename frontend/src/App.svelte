@@ -380,7 +380,11 @@
   // case fills in the list from the effect below once nested folders arrive.
   let directAudioFiles = $derived.by(() => {
     if (!selectedFolder) return [];
-    return getChildren(selectedFolder)
+    // Read the reactive cache, not getChildren(): the latter reads a plain
+    // module variable, so this list would stay empty when the selected folder
+    // finishes loading after the selection changed.
+    const children = $childrenByPath.get(selectedFolder) ?? [];
+    return children
       .filter((child) => child.type === "file" && child.file_type === "audio")
       .map((child) => ({
         path: child.path,
