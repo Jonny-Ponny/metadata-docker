@@ -370,6 +370,52 @@ describe("MetadataFetcher", () => {
     ).toBe(true);
   });
 
+  it("sorts fetched song fields by displayed label", async () => {
+    stubApi({
+      song: {
+        success: true,
+        metadata: {
+          title: "Fetched Title",
+          date: "2020",
+          artist: "Fetched Artist",
+          CatalogNumber: "CAT-1",
+          albumArtist: "Album Artist",
+        },
+      },
+    });
+    const { container } = render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "song",
+        targetPath: "folder/song.mp3",
+      },
+    });
+    await waitFor(() =>
+      expect(
+        /** @type {HTMLInputElement} */ (
+          screen.getByPlaceholderText("Search...")
+        ).value,
+      ).toBe("Song Title"),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Song Metadata");
+
+    const labels = Array.from(
+      container.querySelectorAll(
+        ".metadata-preview .fields-list .field-item label",
+      ),
+    ).map((label) => label.textContent.trim());
+    expect(labels).toEqual([
+      "Album Artist:",
+      "Artist:",
+      "CatalogNumber:",
+      "Date:",
+      "Title:",
+    ]);
+  });
+
   it("reports a failed metadata fetch", async () => {
     await renderSong({ songError: true });
     await fireEvent.click(screen.getByRole("button", { name: "Search" }));
@@ -541,6 +587,36 @@ describe("MetadataFetcher", () => {
     expect(screen.getByText("b.mp3")).toBeTruthy();
     expect(screen.queryByText("cover.jpg")).toBeNull();
     expect(screen.getAllByText("Global filter").length).toBe(1);
+  });
+
+  it("sorts the global field filter by displayed label", async () => {
+    stubApi({ tree: folderTree });
+    const { container } = render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose: vi.fn(),
+        mode: "album",
+        targetPath: "folder",
+        isFolder: true,
+      },
+    });
+    await waitFor(() =>
+      expect(
+        /** @type {HTMLInputElement} */ (
+          screen.getByPlaceholderText("Search...")
+        ).value,
+      ).toBe("Album Name"),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await fireEvent.click(await screen.findByText("Search Title"));
+    await screen.findByText("Files in folder");
+
+    const labels = Array.from(
+      container.querySelectorAll(
+        ".global-fields .fields-list .field-item label",
+      ),
+    ).map((label) => label.textContent.trim());
+    expect(labels).toEqual(["Artist:", "Title:", "Track Number:"]);
   });
 
   it("applies the batch selection to every enabled file", async () => {

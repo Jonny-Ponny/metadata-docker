@@ -157,13 +157,38 @@
   }
 
   /**
+   * Compare two field keys by the label shown in the UI.
+   * @param {string} a
+   * @param {string} b
+   * @returns {number}
+   */
+  function compareFieldLabels(a, b) {
+    return (
+      getFieldLabel(a).localeCompare(getFieldLabel(b), undefined, {
+        sensitivity: "base",
+      }) || a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }
+
+  /**
+   * Sort field keys by their displayed label.
+   * @param {string[]} keys
+   * @returns {string[]}
+   */
+  function sortedFieldKeys(keys) {
+    return [...keys].sort(compareFieldLabels);
+  }
+
+  /**
    * @param {Metadata | null | undefined} metadata
    * @returns {[string, any][]}
    */
   function metadataEntries(metadata) {
-    return Object.entries(metadata || {}).filter(
+    const entries = Object.entries(metadata || {}).filter(
       ([key]) => !isExtraInfoKey(key),
     );
+    entries.sort(([a], [b]) => compareFieldLabels(a, b));
+    return entries;
   }
 
   /**
@@ -898,7 +923,7 @@
                     {/each}
                   </div>
                   <div class="fields-list">
-                    {#each Array.from(allFields) as field (field)}
+                    {#each sortedFieldKeys(Array.from(allFields)) as field (field)}
                       <div class="field-item">
                         <label title={getFieldDescription(field) || undefined}>
                           <input
