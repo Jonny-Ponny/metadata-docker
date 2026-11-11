@@ -8,7 +8,7 @@
 # linux/arm/v7 image, so the builder stays on 22 (still armv7-capable and
 # supported until April 2027); the final stage keeps targeting armv7. The
 # Dependabot config ignores Node 23+ updates for this reason.
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d AS frontend-builder
 WORKDIR /app/frontend
 
 # Install from the lockfile so the image matches CI and the repository
@@ -20,7 +20,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ---- Stage 2: Build the Flask backend and include frontend ----
-FROM python:3.15-alpine@sha256:20a82dbc2783112ddb91d1534603f802d222a3e63e593cd002eb2ac534e70211
+FROM python:3.15-alpine@sha256:a0f2e268f2ce8f3709611a90054ec6a8ae31f6251f5896b8648b9bb99835e30a
 WORKDIR /app
 
 # Install shadow (for user/group management) and gosu
