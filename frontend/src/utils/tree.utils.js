@@ -27,11 +27,11 @@ import { sortItems } from "./sort.utils.js";
 
 /**
  * The shape of a tree entry this module reads. Tree nodes carry more fields.
- * @typedef {Object} TreeEntry
+ * @typedef {Object} TreeRowEntry
  * @property {string} name
  * @property {string} path
  * @property {string} type
- * @property {TreeEntry[] | null} [children]
+ * @property {TreeRowEntry[] | null} [children]
  * @property {boolean} [has_children]
  * @property {string | number} [created]
  * @property {string | number} [modified]
@@ -50,8 +50,8 @@ function parentOf(path) {
 /**
  * Whether a folder can be expanded. A folder known to be empty (`has_children
  * false`) and a loaded folder with no entries cannot be.
- * @param {TreeEntry} entry
- * @param {TreeEntry[]} children
+ * @param {TreeRowEntry} entry
+ * @param {TreeRowEntry[]} children
  * @returns {boolean}
  */
 function folderHasChildren(entry, children) {
@@ -63,16 +63,16 @@ function folderHasChildren(entry, children) {
  * Children of a folder as the tree renders them: the lazy cache first, then a
  * nested `children` array (a fully loaded `/api/files` response), sorted with
  * the tree's current order.
- * @param {TreeEntry} entry
- * @param {Map<string, TreeEntry[]>} childrenByPath
+ * @param {TreeRowEntry} entry
+ * @param {Map<string, TreeRowEntry[]>} childrenByPath
  * @param {{ by: string, direction: string }} sortConfig
- * @returns {TreeEntry[]}
+ * @returns {TreeRowEntry[]}
  */
 function childrenOf(entry, childrenByPath, sortConfig) {
   if (entry.type !== "directory") return [];
   const cached = childrenByPath.get(entry.path) ?? entry.children ?? [];
   if (!cached.length) return [];
-  return /** @type {TreeEntry[]} */ (
+  return /** @type {TreeRowEntry[]} */ (
     /** @type {unknown} */ (
       sortItems(cached, sortConfig.by, sortConfig.direction)
     )
@@ -88,8 +88,8 @@ function childrenOf(entry, childrenByPath, sortConfig) {
  * from the App (which adds the search-only expansion) keeps keyboard order
  * identical to what is on screen.
  *
- * @param {TreeEntry[]} nodes top-level entries
- * @param {Map<string, TreeEntry[]>} childrenByPath
+ * @param {TreeRowEntry[] | null | undefined} nodes top-level entries
+ * @param {Map<string, TreeRowEntry[]>} childrenByPath
  * @param {{ has(path: string): boolean }} expanded
  * @param {{ by: string, direction: string }} sortConfig
  * @returns {VisibleRow[]}
@@ -104,7 +104,7 @@ export function flattenVisibleRows(
   const rows = [];
 
   /**
-   * @param {TreeEntry[]} entries
+   * @param {TreeRowEntry[]} entries
    * @param {number} level
    */
   function walk(entries, level) {
@@ -127,7 +127,7 @@ export function flattenVisibleRows(
     }
   }
 
-  walk(nodes, 0);
+  walk(nodes ?? [], 0);
   return rows;
 }
 

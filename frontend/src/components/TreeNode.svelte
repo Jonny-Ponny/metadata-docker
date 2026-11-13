@@ -59,6 +59,8 @@
    * @property {(path: string) => void} onCreateFolder
    * @property {(path: string) => void} onCopy
    * @property {(path: string) => Promise<void> | void} [onLoad] fetch a folder
+   * @property {string} [rowIdPrefix] prefix for the row element ids, so a row
+   *   stays addressable when the tree is rendered more than once
    */
 
   /** @type {Props} */
@@ -76,6 +78,7 @@
     onCreateFolder,
     onCopy,
     onLoad,
+    rowIdPrefix = "",
   } = $props();
 
   // Input state
@@ -194,6 +197,13 @@
   function handleFileClick() {
     selectFile(item.path);
   }
+
+  // Row id for the keyboard focus model. The app scrolls the row it moves the
+  // cursor to by id, so the id must be unique even when the tree is rendered
+  // more than once (the search view and the normal tree can both be mounted).
+  const rowId = $derived(
+    `${rowIdPrefix}tree-row-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`,
+  );
 
   // Context menu handlers
   /**
@@ -580,6 +590,7 @@
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       role="listitem"
+      id={rowId}
       class="directory"
       class:indented={level > 0}
       class:selected={item.path === selectedFolder}
@@ -687,6 +698,7 @@
               {onCreateFolder}
               {onCopy}
               {onLoad}
+              {rowIdPrefix}
             />
           {/each}
         </ul>
@@ -773,6 +785,7 @@
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       role="listitem"
+      id={rowId}
       class="file"
       class:indented={level > 0}
       class:selected={item.path === selectedFile}
