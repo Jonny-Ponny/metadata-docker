@@ -16,6 +16,7 @@
     setCoverFromUrl,
     formatImageDimensions,
     probeImageSize,
+    createHold,
   } from "../utils/index.js";
 
   /**
@@ -105,6 +106,236 @@
       DEFAULT_HOLD_DURATIONS.tagDelete,
     ),
   );
+
+  // ========== KEYBOARD MODEL ==========
+  // The editor is made of text fields with action icons, so the icons stay out
+  // of the tab order and every action is a shortcut on the focused field:
+  //
+  //   Enter          apply this field to the file
+  //   Ctrl+Enter     HOLD to apply to the folder (progress fills the field)
+  //   Ctrl+Delete    HOLD to delete the field (from the file or from the folder
+  //                  when "Tag deletion applies to folder" is on)
+  //   Alt+ArrowDown  next field        Alt+ArrowUp   previous field
+  //   Tab/Shift+Tab  next/previous text field or checkbox
+  //
+  // Holding matches the mouse hold-to-confirm controls and uses the same
+  // configured durations, so a folder-wide change cannot happen by a slip.
+
+  /** Field ids in the order they are rendered, used by Alt+Arrow. */
+  let fieldOrder = $derived.by(() => {
+    if (readOnly) return [];
+    const order = [...mainFields];
+    if (otherExpanded) order.push(...textareaFields);
+    for (let i = 0; i < customFields.length; i += 1) {
+      order.push(customFieldId(i, "name"), customFieldId(i, "value"));
+    }
+    return order;
+  });
+
+  /**
+   * @param {number} index
+   * @param {"name" | "value"} part
+   */
+  function customFieldId(index, part) {
+    return `custom-${index}-${part}`;
+  }
+
+  /**
+   * The control a field id belongs to.
+   * @param {string} field
+   * @returns {HTMLInputElement | HTMLTextAreaElement | null}
+   */
+  function fieldControl(field) {
+    return /** @type {HTMLInputElement | HTMLTextAreaElement | null} */ (
+      document.getElementById(field) ??
+        document.querySelector(`[data-field-id="${CSS.escape(field)}"] input`)
+    );
+  }
+
+  /** The field the focused control belongs to (its control id is the field). */
+  function focusedFieldId() {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return null;
+    if (!active.closest(".metadata-editor")) return null;
+    const custom = active.closest("[data-field-id]");
+    if (custom) return custom.getAttribute("data-field-id");
+    return active.id || null;
+  }
+
+  /**
+   * Move keyboard focus to one of the editor's fields.
+   * @param {string | null} fieldId
+   */
+  function focusField(fieldId) {
+    if (!fieldId) return;
+    fieldControl(fieldId)?.focus();
+  }
+
+  /** @param {1 | -1} direction */
+  function moveField(direction) {
+    const order = fieldOrder;
+    if (!order.length) return;
+    const current = focusedFieldId();
+    const index = current ? order.indexOf(current) : -1;
+    const next =
+      index < 0
+        ? direction > 0
+          ? 0
+          : order.length - 1
+        : (index + direction + order.length) % order.length;
+    focusField(order[next]);
+  }
+
+  // One hold runs at a time; its progress is drawn on the focused field.
+  /** @type {{ field: string, run: () => void } | null} */
+  let keyboardHoldTarget = null;
+  let keyboardHoldProgress = $state(0);
+  let keyboardHoldField = $state(/** @type {string | null} */ (null));
+
+  const keyboardHold = createHold({
+    onProgress: (value) => {
+      keyboardHoldProgress = value;
+    },
+    onCancel: () => {
+      keyboardHoldProgress = 0;
+      keyboardHoldField = null;
+    },
+    onConfirm: () => {
+      const target = keyboardHoldTarget;
+      keyboardHoldProgress = 0;
+      keyboardHoldField = null;
+      target?.run();
+    },
+  });
+
+  /**
+   * Value of a field, read from the control that shows it so a hold applies
+   * exactly what the user typed.
+   * @param {string} field
+   * @returns {string}
+   */
+  function fieldValue(field) {
+    const control = fieldControl(field);
+    if (control) return control.value;
+    if (field === "lyrics" || field === "unsyncedLyrics") {
+      return String(metadata[field] ?? "");
+    }
+    const own = /** @type {Record<string, unknown>} */ (metadata)[field];
+    return typeof own === "string" ? own : "";
+  }
+
+  /**
+   * Start a hold on the focused field.
+   * @param {string} field
+   * @param {"folder" | "delete"} kind
+   * @param {KeyboardEvent} event
+   */
+  function startKeyboardHold(field, kind, event) {
+    if (readOnly || keyboardHold.isHolding) return;
+    if (kind === "folder") {
+      keyboardHold.update({ duration: holdApplyDuration });
+      keyboardHoldTarget = {
+        field,
+        run: () => applyToFolder(field, fieldValue(field)),
+      };
+    } else {
+      if (!fieldValue(field)) return;
+      keyboardHold.update({ duration: holdTagDeleteDuration });
+      keyboardHoldTarget = {
+        field,
+        run: () =>
+          applyDeleteToFolder
+            ? deleteFieldFromFolder(field)
+            : deleteField(field),
+      };
+    }
+    keyboardHoldField = field;
+    keyboardHoldProgress = 0;
+    keyboardHold.start(event);
+  }
+
+  /** @param {Event} event */
+  function endKeyboardHold(event) {
+    keyboardHold.cancel(event);
+    keyboardHoldTarget = null;
+    keyboardHoldProgress = 0;
+    keyboardHoldField = null;
+  }
+
+  /**
+   * Keydown shared by every field. Native behaviour (word-wise arrows,
+   * selection with Shift, typing) is left alone.
+   * @param {KeyboardEvent} event
+   */
+  function handleFieldKeydown(event) {
+    const field = focusedFieldId();
+    if (!field) return;
+    const isTagField = !field.endsWith("-name");
+
+    if (
+      event.altKey &&
+      (event.key === "ArrowDown" || event.key === "ArrowUp")
+    ) {
+      event.preventDefault();
+      moveField(event.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      if (!isTagField) return;
+      event.preventDefault();
+      // Auto-repeat while the hold is running must not restart it.
+      if (event.repeat && keyboardHold.isHolding) return;
+      startKeyboardHold(field, "folder", event);
+      return;
+    }
+
+    if (event.key === "Delete" && (event.ctrlKey || event.metaKey)) {
+      if (!isTagField) return;
+      event.preventDefault();
+      if (event.repeat && keyboardHold.isHolding) return;
+      startKeyboardHold(field, "delete", event);
+      return;
+    }
+
+    // Plain Enter applies the field to this file (unchanged behaviour).
+    if (event.key === "Enter" && !event.shiftKey) {
+      if (!isTagField) return;
+      event.preventDefault();
+      const value = fieldValue(field);
+      const custom = field.match(/^custom-\d+-value$/);
+      if (custom) {
+        const index = Number(field.split("-")[1]);
+        applyToFile(customFields[index].name, customFields[index].value);
+      } else {
+        applyToFile(field, value);
+      }
+    }
+  }
+
+  /**
+   * Releasing the key that started a hold ends it. The window listener below
+   * catches a release outside the field.
+   * @param {KeyboardEvent} event
+   */
+  function handleFieldKeyup(event) {
+    if (!keyboardHold.isHolding) return;
+    if (event.key === "Enter" || event.key === "Delete") endKeyboardHold(event);
+  }
+
+  $effect(() => {
+    /** @param {KeyboardEvent | FocusEvent} event */
+    const release = (event) => {
+      if (event instanceof KeyboardEvent) handleFieldKeyup(event);
+      else endKeyboardHold(event);
+    };
+    window.addEventListener("keyup", release);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("keyup", release);
+      window.removeEventListener("blur", release);
+    };
+  });
 
   // Derived: filename from path
   let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
