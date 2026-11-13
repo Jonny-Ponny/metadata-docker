@@ -106,6 +106,10 @@
                 <strong>Delete</strong> key to delete selected item
               </li>
               <li>
+                <strong>Arrow keys</strong> to move through the tree from the keyboard
+                (see Keyboard Shortcuts below)
+              </li>
+              <li>
                 <strong>Right-click</strong> for context menu with additional options
               </li>
             </ul>
@@ -290,12 +294,46 @@
 
             <h3>Keyboard Shortcuts</h3>
             <ul>
+              <li>
+                <strong>Tab</strong> into the file tree, then use the arrows to move
+                the cursor; the cursor does not open anything until you press Enter
+              </li>
+              <li>
+                <strong>↑ / ↓</strong> - previous / next visible item
+              </li>
+              <li>
+                <strong>←</strong> - collapse a folder, or jump to its parent folder
+              </li>
+              <li>
+                <strong>→</strong> - expand a folder, or jump to its first item
+              </li>
+              <li>
+                <strong>Space</strong> - expand or collapse the folder under the cursor
+              </li>
+              <li>
+                <strong>Enter</strong> - open the item: folders expand, files open
+                in the editor
+              </li>
+              <li>
+                <strong>Ctrl/Cmd + Enter</strong> - open the item in the editor and
+                move focus there
+              </li>
+              <li>
+                <strong>Home / End</strong> - first / last visible item
+              </li>
+              <li>
+                <strong>Page Up / Page Down</strong> - move one page
+              </li>
+              <li>
+                <strong>a-z</strong> - jump to the next name starting with the typed
+                letters
+              </li>
               <li><strong>F2</strong> - Rename selected item</li>
               <li>
                 <strong>Delete</strong> - Delete selected item
               </li>
               <li>
-                <strong>Enter</strong> - Apply current field changes
+                <strong>Enter</strong> in a metadata field - Apply current field changes
               </li>
               <li>
                 <strong>Esc</strong> - Close modals/cancel rename

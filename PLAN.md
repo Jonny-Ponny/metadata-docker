@@ -58,6 +58,13 @@ image build. What remains is optional hardening and new features.
   so the root loads once and every folder loads on expansion. Mutations refresh
   the affected folders instead of the whole tree. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#library-tree).
+- **Tree keyboard navigation (T-16).** Complete: a flat visible-row list derived
+  from the lazy cache, expanded set and sort order; a cursor separate from the
+  selection; a roving tabindex with focus following the cursor; arrows,
+  Home/End, PgUp/PgDn, Space, Enter and Ctrl/Cmd+Enter (open in the editor), and
+  type-ahead. F2 and Delete act on the cursor row. Typing targets and open
+  overlays turn the tree keys off. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tree-keyboard-navigation).
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are
@@ -77,18 +84,17 @@ image build. What remains is optional hardening and new features.
 Started from the "more keyboard shortcuts and modal focus handling" item under
 Features and split into three numbered tasks:
 
-- **T-16 (P2) - keyboard navigation in the file tree.** A visible-row list built
-  from the lazy cache and the current sort, a roving tabindex, and keys for
-  moving the cursor, expanding/collapsing folders, selecting and switching to
-  the editor. Done in `feature/tree-keyboard-navigation`.
 - **T-17 (P3) - keyboard handling in the metadata editor.** A defined key map
   inside `MetadataEditor` (move between fields, apply, jump to the next file)
   so the per-input `Enter` handlers and the app-level shortcuts stop competing.
-  Needs T-16 first, because both share the active-row state.
+  Needs T-16's cursor and guards, which are now in place.
 - **T-18 (P3) - ARIA tree semantics.** `role="tree"`/`treeitem`, `aria-level`,
   `aria-expanded`, `aria-setsize`/`aria-posinset` and `aria-activedescendant`,
   plus focus containment in the modals. Builds on T-16's flat row list; left
-  out of it to keep the keyboard change reviewable.
+  out of it to keep the keyboard change reviewable. The rows currently carry
+  `role="listitem"` and a roving tabindex, which the a11y linter accepts with
+  two local `svelte-ignore` comments in `TreeNode.svelte` that this task
+  removes.
 
 ### Known issues and small fixes
 
@@ -120,7 +126,8 @@ No open items.
 - **UX and performance** - smart-rename dry-run preview with a conflict
   strategy, addon reload from Settings, responsive/mobile layout, metadata
   CSV/JSON export-import and library normalisation tools. The keyboard tree
-  navigation part is tracked as T-16 to T-18 above.
+  navigation part is done (T-16); the editor key map and ARIA roles follow as
+  T-17 and T-18 above.
 - **More audio formats** - extend `formats.py` and `tag_backends.py`.
 
 ### Housekeeping

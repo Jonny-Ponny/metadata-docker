@@ -200,6 +200,29 @@ folders first (cancellable), checks free space, then sends four files at a time
 with XHR byte progress, a conflict policy (`skip-identical` by default,
 `keep-both` via Settings) and cancel/retry.
 
+### Tree keyboard navigation
+
+`TreeNode` is recursive and only folders the user opened are fetched, so
+walking the DOM would be fragile. Instead `utils/tree.utils.js` turns the
+lazy cache, the expanded set and the current sort into a flat row list
+(`flattenVisibleRows`) and the cursor is an index into it. The helpers there
+(`stepRow`, `pageRow`, `parentRow`, `firstChildRow`, `findByPrefix`) are pure
+and unit-tested.
+
+`App.svelte` keeps a cursor path (`activeRowPath`), separate from the
+selection: moving it only highlights a row, so scrolling with the arrow keys
+never loads audio or fetches metadata. Enter selects (file to the editor,
+folder toggles), Ctrl/Cmd+Enter selects and moves focus into the right panel.
+A roving tabindex keeps exactly one row in the Tab order; focus follows the
+cursor while the keyboard is in the tree, which a `focusin` listener tracks
+(typing targets and open overlays keep the tree keys off). Rows forward their
+keys through `onRowKeys` with their own path, and the tree panel forwards keys
+pressed on it, so both start from a visible row. The guards live in
+`stores/keyboard.store.js` (`shouldIgnoreShortcut`, `isTypingTarget`,
+`isOverlayOpen`); F2 and Delete read the same cursor, so they act on the row
+the keyboard is on. ARIA tree roles are tracked separately (T-18 in
+[PLAN.md](../PLAN.md)).
+
 ## Tests
 
 The suite runs against a temporary music library and log directory created by
