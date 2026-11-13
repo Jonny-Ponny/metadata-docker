@@ -921,6 +921,9 @@
           class="rename-input"
           type="text"
         />
+        <!-- Holds the row's size while renaming so cancelling does not shift
+             the row under the focus that returns to it. -->
+        <span class="rename-spacer" aria-hidden="true">{filename}</span>
       {:else}
         <span class="name">{filename}</span>
         <span class="file-info">
@@ -1091,6 +1094,11 @@
   .file.selected:hover,
   .directory.selected:hover {
     background-color: var(--color-primary-transparent);
+  }
+
+  .rename-spacer {
+    visibility: hidden;
+    white-space: nowrap;
   }
 
   /* Keyboard cursor: a dashed outline so it is distinguishable from the

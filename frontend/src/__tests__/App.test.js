@@ -1589,6 +1589,107 @@ describe("App", () => {
       expect(document.getElementById("tree-row-Zulu-flac")).toBeNull();
     });
 
+    it("returns focus to the renamed row after F2 + Enter", async () => {
+      useTree(keyboardTree());
+      apiOverrides["/api/rename"] = makeResponse({
+        success: true,
+        newPath: "Renamed.flac",
+      });
+      view = await renderAuthenticated();
+      await fireEvent.click(row("Charlie.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+
+      await enterTree();
+      await pressKey("End");
+      await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
+
+      const target = document.getElementById("tree-row-Zulu-flac") ?? window;
+      fireEvent.keyDown(target, { key: "F2" });
+      const input = /** @type {HTMLInputElement} */ (
+        view.container.querySelector(".rename-input")
+      );
+      await waitFor(() => expect(input).toBeTruthy());
+
+      await fireEvent.input(input, { target: { value: "Renamed.flac" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(callsTo("/api/rename")).toHaveLength(1));
+
+      // Focus goes back to the row under the cursor, not the selected file
+      // (Charlie.flac is still selected and shown in the editor). The stub
+      // keeps serving the old name, so the row may be the old path.
+      await waitFor(() =>
+        expect(document.activeElement?.getAttribute("id")).not.toBe(
+          "tree-row-Charlie-flac",
+        ),
+      );
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement?.getAttribute("id")).toBe(
+        `tree-row-${cursorPath()?.replace(/[^a-zA-Z0-9]/g, "-")}`,
+      );
+      // The selection keeps showing the audio file in the player and editor.
+      expect(cursorPath()).not.toBe("Charlie.flac");
+      expect(
+        view.container
+          .querySelector(".file.selected")
+          ?.getAttribute("data-file-path"),
+      ).toBe("Charlie.flac");
+      expect(
+        screen.getByRole("heading", { name: "Metadata Editor" }),
+      ).toBeTruthy();
+    });
+
+    it("returns focus to the row after cancelling a rename with Escape", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await fireEvent.click(row("Charlie.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      await enterTree();
+      await pressKey("End");
+      await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
+
+      const target = document.getElementById("tree-row-Zulu-flac") ?? window;
+      fireEvent.keyDown(target, { key: "F2" });
+      const input = /** @type {HTMLInputElement} */ (
+        view.container.querySelector(".rename-input")
+      );
+      await waitFor(() => expect(input).toBeTruthy());
+      fireEvent.keyDown(input, { key: "Escape" });
+
+      // Cancelling returns to the cursor row, not the selection.
+      await waitFor(() =>
+        expect(document.activeElement?.getAttribute("id")).toBe(
+          "tree-row-Zulu-flac",
+        ),
+      );
+      expect(callsTo("/api/rename")).toHaveLength(0);
+    });
+
+    it("keeps focus in the right panel after a rename started there", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await fireEvent.click(row("Charlie.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+
+      // Focus a real control in the right panel, then end a rename without
+      // touching the tree: the keyboard must stay where the user left it.
+      const field = /** @type {HTMLInputElement | null} */ (
+        view.container.querySelector(".right-panel input")
+      );
+      expect(field).toBeTruthy();
+      field?.focus();
+      const before = document.activeElement;
+
+      renamingPath.set("Zulu.flac");
+      await waitFor(() =>
+        expect(view.container.querySelector(".rename-input")).toBeTruthy(),
+      );
+      renamingPath.set(null);
+      await tick();
+      await tick();
+
+      expect(document.activeElement).toBe(before);
+    });
+
     it("moves the cursor onto the clicked row", async () => {
       useTree(keyboardTree());
       view = await renderAuthenticated();

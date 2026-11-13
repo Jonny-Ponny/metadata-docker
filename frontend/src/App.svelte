@@ -1585,6 +1585,68 @@
     }
   }
 
+  // Focus return after a rename. The rename input unmounts when renaming ends
+  // (Enter, Esc or a blur), which would otherwise leave focus on the page and
+  // force the user to press the switch-panel key before the tree worked again.
+  // The row that gets focus back is the keyboard cursor, not the selection:
+  // F2 renames the row under the cursor, which may be a different file than the
+  // one loaded in the player and editor.
+  let wasRenaming = false;
+  /** Path under the cursor when the rename started. */
+  let renameReturnRow = /** @type {string | null} */ (null);
+  $effect(() => {
+    const renaming = $renamingPath !== null;
+    if (renaming) {
+      wasRenaming = true;
+      renameReturnRow = activeRowPath ?? null;
+      return;
+    }
+    if (!wasRenaming) return;
+    wasRenaming = false;
+
+    // A rename started from the right panel gives the keyboard back to it.
+    if (rightPanel?.contains(document.activeElement)) return;
+
+    // Otherwise focus goes back to the row the rename started on. Its path may
+    // have changed: `handleRename` remaps the selection only, so the cursor is
+    // matched by name in its folder when the old path is gone. The row may also
+    // only exist once the folder refreshed, which the tick below waits for.
+    const rowPath = renameReturnRow ?? activeRowPath;
+    renameReturnRow = null;
+    if (!rowPath) return;
+    treeFocusMode.set("navigation");
+    setTreeKeyboardActive(true);
+    void tick().then(() => {
+      const target = remapRenamedRow(rowPath);
+      if (!target) return;
+      setActiveRow(target);
+      scheduleRowScroll(target);
+      focusTreeRow(target);
+    });
+  });
+
+  /**
+   * The row to focus after a rename: the same path when it still exists, or the
+   * row in its folder whose name matches the renamed one. Returns `null` when
+   * neither is visible (the folder did not reload).
+   * @param {string} oldPath
+   * @returns {string | null}
+   */
+  function remapRenamedRow(oldPath) {
+    if (visibleRows.some((row) => row.path === oldPath)) return oldPath;
+    // A rename keeps the item in its folder, so the row after it in the list is
+    // the renamed item. Match by name from the selection when it was remapped.
+    const renamed =
+      selectedFile && parentPath(selectedFile) === parentPath(oldPath)
+        ? selectedFile
+        : selectedFolder && parentPath(selectedFolder) === parentPath(oldPath)
+          ? selectedFolder
+          : null;
+    return renamed && visibleRows.some((row) => row.path === renamed)
+      ? renamed
+      : null;
+  }
+
   /**
    * Focus follows the cursor while the keyboard is in the tree. Without this a
    * row would render focused but the cursor moved on, and the next arrow key

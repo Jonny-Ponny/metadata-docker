@@ -223,7 +223,9 @@ exactly one row in the Tab order; focus follows the cursor while the keyboard is
 in the tree, which a `focusin` listener tracks (typing targets and open overlays
 keep the tree keys off). Rows forward their keys through `onRowKeys` with their
 own path, and the tree panel forwards keys pressed on it, so both start from a
-visible row. The guards live in
+visible row. When a rename input unmounts (Enter, Esc or a blur), focus returns
+to the renamed row (or stays in the right panel if the rename started there),
+so the tree keeps working without the switch shortcut. The guards live in
 `stores/keyboard.store.js` (`shouldIgnoreShortcut`, `isTypingTarget`,
 `isOverlayOpen`); F2 and Delete read the same cursor, so they act on the row
 the keyboard is on. ARIA tree roles are tracked separately (T-18 in
