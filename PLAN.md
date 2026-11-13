@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-15`, `B-43`. Next:
-  `T-16`, `B-44`.
+- IDs are permanent and never reused. Last used: `T-18`, `B-43`. Next:
+  `T-19`, `B-44`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -72,6 +72,24 @@ image build. What remains is optional hardening and new features.
 
 ## Planned
 
+### Keyboard and accessibility (tree navigation)
+
+Started from the "more keyboard shortcuts and modal focus handling" item under
+Features and split into three numbered tasks:
+
+- **T-16 (P2) - keyboard navigation in the file tree.** A visible-row list built
+  from the lazy cache and the current sort, a roving tabindex, and keys for
+  moving the cursor, expanding/collapsing folders, selecting and switching to
+  the editor. Done in `feature/tree-keyboard-navigation`.
+- **T-17 (P3) - keyboard handling in the metadata editor.** A defined key map
+  inside `MetadataEditor` (move between fields, apply, jump to the next file)
+  so the per-input `Enter` handlers and the app-level shortcuts stop competing.
+  Needs T-16 first, because both share the active-row state.
+- **T-18 (P3) - ARIA tree semantics.** `role="tree"`/`treeitem`, `aria-level`,
+  `aria-expanded`, `aria-setsize`/`aria-posinset` and `aria-activedescendant`,
+  plus focus containment in the modals. Builds on T-16's flat row list; left
+  out of it to keep the keyboard change reviewable.
+
 ### Known issues and small fixes
 
 No open items.
@@ -100,9 +118,9 @@ No open items.
 - **Multi-select** in the tree with batch actions, plus copy/paste tags from one
   file onto a selection.
 - **UX and performance** - smart-rename dry-run preview with a conflict
-  strategy, addon reload from Settings, responsive/mobile layout, more keyboard
-  shortcuts and modal focus handling, metadata CSV/JSON export-import and
-  library normalisation tools.
+  strategy, addon reload from Settings, responsive/mobile layout, metadata
+  CSV/JSON export-import and library normalisation tools. The keyboard tree
+  navigation part is tracked as T-16 to T-18 above.
 - **More audio formats** - extend `formats.py` and `tag_backends.py`.
 
 ### Housekeeping
