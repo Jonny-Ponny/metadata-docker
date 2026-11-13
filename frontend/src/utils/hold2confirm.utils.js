@@ -93,7 +93,9 @@ export function createHold(options = EMPTY) {
     },
     /** @param {HoldToConfirmOptions} next */
     update(next) {
-      current = next;
+      // Merged, not replaced: a caller that only tweaks `duration` must keep
+      // the callbacks it passed to `createHold`.
+      current = { ...current, ...next };
     },
   };
 }

@@ -182,11 +182,14 @@
     fieldControl(fieldId)?.focus();
   }
 
-  /** @param {1 | -1} direction */
-  function moveField(direction) {
+  /**
+   * @param {1 | -1} direction
+   * @param {EventTarget | null} [target] the control the key was pressed on
+   */
+  function moveField(direction, target) {
     const order = fieldOrder;
     if (!order.length) return;
-    const current = fieldIdOf(null);
+    const current = fieldIdOf(target ?? null);
     const index = current ? order.indexOf(current) : -1;
     const next =
       index < 0
@@ -199,7 +202,7 @@
 
   // One hold runs at a time; its progress is drawn on the focused field.
   /** @type {{ field: string, run: () => void } | null} */
-  let keyboardHoldTarget = null;
+  let keyboardHoldTarget = $state(null);
   let keyboardHoldProgress = $state(0);
   let keyboardHoldField = $state(/** @type {string | null} */ (null));
 
@@ -288,7 +291,7 @@
       (event.key === "ArrowDown" || event.key === "ArrowUp")
     ) {
       event.preventDefault();
-      moveField(event.key === "ArrowDown" ? 1 : -1);
+      moveField(event.key === "ArrowDown" ? 1 : -1, event.target);
       return;
     }
 
@@ -1342,7 +1345,7 @@
             <div class="cover-art-actions">
               <button
                 class="icon-btn"
-                tabindex="-1"
+                tabindex={-1}
                 title="Set cover art from URL"
                 onclick={() => (coverUrlOpen = !coverUrlOpen)}
                 disabled={isUploadingPicture || isSavingCoverUrl}
@@ -1370,7 +1373,7 @@
               </button>
               <button
                 class="icon-btn"
-                tabindex="-1"
+                tabindex={-1}
                 title="Upload cover art for this file only"
                 onclick={() => triggerPictureUpload(false)}
                 disabled={isUploadingPicture}
@@ -1396,6 +1399,7 @@
                 </svg>
               </button>
               <HoldButton
+                tabindex={-1}
                 variant="icon"
                 duration={holdApplyDuration}
                 onConfirm={() => triggerPictureUpload(true)}
@@ -1422,6 +1426,7 @@
               </HoldButton>
               {#if metadata.picture}
                 <HoldButton
+                  tabindex={-1}
                   variant="icon"
                   duration={holdTagDeleteDuration}
                   onConfirm={deleteCoverArt}
@@ -1447,7 +1452,7 @@
                 </HoldButton>
                 <button
                   class="icon-btn"
-                  tabindex="-1"
+                  tabindex={-1}
                   title="Save as cover.*"
                   onclick={saveCoverAsFile}
                   disabled={isUploadingPicture || !metadata.picture}
@@ -1512,7 +1517,7 @@
         <div class="cover-url-actions">
           <button
             class="icon-btn"
-            tabindex="-1"
+            tabindex={-1}
             title="Apply this URL to the current file"
             onclick={() => applyCoverUrl(false)}
             disabled={!canApplyCoverUrl || isSavingCoverUrl}
@@ -1538,6 +1543,7 @@
             </svg>
           </button>
           <HoldButton
+            tabindex={-1}
             variant="icon"
             duration={holdApplyDuration}
             onConfirm={() => applyCoverUrl(true)}
@@ -1608,6 +1614,7 @@
               <!-- Delete button -->
               {#if metadata[field]}
                 <HoldButton
+                  tabindex={-1}
                   variant="icon"
                   duration={holdTagDeleteDuration}
                   onConfirm={() => {
@@ -1642,7 +1649,7 @@
               <!-- File button -->
               <button
                 class="icon-btn"
-                tabindex="-1"
+                tabindex={-1}
                 title="Apply to this file only"
                 onclick={() => applyToFile(field, value)}
               >
@@ -1668,6 +1675,7 @@
               </button>
               <!-- Folder button -->
               <HoldButton
+                tabindex={-1}
                 variant="icon"
                 duration={holdApplyDuration}
                 onConfirm={() => applyToFolder(field, metadata[field])}
@@ -1759,6 +1767,7 @@
                   <!-- Delete button -->
                   {#if metadata[field]}
                     <HoldButton
+                      tabindex={-1}
                       variant="icon"
                       duration={holdTagDeleteDuration}
                       onConfirm={() => {
@@ -1793,7 +1802,7 @@
                   <!-- File button -->
                   <button
                     class="icon-btn"
-                    tabindex="-1"
+                    tabindex={-1}
                     onclick={() => applyToFile(field, value)}
                   >
                     <!-- File icon SVG -->
@@ -1818,6 +1827,7 @@
                   </button>
                   <!-- Folder button -->
                   <HoldButton
+                    tabindex={-1}
                     variant="icon"
                     duration={holdApplyDuration}
                     onConfirm={() => applyToFolder(field, value)}
@@ -1873,6 +1883,7 @@
                   <!-- Delete button -->
                   {#if value}
                     <HoldButton
+                      tabindex={-1}
                       variant="icon"
                       duration={holdTagDeleteDuration}
                       onConfirm={() => {
@@ -1907,7 +1918,7 @@
                   <!-- File button -->
                   <button
                     class="icon-btn"
-                    tabindex="-1"
+                    tabindex={-1}
                     onclick={() => applyToFile(key, value)}
                   >
                     <!-- File icon SVG -->
@@ -1932,6 +1943,7 @@
                   </button>
                   <!-- Folder button -->
                   <HoldButton
+                    tabindex={-1}
                     variant="icon"
                     duration={holdApplyDuration}
                     onConfirm={() => applyToFolder(key, value)}
@@ -2014,7 +2026,7 @@
             <!-- File button -->
             <button
               class="icon-btn"
-              tabindex="-1"
+              tabindex={-1}
               title="Apply to this file only"
               onclick={() =>
                 applyToFile(customFields[i].name, customFields[i].value)}
@@ -2041,6 +2053,7 @@
             </button>
             <!-- Folder button -->
             <HoldButton
+              tabindex={-1}
               variant="icon"
               duration={holdApplyDuration}
               onConfirm={() =>
