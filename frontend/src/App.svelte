@@ -340,16 +340,33 @@
     activeRowPath = path ?? null;
   }
 
+  // The dashed cursor outline is a keyboard affordance: after a mouse click the
+  // row is already highlighted by the selection, so the outline is hidden until
+  // an arrow key moves the cursor again. `onCursor` (a click) hides it; the
+  // keyboard actions below show it.
+  let cursorIsKeyboard = $state(false);
+
+  /**
+   * The row was clicked: move the cursor onto it but keep the outline hidden.
+   * @param {string} path
+   */
+  function handleRowClicked(path) {
+    setActiveRow(path);
+    cursorIsKeyboard = false;
+  }
+
   // The cursor highlight. A deleted or renamed row may no longer be in the
   // list; a mouse click moves the cursor onto the clicked row (see
   // `onCursor`), so the cursor and the selection agree after a click and only
   // keyboard movement leaves them apart.
   let cursorRowPath = $derived(
-    rowIndexOf(visibleRows, activeRowPath) >= 0
-      ? activeRowPath
-      : rowIndexOf(visibleRows, selectedFile ?? selectedFolder) >= 0
-        ? (selectedFile ?? selectedFolder)
-        : null,
+    !cursorIsKeyboard
+      ? null
+      : rowIndexOf(visibleRows, activeRowPath) >= 0
+        ? activeRowPath
+        : rowIndexOf(visibleRows, selectedFile ?? selectedFolder) >= 0
+          ? (selectedFile ?? selectedFolder)
+          : null,
   );
 
   let selectedRowPath = $derived(selectedFile ?? selectedFolder);
@@ -371,6 +388,7 @@
   function focusRowIndex(index) {
     if (index < 0) return;
     const path = visibleRows[index].path;
+    cursorIsKeyboard = true;
     setActiveRow(path);
     scheduleRowScroll(path);
   }
@@ -1619,6 +1637,7 @@
     void tick().then(() => {
       const target = remapRenamedRow(rowPath);
       if (!target) return;
+      cursorIsKeyboard = true;
       setActiveRow(target);
       scheduleRowScroll(target);
       focusTreeRow(target);
@@ -2581,7 +2600,7 @@
                       cursorPath={cursorRowPath}
                       rovingPath={rovingRowPath}
                       onRowKeys={handleTreeNavigation}
-                      onCursor={setActiveRow}
+                      onCursor={handleRowClicked}
                       onOpenInEditor={activateRowInEditor}
                       expanded={expandedForDisplay}
                       {toggleDir}

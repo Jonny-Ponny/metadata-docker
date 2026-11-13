@@ -1690,15 +1690,22 @@ describe("App", () => {
       expect(document.activeElement).toBe(before);
     });
 
-    it("moves the cursor onto the clicked row", async () => {
+    it("hides the dashed cursor after a click and shows it on a key press", async () => {
       useTree(keyboardTree());
       view = await renderAuthenticated();
       await fireEvent.click(row("Charlie.flac"));
       await screen.findByRole("heading", { name: "Metadata Editor" });
 
-      // The dashed cursor and the selection agree after a click, so two rows
-      // are never highlighted at once.
-      expect(cursorPath()).toBe("Charlie.flac");
+      // After a mouse click the selection highlight is the only one shown.
+      expect(cursorPath()).toBe(null);
+      expect(
+        document.querySelectorAll(".file-tree-container .cursor"),
+      ).toHaveLength(0);
+
+      // Moving with the keyboard brings the dashed outline back.
+      await enterTree();
+      await pressKey("ArrowUp");
+      await waitFor(() => expect(cursorPath()).not.toBe(null));
       expect(
         document.querySelectorAll(".file-tree-container .cursor"),
       ).toHaveLength(1);

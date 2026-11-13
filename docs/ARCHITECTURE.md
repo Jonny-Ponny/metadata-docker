@@ -212,8 +212,9 @@ and unit-tested.
 `App.svelte` keeps a cursor path (`activeRowPath`), separate from the
 selection: moving it only highlights a row, so scrolling with the arrow keys
 never loads audio or fetches metadata. A click moves the cursor onto the clicked
-row, so the cursor and the selection never show two highlighted rows after
-mouse use. Enter selects (file to the editor, folder toggles), Ctrl/Cmd+Enter
+row but hides its dashed outline (it is a keyboard affordance); the next arrow
+key shows it again, so the cursor and the selection never show two highlighted
+rows after mouse use. Enter selects (file to the editor, folder toggles), Ctrl/Cmd+Enter
 selects and moves focus into the right panel (rows forward it themselves).
 Ctrl/Cmd+Shift+E switches between the tree and the right panel from anywhere,
 including a metadata field, and is the way back to the tree without the mouse.
