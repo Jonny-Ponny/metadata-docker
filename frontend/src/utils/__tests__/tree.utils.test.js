@@ -181,6 +181,21 @@ describe("flattenVisibleRows", () => {
       ),
     ).toEqual([]);
   });
+
+  it("keeps an expanded folder that has no cache entry as a single row", () => {
+    // Reaching an expanded folder without its children is what a load in
+    // flight looks like; the row must stay and the list must not break.
+    const nested = [folder("Lazy", { has_children: true })];
+    const rows = flattenVisibleRows(
+      nested,
+      new Map([["", nested]]),
+      expandedSet(["Lazy"]),
+      byName,
+    );
+
+    expect(paths(rows)).toEqual(["Lazy"]);
+    expect(rows[0].expanded).toBe(true);
+  });
 });
 
 describe("row helpers", () => {

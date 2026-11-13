@@ -22,6 +22,7 @@
     formatFolderSummary,
     isAudioFile,
     getAudioFormatLabel,
+    noteTreePointerClick,
     readApiError,
   } from "../utils/index.js";
 
@@ -61,6 +62,9 @@
    * @property {(path: string) => Promise<void> | void} [onLoad] fetch a folder
    * @property {string} [rowIdPrefix] prefix for the row element ids, so a row
    *   stays addressable when the tree is rendered more than once
+   * @property {string | null} [cursorPath] row the keyboard cursor is on
+   * @property {string | null} [rovingPath] row that is in the tab order
+   * @property {(path: string, event: KeyboardEvent) => void} [onRowKeys]
    */
 
   /** @type {Props} */
@@ -79,6 +83,9 @@
     onCopy,
     onLoad,
     rowIdPrefix = "",
+    cursorPath = null,
+    rovingPath = null,
+    onRowKeys,
   } = $props();
 
   // Input state
@@ -204,6 +211,24 @@
   const rowId = $derived(
     `${rowIdPrefix}tree-row-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`,
   );
+
+  // Roving tabindex: one row is reachable with Tab, the rest only by arrow key.
+  const rowTabIndex = $derived(rovingPath === item.path ? 0 : -1);
+
+  /** @param {MouseEvent} event */
+  function notePointerClick(event) {
+    noteTreePointerClick(event.detail);
+  }
+
+  // Keys are routed up with the row's path: the app owns the cursor and the
+  // expanded set, so no row decides navigation on its own.
+  /**
+   * @param {string} path
+   * @param {KeyboardEvent} event
+   */
+  function routeKey(path, event) {
+    onRowKeys?.(path, event);
+  }
 
   // Context menu handlers
   /**
@@ -586,7 +611,9 @@
 
 {#if item.type === "directory"}
   <li>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- A row is a keyboard focus stop by design (T-16); the ARIA tree roles
+         arrive in T-18. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       role="listitem"
@@ -594,11 +621,19 @@
       class="directory"
       class:indented={level > 0}
       class:selected={item.path === selectedFolder}
+      class:cursor={item.path === cursorPath}
+      tabindex={rowTabIndex}
+      onkeydown={(event) =>
+        // Leave the rename input's own keys alone.
+        $renamingPath === item.path ? undefined : routeKey(item.path, event)}
       style="--level: {level}"
       title={folderSummaryText}
       onmouseenter={handleDirectoryEnter}
       onmouseleave={handleDirectoryLeave}
-      onclick={handleDirectoryClick}
+      onclick={(event) => {
+        notePointerClick(event);
+        handleDirectoryClick();
+      }}
       oncontextmenu={(e) => {
         e.preventDefault();
         handleContextMenu(e);
@@ -699,6 +734,9 @@
               {onCopy}
               {onLoad}
               {rowIdPrefix}
+              {cursorPath}
+              {rovingPath}
+              {onRowKeys}
             />
           {/each}
         </ul>
@@ -781,7 +819,9 @@
   })()}
 
   <li>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- A row is a keyboard focus stop by design (T-16); the ARIA tree roles
+         arrive in T-18. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       role="listitem"
@@ -789,8 +829,14 @@
       class="file"
       class:indented={level > 0}
       class:selected={item.path === selectedFile}
+      class:cursor={item.path === cursorPath}
+      tabindex={rowTabIndex}
+      onkeydown={(event) =>
+        // Leave the rename input's own keys alone.
+        $renamingPath === item.path ? undefined : routeKey(item.path, event)}
       style="--level: {level}"
-      onclick={() => {
+      onclick={(event) => {
+        notePointerClick(event);
         // Call selectFile for both audio AND images
         handleFileClick();
       }}
@@ -1018,6 +1064,20 @@
   .file.selected:hover,
   .directory.selected:hover {
     background-color: var(--color-primary-transparent);
+  }
+
+  /* Keyboard cursor: a dashed outline so it is distinguishable from the
+     selection, which is drawn with the left accent border. */
+  .file.cursor,
+  .directory.cursor {
+    outline: 1px dashed var(--color-primary);
+    outline-offset: -2px;
+  }
+
+  .file:focus-visible,
+  .directory:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
   }
 
   .context-menu {

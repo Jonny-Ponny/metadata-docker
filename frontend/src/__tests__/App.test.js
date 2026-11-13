@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/svelte";
 import { get } from "svelte/store";
+import { tick } from "svelte";
 
 import App from "../App.svelte";
 import {
@@ -1147,6 +1148,446 @@ describe("App", () => {
     await fireEvent.keyDown(window, { key: "Delete" });
 
     expect(callsTo("/api/delete")).toHaveLength(0);
+  });
+
+  it("accepts the delete key in the panel context", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+
+    await fireEvent.click(node(view, "loose.flac"));
+    await screen.findByRole("heading", { name: "Metadata Editor" });
+    await fireEvent.keyDown(node(view, "loose.flac"), { key: "Delete" });
+
+    await waitFor(() => expect(callsTo("/api/delete")).toHaveLength(1));
+  });
+
+  describe("tree keyboard navigation", () => {
+    /**
+     * A tree with two folders, so cursor movement has margins. Folders are
+     * first and files last, both sorted by name.
+     * @returns {TreeItem[]}
+     */
+    function keyboardTree() {
+      return [
+        {
+          name: "Albums",
+          path: "Albums",
+          type: "directory",
+          children: [
+            {
+              name: "inner.mp3",
+              path: "Albums/inner.mp3",
+              type: "file",
+              file_type: "audio",
+              size: 10,
+            },
+          ],
+        },
+        {
+          name: "2020",
+          path: "2020",
+          type: "directory",
+          children: [
+            {
+              name: "late.mp3",
+              path: "2020/late.mp3",
+              type: "file",
+              file_type: "audio",
+              size: 20,
+            },
+          ],
+        },
+        {
+          name: "Charlie.flac",
+          path: "Charlie.flac",
+          type: "file",
+          file_type: "audio",
+          size: 30,
+        },
+        {
+          name: "Zulu.flac",
+          path: "Zulu.flac",
+          type: "file",
+          file_type: "audio",
+          size: 40,
+        },
+      ];
+    }
+
+    /** @type {import("@testing-library/svelte").RenderResult<typeof App>} */
+    let view;
+
+    /**
+     * @param {string} path
+     * @returns {HTMLElement}
+     */
+    function row(path) {
+      return node(view, path);
+    }
+
+    /**
+     * The rendered rows, top to bottom, by path.
+     * @returns {string[]}
+     */
+    function visiblePaths() {
+      return [
+        ...view.container.querySelectorAll(
+          ".file-tree-container .file, .file-tree-container .directory",
+        ),
+      ].map((element) => {
+        const row = /** @type {HTMLElement} */ (element);
+        return (
+          row.getAttribute("data-file-path") ??
+          row.getAttribute("data-folder-path") ??
+          ""
+        );
+      });
+    }
+
+    /** The row the app currently marks as the keyboard cursor. */
+    function cursorPath() {
+      const row = document.querySelector(".file-tree-container .cursor");
+      if (!row) return null;
+      return (
+        row.getAttribute("data-file-path") ??
+        row.getAttribute("data-folder-path")
+      );
+    }
+
+    /**
+     * Put the keyboard in the tree, as a click on its panel does.
+     */
+    async function enterTree() {
+      const panel = /** @type {HTMLElement} */ (
+        view.container.querySelector(".file-tree-panel")
+      );
+      fireEvent.pointerDown(panel, { bubbles: true });
+      await tick();
+    }
+
+    /**
+     * Press a key on the tree. Keys act on the app's cursor row, so this
+     * presses on the panel exactly like a focused row would forward them.
+     * @param {string} key
+     * @param {{ ctrlKey?: boolean }} [init]
+     */
+    async function pressKey(key, init = {}) {
+      const panel = /** @type {HTMLElement} */ (
+        view.container.querySelector(".file-tree-panel")
+      );
+      fireEvent.keyDown(panel, { key, bubbles: true, ...init });
+      await tick();
+    }
+
+    beforeEach(() => {
+      isAuthenticated.set(true);
+    });
+
+    it("keeps the cursor off the selection until Enter opens a file", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+
+      // Home starts at the top row; the cursor moves without selecting.
+      await pressKey("Home");
+      expect(visiblePaths()[0]).toBe("2020");
+      expect(cursorPath()).toBe("2020");
+      await pressKey("ArrowDown");
+      expect(cursorPath()).toBe("Albums");
+      expect(
+        screen.queryByRole("heading", { name: "Metadata Editor" }),
+      ).toBeNull();
+      expect(callsStartingWith("/api/metadata?")).toHaveLength(0);
+
+      await pressKey("End");
+      await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
+
+      await pressKey("Enter");
+      expect(
+        await screen.findByRole("heading", { name: "Metadata Editor" }),
+      ).toBeTruthy();
+      await waitFor(() =>
+        expect(callsStartingWith("/api/metadata?path=Zulu.flac")).toHaveLength(
+          1,
+        ),
+      );
+    });
+
+    it("starts from the selection and clamps at both ends", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await fireEvent.click(row("Albums"));
+      await enterTree();
+
+      await pressKey("ArrowUp");
+      expect(cursorPath()).toBe("2020");
+
+      await pressKey("Home");
+      expect(cursorPath()).toBe("2020");
+
+      await pressKey("End");
+      await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
+      await pressKey("ArrowDown");
+      expect(cursorPath()).toBe("Zulu.flac");
+    });
+
+    it("expands and collapses folders with arrows and Space", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+      expect(cursorPath()).toBe("2020");
+      // "2020" sorts first; move onto "Albums".
+      await pressKey("ArrowDown");
+      expect(cursorPath()).toBe("Albums");
+
+      // Folders start collapsed; Right opens the cursor's folder.
+      await pressKey("ArrowRight");
+      expect(await screen.findByText("inner.mp3")).toBeTruthy();
+      await waitFor(() =>
+        expect(callsStartingWith("/api/files/dir?path=Albums")).toHaveLength(1),
+      );
+
+      // A second Right descends into the first child.
+      await pressKey("ArrowRight");
+      expect(cursorPath()).toBe("Albums/inner.mp3");
+
+      // Left goes back to the parent, then collapses it.
+      await pressKey("ArrowLeft");
+      expect(cursorPath()).toBe("Albums");
+      await pressKey("ArrowLeft");
+      expect(screen.queryByText("inner.mp3")).toBeNull();
+
+      // Space toggles the same way.
+      await pressKey(" ");
+      expect(await screen.findByText("inner.mp3")).toBeTruthy();
+    });
+
+    it("does not open a collapsed folder with Right when it is empty", async () => {
+      useTree([
+        {
+          name: "Empty",
+          path: "Empty",
+          type: "directory",
+          has_children: false,
+          children: [],
+        },
+        {
+          name: "next.mp3",
+          path: "next.mp3",
+          type: "file",
+          file_type: "audio",
+          size: 1,
+        },
+      ]);
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+      expect(cursorPath()).toBe("Empty");
+
+      await pressKey("ArrowRight");
+      expect(cursorPath()).toBe("Empty");
+      expect(callsStartingWith("/api/files/dir?path=Empty")).toHaveLength(0);
+    });
+
+    it("moves by a page and to the ends of the tree", async () => {
+      // Each folder holds enough rows to fill more than a page, so the jump
+      // has to move inside them rather than stopping on a folder row.
+      useTree([
+        {
+          name: "Albums",
+          path: "Albums",
+          type: "directory",
+          children: Array.from({ length: 5 }, (_, index) => ({
+            name: `track-${index + 1}.mp3`,
+            path: `Albums/track-${index + 1}.mp3`,
+            type: "file",
+            file_type: "audio",
+            size: 1,
+          })),
+        },
+        {
+          name: "Zeta",
+          path: "Zeta",
+          type: "directory",
+          children: Array.from({ length: 5 }, (_, index) => ({
+            name: `late-${index + 1}.mp3`,
+            path: `Zeta/late-${index + 1}.mp3`,
+            type: "file",
+            file_type: "audio",
+            size: 1,
+          })),
+        },
+        {
+          name: "loose.flac",
+          path: "loose.flac",
+          type: "file",
+          file_type: "audio",
+          size: 1,
+        },
+      ]);
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+      expect(cursorPath()).toBe("Albums");
+
+      // Open both folders so the list has enough rows for a page.
+      await pressKey("ArrowRight");
+      await waitFor(() =>
+        expect(visiblePaths()).toContain("Albums/track-1.mp3"),
+      );
+      await pressKey("End");
+      await waitFor(() => expect(cursorPath()).toBe("loose.flac"));
+      // End opens nothing: it lands on the last row that is visible.
+      expect(visiblePaths().includes("Zeta/late-1.mp3")).toBe(false);
+
+      // A page is twelve rows, so with eight rows open it reaches both ends.
+      await pressKey("PageUp");
+      expect(cursorPath()).toBe("Albums");
+      await pressKey("PageDown");
+      expect(cursorPath()).toBe("loose.flac");
+      await pressKey("PageDown");
+      expect(cursorPath()).toBe("loose.flac");
+    });
+
+    it("jumps to the first matching row by typing", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+
+      await pressKey("z");
+      expect(cursorPath()).toBe("Zulu.flac");
+      // Letters within the pause continue the prefix, like a file manager.
+      await pressKey("c");
+      expect(cursorPath()).toBe("Zulu.flac");
+      // After the pause a new search starts from the cursor and wraps.
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      await pressKey("c");
+      expect(cursorPath()).toBe("Charlie.flac");
+    });
+
+    it("opens the metadata editor with Ctrl+Enter and moves focus to it", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+
+      // A folder is not opened in the editor.
+      await pressKey("Enter", { ctrlKey: true });
+      expect(callsStartingWith("/api/metadata?")).toHaveLength(0);
+
+      await pressKey("End");
+      await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
+      await pressKey("Enter", { ctrlKey: true });
+
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      await waitFor(() => {
+        expect(document.activeElement?.closest(".right-panel")).toBeTruthy();
+      });
+    });
+
+    it("renames the row the cursor is on, not the selection", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await fireEvent.click(row("Charlie.flac"));
+      await enterTree();
+
+      await pressKey("End");
+      await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
+
+      // The row is the event target for the shortcuts, as in a browser.
+      await fireEvent.keyDown(
+        document.getElementById("tree-row-Zulu-flac") ?? window,
+        {
+          key: "F2",
+        },
+      );
+      expect(get(renamingPath)).toBe("Zulu.flac");
+
+      renamingPath.set(null);
+      await fireEvent.keyDown(
+        document.getElementById("tree-row-Zulu-flac") ?? window,
+        {
+          key: "Delete",
+        },
+      );
+      await waitFor(() => expect(callsTo("/api/delete")).toHaveLength(1));
+      expect(callsTo("/api/delete")[0][1]).toMatchObject({
+        body: JSON.stringify({ path: "Zulu.flac" }),
+      });
+    });
+
+    it("turns the tree keys off when the keyboard leaves the tree", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+
+      const search = screen.getByPlaceholderText(/Search files/);
+      search.focus();
+      await fireEvent.keyDown(search, { key: "ArrowDown" });
+      await tick();
+      expect(cursorPath()).toBe("2020");
+    });
+
+    it("ignores tree keys while renaming or with a modal open", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+
+      renamingPath.set("Zulu.flac");
+      await pressKey("ArrowDown");
+      expect(cursorPath()).toBe("2020");
+      renamingPath.set(null);
+
+      await fireEvent.click(screen.getByRole("button", { name: "Help" }));
+      await pressKey("ArrowDown");
+      expect(cursorPath()).toBe("2020");
+    });
+
+    it("puts exactly one row in the tab order", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      const rows = [
+        ...view.container.querySelectorAll(
+          ".file-tree-container .file, .file-tree-container .directory",
+        ),
+      ];
+      const tabbable = rows.filter(
+        (element) => element.getAttribute("tabindex") === "0",
+      );
+      expect(tabbable).toHaveLength(1);
+    });
+
+    it("uses a separate row id scheme in the search view", async () => {
+      useTree(keyboardTree());
+      searchReply = {
+        results: [
+          {
+            name: "Zulu.flac",
+            path: "Zulu.flac",
+            type: "file",
+            parents: [],
+          },
+        ],
+        truncated: false,
+      };
+      view = await renderAuthenticated();
+      const search = /** @type {HTMLInputElement} */ (
+        screen.getByPlaceholderText(/Search files/)
+      );
+      await fireEvent.input(search, { target: { value: "zulu" } });
+      await fireEvent.keyDown(search, { key: "Enter" });
+
+      await waitFor(() =>
+        expect(
+          document.getElementById("search-tree-row-Zulu-flac"),
+        ).toBeTruthy(),
+      );
+      expect(document.getElementById("tree-row-Zulu-flac")).toBeNull();
+    });
   });
 
   it("refreshes the tree on the refreshFileTree event", async () => {

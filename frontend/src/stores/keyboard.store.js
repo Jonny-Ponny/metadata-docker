@@ -94,3 +94,13 @@ export const treeCursor = writable(/** @type {string | null} */ (null));
 export const treeFocusMode = writable(
   /** @type {"navigation" | "activation"} */ ("navigation"),
 );
+
+/**
+ * Called by `TreeNode` from its own click handler. It runs before the app's
+ * window-level capture listener, so a double click that re-selects the same
+ * control still counts as an activation.
+ * @param {number} detail `MouseEvent.detail`
+ */
+export function noteTreePointerClick(detail) {
+  treeFocusMode.set(detail >= 2 ? "activation" : "navigation");
+}

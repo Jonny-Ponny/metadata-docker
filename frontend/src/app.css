@@ -205,6 +205,13 @@ body {
   height: 100%;
 }
 
+/* The tree is one focus stop; its rows are added while the keyboard is in
+   use. The focus ring marks the panel so the arrow keys have a visible owner. */
+.file-tree-panel:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
 /* Pointer-driven tree drag. No native drag session is created (Firefox does
    not deliver wheel events during one), so the tree stays scrollable. */
 body.internal-dragging,
