@@ -232,6 +232,21 @@ so the tree keeps working without the switch shortcut. The guards live in
 the keyboard is on. ARIA tree roles are tracked separately (T-18 in
 [PLAN.md](../PLAN.md)).
 
+### Metadata editor keyboard handling
+
+The editor is a long list of text fields with per-field action icons, so the
+icons are pointer-only (`tabindex="-1"`) and each action is a shortcut on the
+focused field: Enter applies to the file, holding Ctrl/Cmd+Enter applies to the
+folder, holding Ctrl/Cmd+Delete deletes the field (from the folder when "Tag
+deletion applies to folder" is on), and Alt+ArrowUp/Down move between fields.
+Native word-wise arrows and selection are left alone.
+
+Holding rather than confirming in a dialog keeps it consistent with the mouse
+hold-to-confirm buttons and reuses the same durations from Settings. Both
+gestures run on `createHold()` from `utils/hold2confirm.utils.js`, which owns
+the timing and progress; `holdToConfirm` is the pointer action on top of it.
+Releasing the key cancels, so a folder-wide change needs a deliberate hold.
+
 ## Tests
 
 The suite runs against a temporary music library and log directory created by

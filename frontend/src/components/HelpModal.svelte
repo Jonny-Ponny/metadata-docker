@@ -338,7 +338,27 @@
                 <strong>Delete</strong> - Delete selected item
               </li>
               <li>
-                <strong>Enter</strong> in a metadata field - Apply current field changes
+                <strong>Enter</strong> in a metadata field - Apply that field to the
+                current file
+              </li>
+              <li>
+                <strong>Ctrl/Cmd + Enter</strong> (hold) in a metadata field - Apply
+                that field to every file in the folder; a progress bar fills the field
+                while you hold
+              </li>
+              <li>
+                <strong>Ctrl/Cmd + Delete</strong> (hold) in a metadata field - Delete
+                that field (from the file, or from the folder when "Tag deletion applies
+                to folder" is on)
+              </li>
+              <li>
+                <strong>Alt + ↓ / Alt + ↑</strong> in the editor - Next / previous
+                field
+              </li>
+              <li>
+                <strong>Tab</strong> in the editor - Move between text fields; the
+                apply/delete icons are mouse-only because the shortcuts above do the
+                same
               </li>
               <li>
                 <strong>Esc</strong> - Close modals/cancel rename
