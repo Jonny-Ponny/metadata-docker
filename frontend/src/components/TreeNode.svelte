@@ -65,6 +65,9 @@
    * @property {string | null} [cursorPath] row the keyboard cursor is on
    * @property {string | null} [rovingPath] row that is in the tab order
    * @property {(path: string, event: KeyboardEvent) => void} [onRowKeys]
+   * @property {(path: string) => void} [onCursor] the row was clicked
+   * @property {(path: string) => void} [onOpenInEditor] the row's own
+   *   Ctrl/Cmd+Enter, so the event does not depend on window-level routing
    */
 
   /** @type {Props} */
@@ -86,6 +89,8 @@
     cursorPath = null,
     rovingPath = null,
     onRowKeys,
+    onCursor,
+    onOpenInEditor,
   } = $props();
 
   // Input state
@@ -218,6 +223,18 @@
   /** @param {MouseEvent} event */
   function notePointerClick(event) {
     noteTreePointerClick(event.detail);
+  }
+
+  /**
+   * Ctrl/Cmd+Enter on a row opens it in the editor. The row forwards it on its
+   * own so it works regardless of how the window-level handler routes keys.
+   * @param {KeyboardEvent} event
+   */
+  function handleRowKeydown(event) {
+    if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+    if (!onOpenInEditor || item.type !== "file") return;
+    event.preventDefault();
+    onOpenInEditor(item.path);
   }
 
   // Keys are routed up with the row's path: the app owns the cursor and the
@@ -623,15 +640,19 @@
       class:selected={item.path === selectedFolder}
       class:cursor={item.path === cursorPath}
       tabindex={rowTabIndex}
-      onkeydown={(event) =>
+      onkeydown={(event) => {
         // Leave the rename input's own keys alone.
-        $renamingPath === item.path ? undefined : routeKey(item.path, event)}
+        if ($renamingPath === item.path) return;
+        handleRowKeydown(event);
+        if (!event.defaultPrevented) routeKey(item.path, event);
+      }}
       style="--level: {level}"
       title={folderSummaryText}
       onmouseenter={handleDirectoryEnter}
       onmouseleave={handleDirectoryLeave}
       onclick={(event) => {
         notePointerClick(event);
+        onCursor?.(item.path);
         handleDirectoryClick();
       }}
       oncontextmenu={(e) => {
@@ -737,6 +758,8 @@
               {cursorPath}
               {rovingPath}
               {onRowKeys}
+              {onCursor}
+              {onOpenInEditor}
             />
           {/each}
         </ul>
@@ -831,12 +854,16 @@
       class:selected={item.path === selectedFile}
       class:cursor={item.path === cursorPath}
       tabindex={rowTabIndex}
-      onkeydown={(event) =>
+      onkeydown={(event) => {
         // Leave the rename input's own keys alone.
-        $renamingPath === item.path ? undefined : routeKey(item.path, event)}
+        if ($renamingPath === item.path) return;
+        handleRowKeydown(event);
+        if (!event.defaultPrevented) routeKey(item.path, event);
+      }}
       style="--level: {level}"
       onclick={(event) => {
         notePointerClick(event);
+        onCursor?.(item.path);
         // Call selectFile for both audio AND images
         handleFileClick();
       }}

@@ -164,6 +164,7 @@
     };
   });
 
+  // svelte-ignore non_reactive_update
   async function togglePlay() {
     if (!audio || !audioFile) {
       return;
@@ -332,7 +333,7 @@
   }
 
   // Expose functions to parent
-  export { seekToTime, stop, getCurrentTime };
+  export { seekToTime, stop, getCurrentTime, togglePlay };
 </script>
 
 <!-- Template – unchanged -->

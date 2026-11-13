@@ -1331,7 +1331,7 @@ describe("App", () => {
       expect(cursorPath()).toBe("Zulu.flac");
     });
 
-    it("expands and collapses folders with arrows and Space", async () => {
+    it("expands and collapses folders with the arrow keys", async () => {
       useTree(keyboardTree());
       view = await renderAuthenticated();
       await enterTree();
@@ -1358,9 +1358,9 @@ describe("App", () => {
       await pressKey("ArrowLeft");
       expect(screen.queryByText("inner.mp3")).toBeNull();
 
-      // Space toggles the same way.
+      // Space belongs to the player, not the tree: it must not reopen it.
       await pressKey(" ");
-      expect(await screen.findByText("inner.mp3")).toBeTruthy();
+      expect(screen.queryByText("inner.mp3")).toBeNull();
     });
 
     it("does not open a collapsed folder with Right when it is empty", async () => {
@@ -1587,6 +1587,105 @@ describe("App", () => {
         ).toBeTruthy(),
       );
       expect(document.getElementById("tree-row-Zulu-flac")).toBeNull();
+    });
+
+    it("moves the cursor onto the clicked row", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await fireEvent.click(row("Charlie.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+
+      // The dashed cursor and the selection agree after a click, so two rows
+      // are never highlighted at once.
+      expect(cursorPath()).toBe("Charlie.flac");
+      expect(
+        document.querySelectorAll(".file-tree-container .cursor"),
+      ).toHaveLength(1);
+    });
+
+    it("opens a file in the editor with Ctrl+Enter on the row itself", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("End");
+      await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
+
+      const focused = document.getElementById("tree-row-Zulu-flac") ?? window;
+      fireEvent.keyDown(focused, {
+        key: "Enter",
+        ctrlKey: true,
+        bubbles: true,
+      });
+
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      await waitFor(() =>
+        expect(document.activeElement?.closest(".right-panel")).toBeTruthy(),
+      );
+    });
+
+    it("switches between the tree and the right panel with Ctrl+Shift+E", async () => {
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await fireEvent.click(row("Charlie.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+
+      // The direction follows where the key is pressed: from the tree it goes
+      // to the right panel, from the right panel back to the cursor row.
+      const treeRow = document.getElementById("tree-row-Charlie-flac");
+      fireEvent.keyDown(treeRow ?? window, {
+        key: "E",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+      });
+      await waitFor(() =>
+        expect(document.activeElement?.closest(".right-panel")).toBeTruthy(),
+      );
+
+      fireEvent.keyDown(document.activeElement ?? window, {
+        key: "E",
+        ctrlKey: true,
+        shiftKey: true,
+      });
+      await waitFor(() =>
+        expect(
+          document.activeElement?.closest(".file-tree-panel"),
+        ).toBeTruthy(),
+      );
+    });
+  });
+
+  describe("playback shortcut", () => {
+    it("plays and pauses with Space outside of controls", async () => {
+      isAuthenticated.set(true);
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+
+      fireEvent.keyDown(document.body, { key: " " });
+      await waitFor(() => expect(playSpy).toHaveBeenCalled());
+
+      fireEvent.keyDown(document.body, { key: " " });
+      await waitFor(() =>
+        expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled(),
+      );
+    });
+
+    it("leaves Space to a focused button", async () => {
+      isAuthenticated.set(true);
+      await renderAuthenticated();
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+
+      fireEvent.keyDown(screen.getByRole("button", { name: "Help" }), {
+        key: " ",
+      });
+      await Promise.resolve();
+      expect(playSpy).not.toHaveBeenCalled();
     });
   });
 

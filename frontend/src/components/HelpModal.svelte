@@ -308,15 +308,16 @@
                 <strong>→</strong> - expand a folder, or jump to its first item
               </li>
               <li>
-                <strong>Space</strong> - expand or collapse the folder under the cursor
-              </li>
-              <li>
                 <strong>Enter</strong> - open the item: folders expand, files open
                 in the editor
               </li>
               <li>
                 <strong>Ctrl/Cmd + Enter</strong> - open the item in the editor and
                 move focus there
+              </li>
+              <li>
+                <strong>Ctrl/Cmd + Shift + E</strong> - switch between the file tree
+                and the right panel (works from anywhere, including a metadata field)
               </li>
               <li>
                 <strong>Home / End</strong> - first / last visible item
@@ -327,6 +328,10 @@
               <li>
                 <strong>a-z</strong> - jump to the next name starting with the typed
                 letters
+              </li>
+              <li>
+                <strong>Space</strong> - play or pause the current track (unless a
+                button or link has focus)
               </li>
               <li><strong>F2</strong> - Rename selected item</li>
               <li>
