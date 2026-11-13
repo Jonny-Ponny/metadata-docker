@@ -152,14 +152,25 @@
     );
   }
 
-  /** The field the focused control belongs to (its control id is the field). */
-  function focusedFieldId() {
-    const active = document.activeElement;
-    if (!(active instanceof HTMLElement)) return null;
-    if (!active.closest(".metadata-editor")) return null;
-    const custom = active.closest("[data-field-id]");
+  /**
+   * The field a control belongs to (a control's id is its field). Passing the
+   * keydown target keeps the mapping correct even when focus has not moved yet;
+   * without an element the focused control is used (Alt+Arrow navigation).
+   * @param {EventTarget | null} [target]
+   * @returns {string | null}
+   */
+  function fieldIdOf(target) {
+    const element =
+      target instanceof HTMLElement
+        ? target
+        : document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+    if (!element) return null;
+    if (!element.closest(".metadata-editor")) return null;
+    const custom = element.closest("[data-field-id]");
     if (custom) return custom.getAttribute("data-field-id");
-    return active.id || null;
+    return element.id || null;
   }
 
   /**
@@ -175,7 +186,7 @@
   function moveField(direction) {
     const order = fieldOrder;
     if (!order.length) return;
-    const current = focusedFieldId();
+    const current = fieldIdOf(null);
     const index = current ? order.indexOf(current) : -1;
     const next =
       index < 0
@@ -268,7 +279,7 @@
    * @param {KeyboardEvent} event
    */
   function handleFieldKeydown(event) {
-    const field = focusedFieldId();
+    const field = fieldIdOf(event.target);
     if (!field) return;
     const isTagField = !field.endsWith("-name");
 
@@ -1331,6 +1342,7 @@
             <div class="cover-art-actions">
               <button
                 class="icon-btn"
+                tabindex="-1"
                 title="Set cover art from URL"
                 onclick={() => (coverUrlOpen = !coverUrlOpen)}
                 disabled={isUploadingPicture || isSavingCoverUrl}
@@ -1358,6 +1370,7 @@
               </button>
               <button
                 class="icon-btn"
+                tabindex="-1"
                 title="Upload cover art for this file only"
                 onclick={() => triggerPictureUpload(false)}
                 disabled={isUploadingPicture}
@@ -1434,6 +1447,7 @@
                 </HoldButton>
                 <button
                   class="icon-btn"
+                  tabindex="-1"
                   title="Save as cover.*"
                   onclick={saveCoverAsFile}
                   disabled={isUploadingPicture || !metadata.picture}
@@ -1498,6 +1512,7 @@
         <div class="cover-url-actions">
           <button
             class="icon-btn"
+            tabindex="-1"
             title="Apply this URL to the current file"
             onclick={() => applyCoverUrl(false)}
             disabled={!canApplyCoverUrl || isSavingCoverUrl}
@@ -1577,15 +1592,17 @@
             }}
             onfocus={() => startEditing(field)}
             onblur={() => stopEditing(field)}
-            onkeydown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                applyToFile(field, metadata[field]);
-              }
-            }}
+            onkeydown={handleFieldKeydown}
             placeholder={field}
             readonly={readOnly}
           />
+          {#if keyboardHoldField === field}
+            <div
+              class="hold-progress"
+              aria-hidden="true"
+              style="--progress: {keyboardHoldProgress};"
+            ></div>
+          {/if}
           {#if editingFields.has(field)}
             <div class="field-actions">
               <!-- Delete button -->
@@ -1625,6 +1642,7 @@
               <!-- File button -->
               <button
                 class="icon-btn"
+                tabindex="-1"
                 title="Apply to this file only"
                 onclick={() => applyToFile(field, value)}
               >
@@ -1725,9 +1743,17 @@
                 }}
                 onfocus={() => startEditing(field)}
                 onblur={() => stopEditing(field)}
+                onkeydown={handleFieldKeydown}
                 placeholder={field}
                 rows="2"
                 readonly={readOnly}></textarea>
+              {#if keyboardHoldField === field}
+                <div
+                  class="hold-progress"
+                  aria-hidden="true"
+                  style="--progress: {keyboardHoldProgress};"
+                ></div>
+              {/if}
               {#if editingFields.has(field)}
                 <div class="field-actions textarea-actions">
                   <!-- Delete button -->
@@ -1767,6 +1793,7 @@
                   <!-- File button -->
                   <button
                     class="icon-btn"
+                    tabindex="-1"
                     onclick={() => applyToFile(field, value)}
                   >
                     <!-- File icon SVG -->
@@ -1838,12 +1865,7 @@
                 }}
                 onfocus={() => startEditing(key)}
                 onblur={() => stopEditing(key)}
-                onkeydown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    applyToFile(key, metadata.otherFields[key]);
-                  }
-                }}
+                onkeydown={handleFieldKeydown}
                 readonly={readOnly}
               />
               {#if editingFields.has(key)}
@@ -1885,6 +1907,7 @@
                   <!-- File button -->
                   <button
                     class="icon-btn"
+                    tabindex="-1"
                     onclick={() => applyToFile(key, value)}
                   >
                     <!-- File icon SVG -->
@@ -1952,6 +1975,7 @@
     <div
       class="field custom"
       class:editing={customFieldEditing[i]}
+      data-field-id={customFieldId(i, "value")}
       onfocusin={() => (customFieldEditing[i] = true)}
       onfocusout={(e) => {
         // @ts-ignore
@@ -1963,28 +1987,34 @@
       <!-- Field name input -->
       <input
         type="text"
+        id={customFieldId(i, "name")}
         placeholder="Field name"
         bind:value={customFields[i].name}
+        onkeydown={handleFieldKeydown}
       />
 
       <!-- Value row: input and icons -->
       <div class="value-row">
         <input
           type="text"
+          id={customFieldId(i, "value")}
           placeholder="Value"
           bind:value={customFields[i].value}
-          onkeydown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              applyToFile(customFields[i].name, customFields[i].value);
-            }
-          }}
+          onkeydown={handleFieldKeydown}
         />
+        {#if keyboardHoldField === customFieldId(i, "value")}
+          <div
+            class="hold-progress"
+            aria-hidden="true"
+            style="--progress: {keyboardHoldProgress};"
+          ></div>
+        {/if}
         {#if customFieldEditing[i]}
           <div class="field-actions" style="position: static; transform: none;">
             <!-- File button -->
             <button
               class="icon-btn"
+              tabindex="-1"
               title="Apply to this file only"
               onclick={() =>
                 applyToFile(customFields[i].name, customFields[i].value)}
@@ -2241,6 +2271,22 @@
     flex: 1; /* Take remaining space */
     min-width: 0; /* Prevent overflow */
     width: 100%;
+  }
+
+  /* Progress of a held shortcut (Ctrl+Enter / Ctrl+Delete) on the field. It
+     sits above the input and never takes pointer events. */
+  .hold-progress {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    border-radius: 4px;
+    background: linear-gradient(
+      to right,
+      var(--color-primary-transparent) calc(var(--progress) * 100%),
+      transparent 0
+    );
+    box-shadow: inset 0 0 0 1px var(--color-primary);
   }
 
   /* Base input styles */
