@@ -211,13 +211,19 @@ and unit-tested.
 
 `App.svelte` keeps a cursor path (`activeRowPath`), separate from the
 selection: moving it only highlights a row, so scrolling with the arrow keys
-never loads audio or fetches metadata. Enter selects (file to the editor,
-folder toggles), Ctrl/Cmd+Enter selects and moves focus into the right panel.
-A roving tabindex keeps exactly one row in the Tab order; focus follows the
-cursor while the keyboard is in the tree, which a `focusin` listener tracks
-(typing targets and open overlays keep the tree keys off). Rows forward their
-keys through `onRowKeys` with their own path, and the tree panel forwards keys
-pressed on it, so both start from a visible row. The guards live in
+never loads audio or fetches metadata. A click moves the cursor onto the clicked
+row, so the cursor and the selection never show two highlighted rows after
+mouse use. Enter selects (file to the editor, folder toggles), Ctrl/Cmd+Enter
+selects and moves focus into the right panel (rows forward it themselves).
+Ctrl/Cmd+Shift+E switches between the tree and the right panel from anywhere,
+including a metadata field, and is the way back to the tree without the mouse.
+Space is the global play/pause key (ignored on buttons, links and while typing);
+the tree itself uses Right/Left to expand and collapse. A roving tabindex keeps
+exactly one row in the Tab order; focus follows the cursor while the keyboard is
+in the tree, which a `focusin` listener tracks (typing targets and open overlays
+keep the tree keys off). Rows forward their keys through `onRowKeys` with their
+own path, and the tree panel forwards keys pressed on it, so both start from a
+visible row. The guards live in
 `stores/keyboard.store.js` (`shouldIgnoreShortcut`, `isTypingTarget`,
 `isOverlayOpen`); F2 and Delete read the same cursor, so they act on the row
 the keyboard is on. ARIA tree roles are tracked separately (T-18 in

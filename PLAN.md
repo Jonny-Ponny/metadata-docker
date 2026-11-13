@@ -61,9 +61,10 @@ image build. What remains is optional hardening and new features.
 - **Tree keyboard navigation (T-16).** Complete: a flat visible-row list derived
   from the lazy cache, expanded set and sort order; a cursor separate from the
   selection; a roving tabindex with focus following the cursor; arrows,
-  Home/End, PgUp/PgDn, Space, Enter and Ctrl/Cmd+Enter (open in the editor), and
-  type-ahead. F2 and Delete act on the cursor row. Typing targets and open
-  overlays turn the tree keys off. Details:
+  Home/End, PgUp/PgDn, Enter and Ctrl/Cmd+Enter (open in the editor), and
+  type-ahead. F2 and Delete act on the cursor row. Ctrl/Cmd+Shift+E switches
+  between the tree and the right panel, and Space is reserved for play/pause.
+  Typing targets and open overlays turn the tree keys off. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tree-keyboard-navigation).
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
