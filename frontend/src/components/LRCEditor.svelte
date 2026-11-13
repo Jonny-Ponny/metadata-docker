@@ -722,6 +722,14 @@
    * @param {KeyboardEvent} e
    */
   function handleKeydown(e) {
+    // Escape closes the editor from anywhere, including a focused field, as in
+    // the other modals. It is checked before the typing guard below.
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+
     // Ignore if focus is inside an input/textarea or content-editable
     const target = /** @type {HTMLElement} */ (e.target);
     if (

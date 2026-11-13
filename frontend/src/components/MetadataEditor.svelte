@@ -125,7 +125,12 @@
   let fieldOrder = $derived.by(() => {
     if (readOnly) return [];
     const order = [...mainFields];
-    if (otherExpanded) order.push(...textareaFields);
+    if (otherExpanded) {
+      // These are the order the sections render in: the textareas, then the
+      // tags from `otherFields`, then the custom rows.
+      order.push(...textareaFields);
+      order.push(...Object.keys(metadata.otherFields ?? {}));
+    }
     for (let i = 0; i < customFields.length; i += 1) {
       order.push(customFieldId(i, "name"), customFieldId(i, "value"));
     }
@@ -168,9 +173,11 @@
           : null;
     if (!element) return null;
     if (!element.closest(".metadata-editor")) return null;
+    // A control's own id is its field; the custom row's data-field-id is only a
+    // fallback for controls that have none (it names the row, not one input).
+    if (element.id) return element.id;
     const custom = element.closest("[data-field-id]");
-    if (custom) return custom.getAttribute("data-field-id");
-    return element.id || null;
+    return custom?.getAttribute("data-field-id") ?? null;
   }
 
   /**
@@ -382,6 +389,20 @@
   // Separate modals for synced and unsynced lyrics
   let showSyncedLyricsModal = $state(false);
   let showUnsyncedLyricsModal = $state(false);
+
+  // Escape closes the unsynced lyrics modal, like the other modals. It is a
+  // window listener so it works from the textarea as well.
+  $effect(() => {
+    if (!showUnsyncedLyricsModal) return;
+    /** @param {KeyboardEvent} event */
+    const handleEscape = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeUnsyncedLyricsModal();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  });
   let syncedLyricsData = $state(
     /** @type {{ lyrics: string, timestamps: string[] }} */ ({
       lyrics: "",

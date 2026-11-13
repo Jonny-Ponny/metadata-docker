@@ -418,6 +418,60 @@ describe("MetadataEditor editing actions", () => {
     expect(document.activeElement).toBe(screen.getByLabelText("Genre"));
   });
 
+  it("walks the other fields and custom fields with Alt+Arrow", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    // The "Other" textareas join the order when the section is open.
+    await fireEvent.click(screen.getByText(/Other/));
+    await tick();
+    // Custom field rows are part of it too, name before value.
+    await fireEvent.click(screen.getByText("+ Add new field"));
+    await tick();
+
+    document.getElementById("genre")?.focus();
+    const seen = [];
+    for (let i = 0; i < 6; i += 1) {
+      await fireEvent.keyDown(document.activeElement ?? window, {
+        key: "ArrowDown",
+        altKey: true,
+      });
+      seen.push(/** @type {HTMLElement} */ (document.activeElement).id);
+    }
+
+    // Genres sits before the "Other" section: textareas, the other tags and
+    // then the custom row, after which the list wraps back to the top.
+    expect(seen).toEqual([
+      "comment",
+      "description",
+      "composer",
+      "custom-0-name",
+      "custom-0-value",
+      "title",
+    ]);
+  });
+
+  it("jumps to a custom field through the other fields first", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    // With "Other" closed the textareas are not rendered, so the order skips
+    // straight from the last main field to the custom field.
+    await fireEvent.click(screen.getByText("+ Add new field"));
+    await tick();
+    document.getElementById("genre")?.focus();
+    await fireEvent.keyDown(document.getElementById("genre") ?? window, {
+      key: "ArrowDown",
+      altKey: true,
+    });
+
+    expect(/** @type {HTMLElement} */ (document.activeElement).id).toBe(
+      "custom-0-name",
+    );
+  });
+
   it("keeps the field action icons out of the tab order", async () => {
     stubMetadata();
     render(MetadataEditor, { props: { filePath } });
@@ -1086,6 +1140,22 @@ describe("MetadataEditor editing actions", () => {
         screen.queryByPlaceholderText("Enter unsynced lyrics here..."),
       ).toBeNull(),
     );
+  });
+
+  it("closes the unsynced lyrics modal with Escape from the textarea", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    await fireEvent.click(screen.getByText("Edit unsynced lyrics"));
+
+    const textarea = screen.getByPlaceholderText(
+      "Enter unsynced lyrics here...",
+    );
+    await fireEvent.keyDown(textarea, { key: "Escape" });
+
+    expect(
+      screen.queryByPlaceholderText("Enter unsynced lyrics here..."),
+    ).toBeNull();
   });
 
   it("closes the unsynced lyrics modal without saving", async () => {
