@@ -200,6 +200,38 @@ folders first (cancellable), checks free space, then sends four files at a time
 with XHR byte progress, a conflict policy (`skip-identical` by default,
 `keep-both` via Settings) and cancel/retry.
 
+### Tree keyboard navigation
+
+`TreeNode` is recursive and only folders the user opened are fetched, so
+walking the DOM would be fragile. Instead `utils/tree.utils.js` turns the
+lazy cache, the expanded set and the current sort into a flat row list
+(`flattenVisibleRows`) and the cursor is an index into it. The helpers there
+(`stepRow`, `pageRow`, `parentRow`, `firstChildRow`, `findByPrefix`) are pure
+and unit-tested.
+
+`App.svelte` keeps a cursor path (`activeRowPath`), separate from the
+selection: moving it only highlights a row, so scrolling with the arrow keys
+never loads audio or fetches metadata. A click moves the cursor onto the clicked
+row but hides its dashed outline (it is a keyboard affordance); the next arrow
+key shows it again, so the cursor and the selection never show two highlighted
+rows after mouse use. Enter selects (file to the editor, folder toggles), Ctrl/Cmd+Enter
+selects and moves focus into the right panel (rows forward it themselves).
+Ctrl/Cmd+Shift+E switches between the tree and the right panel from anywhere,
+including a metadata field, and is the way back to the tree without the mouse.
+Space is the global play/pause key (ignored on buttons, links and while typing);
+the tree itself uses Right/Left to expand and collapse. A roving tabindex keeps
+exactly one row in the Tab order; focus follows the cursor while the keyboard is
+in the tree, which a `focusin` listener tracks (typing targets and open overlays
+keep the tree keys off). Rows forward their keys through `onRowKeys` with their
+own path, and the tree panel forwards keys pressed on it, so both start from a
+visible row. When a rename input unmounts (Enter, Esc or a blur), focus returns
+to the renamed row (or stays in the right panel if the rename started there),
+so the tree keeps working without the switch shortcut. The guards live in
+`stores/keyboard.store.js` (`shouldIgnoreShortcut`, `isTypingTarget`,
+`isOverlayOpen`); F2 and Delete read the same cursor, so they act on the row
+the keyboard is on. ARIA tree roles are tracked separately (T-18 in
+[PLAN.md](../PLAN.md)).
+
 ## Tests
 
 The suite runs against a temporary music library and log directory created by

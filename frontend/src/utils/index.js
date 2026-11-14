@@ -6,11 +6,13 @@ export * from "../stores/toast.store";
 export * from "../stores/context.store";
 export * from "../stores/auth.store";
 export * from "../stores/upload.store";
+export * from "../stores/keyboard.store";
 export * from "../stores/tree.store";
 
 // utils
 export * from "./timestamp.utils";
 export * from "./sort.utils";
+export * from "./tree.utils";
 export * from "./hold2confirm.utils";
 export * from "./lyrics.utils";
 export * from "./dom.utils.js";

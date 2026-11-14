@@ -1,6 +1,7 @@
 <!-- src/App.svelte -->
 <script>
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import { get } from "svelte/store";
   import { SvelteSet } from "svelte/reactivity";
 
   import ToastContainer from "./components/ToastContainer.svelte";
@@ -47,6 +48,20 @@
     searchResults,
     searchLibrary,
     childrenByPath,
+    flattenVisibleRows,
+    rowIndexOf,
+    stepRow,
+    firstRow,
+    lastRow,
+    pageRow,
+    firstChildRow,
+    parentRow,
+    findByPrefix,
+    shouldIgnoreShortcut,
+    isTypeAheadKey,
+    isTypingTarget,
+    isOverlayOpen,
+    treeFocusMode,
   } from "./utils/index.js";
 
   // Wait for the user to stop typing before asking the server, and ignore
@@ -89,6 +104,7 @@
    * @property {(time: number) => boolean} seekToTime
    * @property {() => void} stop
    * @property {() => number} getCurrentTime
+   * @property {() => Promise<void>} togglePlay
    */
 
   /**
@@ -180,6 +196,9 @@
 
   // Ref for the file tree container
   let fileTreeContainer = $state(/** @type {HTMLDivElement | null} */ (null));
+
+  // Right panel, for moving keyboard focus into the editor.
+  let rightPanel = $state(/** @type {HTMLDivElement | null} */ (null));
 
   // ========== SEARCH STATE ==========
   let searchQuery = $state("");
@@ -288,6 +307,138 @@
   let sortedTreeData = $derived(
     sortItems(filteredTreeData || [], $sortConfig.by, $sortConfig.direction),
   );
+
+  // ========== TREE KEYBOARD NAVIGATION ==========
+  // The cursor is a row path, not a selection: moving it only highlights a row.
+  // Enter selects (file -> editor, folder -> toggle) and Ctrl/Cmd+Enter opens
+  // the row in the right panel and focuses it.
+  let activeRowPath = $state(/** @type {string | null} */ (null));
+
+  // The visible rows, in the order the tree renders them. Same inputs as the
+  // tree itself, so the keyboard can never land on a row that is not on screen.
+  let visibleRows = $derived(
+    flattenVisibleRows(
+      sortedTreeData,
+      $childrenByPath,
+      expandedForDisplay,
+      $sortConfig,
+    ),
+  );
+
+  // Rows the user typed ahead through; reset when they use another key so the
+  // next letter starts a new prefix.
+  let typeAheadPrefix = "";
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let typeAheadTimer = null;
+  const TYPE_AHEAD_RESET_MS = 700;
+
+  /**
+   * Move the keyboard cursor.
+   * @param {string | null} [path]
+   */
+  function setActiveRow(path) {
+    activeRowPath = path ?? null;
+  }
+
+  // The dashed cursor outline is a keyboard affordance: after a mouse click the
+  // row is already highlighted by the selection, so the outline is hidden until
+  // an arrow key moves the cursor again. `onCursor` (a click) hides it; the
+  // keyboard actions below show it.
+  let cursorIsKeyboard = $state(false);
+
+  /**
+   * The row was clicked: move the cursor onto it but keep the outline hidden.
+   * @param {string} path
+   */
+  function handleRowClicked(path) {
+    setActiveRow(path);
+    cursorIsKeyboard = false;
+  }
+
+  // The cursor highlight. A deleted or renamed row may no longer be in the
+  // list; a mouse click moves the cursor onto the clicked row (see
+  // `onCursor`), so the cursor and the selection agree after a click and only
+  // keyboard movement leaves them apart.
+  let cursorRowPath = $derived(
+    !cursorIsKeyboard
+      ? null
+      : rowIndexOf(visibleRows, activeRowPath) >= 0
+        ? activeRowPath
+        : rowIndexOf(visibleRows, selectedFile ?? selectedFolder) >= 0
+          ? (selectedFile ?? selectedFolder)
+          : null,
+  );
+
+  let selectedRowPath = $derived(selectedFile ?? selectedFolder);
+
+  // Roving tabindex: exactly one tree row is in the tab order, so Tab does not
+  // walk every row. It follows the selection, else the cursor, else the first
+  // row.
+  let rovingRowPath = $derived(
+    rowIndexOf(visibleRows, selectedRowPath) >= 0
+      ? selectedRowPath
+      : rowIndexOf(visibleRows, cursorRowPath) >= 0
+        ? cursorRowPath
+        : (visibleRows[0]?.path ?? null),
+  );
+
+  /**
+   * @param {number} index
+   */
+  function focusRowIndex(index) {
+    if (index < 0) return;
+    const path = visibleRows[index].path;
+    cursorIsKeyboard = true;
+    setActiveRow(path);
+    scheduleRowScroll(path);
+  }
+
+  function clearTypeAhead() {
+    typeAheadPrefix = "";
+    if (typeAheadTimer) {
+      clearTimeout(typeAheadTimer);
+      typeAheadTimer = null;
+    }
+  }
+
+  // Scroll the cursor row only when it left the visible area. The selection
+  // helpers centre the row, which is right for a click but jumpy while the
+  // cursor is held down.
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let rowScrollTimer = null;
+
+  /**
+   * @param {string} path
+   */
+  function scheduleRowScroll(path) {
+    if (rowScrollTimer) clearTimeout(rowScrollTimer);
+    rowScrollTimer = setTimeout(() => {
+      rowScrollTimer = null;
+      const element = findRowElement(path);
+      if (!element || !fileTreeContainer) return;
+      const row = element.getBoundingClientRect();
+      const panel = fileTreeContainer.getBoundingClientRect();
+      if (row.top >= panel.top && row.bottom <= panel.bottom) return;
+      element.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }, 0);
+  }
+
+  /**
+   * @param {string} path
+   * @returns {string}
+   */
+  function rowIdFor(path) {
+    // Same scheme as TreeNode's rowId (`rowIdPrefix` stays empty).
+    return `tree-row-${path.replace(/[^a-zA-Z0-9]/g, "-")}`;
+  }
+
+  /** Which tree page the keyboard is in, for PgUp/PgDn and the focus ring. */
+  let treeIsKeyboardActive = $state(false);
+
+  /** @param {boolean} active */
+  function setTreeKeyboardActive(active) {
+    treeIsKeyboardActive = active;
+  }
 
   let showSettingsModal = $state(false);
 
@@ -1162,55 +1313,417 @@
     document.removeEventListener("mouseup", stopResize);
   }
 
-  // Keydown
+  // ========== KEYBOARD HANDLING ==========
   /**
+   * F2 / Delete. The navigation keys are handled per row; both read the same
+   * cursor, so the shortcuts act on the row the keyboard is on.
    * @param {KeyboardEvent} e
    */
-  function handleKeyDown(e) {
-    // Check if we're in a rename operation
-    if ($renamingPath) {
-      // Let the rename input handle the keys
+  function handleShortcutKeyDown(e) {
+    if (shouldIgnoreShortcut(e)) return;
+
+    // Space plays/pauses the current track wherever focus is, except on
+    // controls and links that use Space themselves. The tree no longer uses
+    // it: Space is the player key, Right/Left toggle folders.
+    if (e.key === " " && !isSpaceOwner(e.target)) {
+      e.preventDefault();
+      if ($settings.enablePlayer) void playerComponent?.togglePlay();
       return;
     }
 
-    // Check if any input, textarea, or contenteditable is focused
-    const activeElement = document.activeElement;
-    const isInputFocused =
-      activeElement &&
-      (activeElement.tagName === "INPUT" ||
-        activeElement.tagName === "TEXTAREA" ||
-        activeElement.getAttribute("contenteditable") === "true" ||
-        activeElement.closest(".modal-content") !== null || // Any modal content
-        activeElement.closest(".timestamp-input") !== null || // Timestamp editor
-        activeElement.closest(".edit-textarea") !== null); // Edit modal textarea
+    // Rename and delete act on the row the keyboard is on, which may differ
+    // from the selection while the cursor is being moved.
+    const rowPath =
+      rowIndexOf(visibleRows, activeRowPath) >= 0 ? activeRowPath : null;
+    const target = rowPath ?? selectedFile ?? selectedFolder;
 
-    if (isInputFocused) {
-      // Don't handle keyboard shortcuts when user is typing
+    if (e.key === "F2" && target) {
+      e.preventDefault();
+      renamingPath.set(target);
       return;
     }
 
-    if (e.key === "F2" && selectedFile) {
+    if ($settings.allowDeleteKey && e.key === "Delete" && target) {
       e.preventDefault();
-      renamingPath.set(selectedFile);
-    } else if (e.key === "F2" && selectedFolder) {
-      e.preventDefault();
-      renamingPath.set(selectedFolder);
+      handleDelete(target);
+    }
+  }
+
+  /**
+   * Whether Space belongs to the target control (a button, link or summary)
+   * rather than the player.
+   * @param {EventTarget | null} target
+   * @returns {boolean}
+   */
+  function isSpaceOwner(target) {
+    if (!(target instanceof Element)) return false;
+    return !!target.closest(
+      "button, a[href], summary, [role='button'], input[type='checkbox'], input[type='radio']",
+    );
+  }
+
+  /**
+   * Open a row in the right panel. Folders show their overview; files open in
+   * the editor/viewer the selection routes to.
+   * @param {string} path
+   */
+  function activateRow(path) {
+    const row = visibleRows[rowIndexOf(visibleRows, path)];
+    if (!row) return;
+    setActiveRow(path);
+    if (row.type === "directory") {
+      selectFolder(path);
+      return;
+    }
+    if (selectedFile !== path) selectFile(path);
+  }
+
+  /**
+   * Open a row and move keyboard focus into the panel that shows it. This is
+   * the "switch to the editor" shortcut: the tree keeps its cursor, so the
+   * next Shift+Tab or click returns to the same place.
+   * @param {string} path
+   */
+  async function activateRowInEditor(path) {
+    const row = visibleRows[rowIndexOf(visibleRows, path)];
+    if (!row || row.type !== "file") return;
+    activateRow(path);
+    await tick();
+    const field = rightPanel?.querySelector("input, textarea, select") ?? null;
+    /** @type {HTMLElement | null} */ (field)?.focus();
+  }
+
+  const PAGE_ROW_ESTIMATE = 12;
+
+  // The two panels are one keyboard area: Ctrl/Cmd+Shift+E moves focus between
+  // them from anywhere in the app (except while typing or in a modal), so the
+  // editor is one shortcut away from the tree and back.
+  const SWITCH_PANEL_KEY = "e";
+
+  /**
+   * Focus the file tree's current row (opening the tree if it was closed).
+   * @param {string | null} [path]
+   */
+  function focusTree(path = activeRowPath ?? selectedFile ?? selectedFolder) {
+    setTreeKeyboardActive(true);
+    if (!visibleRows.length) return;
+    const index = rowIndexOf(visibleRows, path);
+    const target = index >= 0 ? index : firstRow(visibleRows);
+    if (index < 0) focusRowIndex(target);
+    scheduleRowScroll(visibleRows[target]?.path ?? "");
+    focusTreeRow(visibleRows[target]?.path ?? null);
+  }
+
+  /** Focus the first control of the right panel, or the panel itself. */
+  async function focusRightPanel() {
+    await tick();
+    const field = rightPanel?.querySelector("input, textarea, select") ?? null;
+    /** @type {HTMLElement | null} */ (field)?.focus();
+    if (!field) /** @type {HTMLElement | null} */ (rightPanel)?.focus();
+  }
+
+  /** @param {KeyboardEvent} e */
+  function handleSwitchPanel(e) {
+    if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
+    if (e.key.toLowerCase() !== SWITCH_PANEL_KEY) return;
+    // The key works from a text field too: it is the way back to the tree.
+    // A modal or the rename input owns its keyboard entirely.
+    if (isOverlayOpen()) return;
+    e.preventDefault();
+    // Where the key was pressed decides the direction: the row or panel for
+    // the right panel, anything else for the tree.
+    const target = e.target instanceof Element ? e.target : null;
+    const inTree = target?.closest(".file-tree-panel");
+    if (inTree) {
+      focusRightPanel();
+    } else {
+      focusTree();
+    }
+  }
+
+  /**
+   * Tree navigation keys. A row forwards its own keys through `onRowKeys`, and
+   * the panel forwards keys pressed on it; the action is always relative to a
+   * visible row, because the row under the selection is not necessarily the
+   * one the cursor is on.
+   * @param {string} path row the key was pressed on
+   * @param {KeyboardEvent} e
+   */
+  function handleTreeNavigation(path, e) {
+    if (!path || shouldIgnoreShortcut(e)) return;
+    if (!e.target || !(e.target instanceof Element)) return;
+    if (e.target.closest("input, textarea, select, button")) return;
+    // Only the tree or one of its rows owns these keys; the window listener
+    // exists to keep focus and cursor in step, not to act on its own.
+    if (!e.target.closest(".file-tree-panel") && e.target !== e.currentTarget) {
+      return;
     }
 
-    if ($settings.allowDeleteKey) {
-      if (e.key === "Delete" && selectedFile) {
+    setTreeKeyboardActive(true);
+    // A key on the panel starts from the row passed in; a key on a row starts
+    // from that row. Either way the action is relative to a visible row.
+    const index = rowIndexOf(visibleRows, path);
+    if (index < 0) return;
+    const row = visibleRows[index];
+
+    if (e.ctrlKey || e.metaKey) {
+      // Rows forward their own Ctrl/Cmd+Enter (see TreeNode); the window-level
+      // handler may also see it, so a repeated call must be a no-op.
+      if (e.key === "Enter" && row.type === "file") {
         e.preventDefault();
-        handleDelete(selectedFile);
-      } else if (e.key === "Delete" && selectedFolder) {
-        e.preventDefault();
-        handleDelete(selectedFolder);
+        clearTypeAhead();
+        activateRowInEditor(row.path);
       }
+      return;
     }
+
+    /** @param {number} next */
+    const move = (next) => {
+      if (next < 0) return;
+      e.preventDefault();
+      clearTypeAhead();
+      // `next === index` is not a no-op: the reference row may be the selection
+      // rather than the cursor, which still has to move onto it.
+      focusRowIndex(next);
+    };
+
+    switch (e.key) {
+      case "ArrowDown":
+        move(stepRow(visibleRows, index, 1));
+        return;
+      case "ArrowUp":
+        move(stepRow(visibleRows, index, -1));
+        return;
+      case "PageDown":
+      case "PageUp":
+        jumpPage(row, index, e.key === "PageDown" ? 1 : -1, e);
+        return;
+      case "Home":
+        move(firstRow(visibleRows));
+        return;
+      case "End":
+        move(lastRow(visibleRows));
+        return;
+      case "ArrowRight":
+        if (row.type === "directory") {
+          if (!row.expanded && row.hasChildren) {
+            e.preventDefault();
+            clearTypeAhead();
+            setActiveRow(row.path);
+            toggleDir(row.path);
+          } else if (row.expanded) {
+            move(firstChildRow(visibleRows, index));
+          } else {
+            // Nothing to open: stay put rather than doing something unexpected.
+            e.preventDefault();
+          }
+        }
+        return;
+      case "ArrowLeft": {
+        if (row.type === "directory" && row.expanded) {
+          e.preventDefault();
+          clearTypeAhead();
+          toggleDir(row.path);
+        } else {
+          move(parentRow(visibleRows, index));
+        }
+        return;
+      }
+      case "Enter":
+        e.preventDefault();
+        clearTypeAhead();
+        setActiveRow(row.path);
+        if (row.type === "directory") {
+          toggleDir(row.path);
+        } else {
+          activateRow(row.path);
+        }
+        return;
+      default:
+        break;
+    }
+
+    // A double-click opens a control (or selects a row) for typing; a single
+    // click is navigation, and a letter then jumps to a matching name.
+    if (
+      isTypeAheadKey(e) &&
+      get(treeFocusMode) === "navigation" &&
+      fileTreeContainer?.contains(e.target)
+    ) {
+      e.preventDefault();
+      typeAheadPrefix += e.key;
+      if (typeAheadTimer) clearTimeout(typeAheadTimer);
+      typeAheadTimer = setTimeout(() => {
+        typeAheadTimer = null;
+        typeAheadPrefix = "";
+      }, TYPE_AHEAD_RESET_MS);
+      const match = findByPrefix(visibleRows, typeAheadPrefix, index);
+      if (match >= 0) focusRowIndex(match);
+    }
+  }
+
+  /**
+   * A page jump crosses folders, so it may need rows that are not open. Open
+   * what the next page hides, fetch what is missing, and move once the rows
+   * exist. This is why the list the cursor walks is not limited to what is
+   * currently expanded: a collapsed tree would otherwise be barely navigable.
+   * @param {import("./utils/tree.utils.js").VisibleRow} row
+   * @param {number} index
+   * @param {1 | -1} direction
+   * @param {KeyboardEvent} e
+   */
+  function jumpPage(row, index, direction, e) {
+    e.preventDefault();
+    clearTypeAhead();
+    // The list is exactly what is on screen, so a page is a fixed number of
+    // rows in that list. Home and End reach the ends of it.
+    const from = rowIndexOf(visibleRows, row.path);
+    const start = from < 0 ? index : from;
+    focusRowIndex(pageRow(visibleRows, start, PAGE_ROW_ESTIMATE, direction));
+  }
+
+  /**
+   * @param {string} path
+   * @returns {HTMLElement | null}
+   */
+  function findRowElement(path) {
+    return document.getElementById(rowIdFor(path));
+  }
+
+  /**
+   * Move DOM focus to the cursor row so the next key lands on it. Uses
+   * `preventScroll` because the cursor scrolls itself into view.
+   * @param {string | null} path
+   */
+  function focusTreeRow(path) {
+    if (!path) return;
+    const element = findRowElement(path);
+    if (element && fileTreeContainer?.contains(element)) {
+      element.focus({ preventScroll: true });
+    }
+  }
+
+  // Focus return after a rename. The rename input unmounts when renaming ends
+  // (Enter, Esc or a blur), which would otherwise leave focus on the page and
+  // force the user to press the switch-panel key before the tree worked again.
+  // The row that gets focus back is the keyboard cursor, not the selection:
+  // F2 renames the row under the cursor, which may be a different file than the
+  // one loaded in the player and editor.
+  let wasRenaming = false;
+  /** Path under the cursor when the rename started. */
+  let renameReturnRow = /** @type {string | null} */ (null);
+  $effect(() => {
+    const renaming = $renamingPath !== null;
+    if (renaming) {
+      wasRenaming = true;
+      renameReturnRow = activeRowPath ?? null;
+      return;
+    }
+    if (!wasRenaming) return;
+    wasRenaming = false;
+
+    // A rename started from the right panel gives the keyboard back to it.
+    if (rightPanel?.contains(document.activeElement)) return;
+
+    // Otherwise focus goes back to the row the rename started on. Its path may
+    // have changed: `handleRename` remaps the selection only, so the cursor is
+    // matched by name in its folder when the old path is gone. The row may also
+    // only exist once the folder refreshed, which the tick below waits for.
+    const rowPath = renameReturnRow ?? activeRowPath;
+    renameReturnRow = null;
+    if (!rowPath) return;
+    treeFocusMode.set("navigation");
+    setTreeKeyboardActive(true);
+    void tick().then(() => {
+      const target = remapRenamedRow(rowPath);
+      if (!target) return;
+      cursorIsKeyboard = true;
+      setActiveRow(target);
+      scheduleRowScroll(target);
+      focusTreeRow(target);
+    });
+  });
+
+  /**
+   * The row to focus after a rename: the same path when it still exists, or the
+   * row in its folder whose name matches the renamed one. Returns `null` when
+   * neither is visible (the folder did not reload).
+   * @param {string} oldPath
+   * @returns {string | null}
+   */
+  function remapRenamedRow(oldPath) {
+    if (visibleRows.some((row) => row.path === oldPath)) return oldPath;
+    // A rename keeps the item in its folder, so the row after it in the list is
+    // the renamed item. Match by name from the selection when it was remapped.
+    const renamed =
+      selectedFile && parentPath(selectedFile) === parentPath(oldPath)
+        ? selectedFile
+        : selectedFolder && parentPath(selectedFolder) === parentPath(oldPath)
+          ? selectedFolder
+          : null;
+    return renamed && visibleRows.some((row) => row.path === renamed)
+      ? renamed
+      : null;
+  }
+
+  /**
+   * Focus follows the cursor while the keyboard is in the tree. Without this a
+   * row would render focused but the cursor moved on, and the next arrow key
+   * would start again from the old row.
+   */
+  $effect(() => {
+    const path = cursorRowPath;
+    if (!treeIsKeyboardActive || !path) return;
+    focusTreeRow(path);
+  });
+
+  /**
+   * Focus moving out of the tree (Tab, a click in the editor, a modal) turns
+   * the tree keys off so they cannot fight with the editor or a dialog.
+   * @param {FocusEvent} event
+   */
+  function handleFocusChange(event) {
+    if (isTypingTarget(event.target)) return;
+    if (!(event.target instanceof Element)) return;
+    if (event.target.closest(".file-tree-panel")) {
+      setTreeKeyboardActive(true);
+    } else if (treeIsKeyboardActive) {
+      setTreeKeyboardActive(false);
+    }
+  }
+
+  /**
+   * Keys pressed on the panel itself (Tab focus, or a click below the rows).
+   * Rows route through the same handler with their own path.
+   * @param {string} path
+   * @param {KeyboardEvent} e
+   */
+  function keydownFromTree(path, e) {
+    if (!path) return;
+    handleTreeNavigation(path, e);
+  }
+
+  /**
+   * Turns the tree keys on when the tree itself is clicked, including empty
+   * space below the rows.
+   * @param {PointerEvent} event
+   */
+  function handleTreePanelPointerDown(event) {
+    if (!(event.target instanceof Element)) return;
+    setTreeKeyboardActive(true);
   }
 
   // ========== CLEANUP ==========
   $effect(() => {
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleShortcutKeyDown);
+    window.addEventListener("keydown", handleSwitchPanel);
+    // Navigation runs in the capture phase so a focused row cannot swallow it.
+    /** @param {Event} event */
+    const onWindowKeyDown = (event) => {
+      handleTreeNavigation("", /** @type {KeyboardEvent} */ (event));
+    };
+    window.addEventListener("keydown", onWindowKeyDown, true);
+    window.addEventListener("focusin", handleFocusChange, true);
     return () => {
       document.body.classList.remove("resizing");
       document.removeEventListener("mousemove", handleResize);
@@ -1220,11 +1733,19 @@
         URL.revokeObjectURL(audioFile.url);
       }
 
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleShortcutKeyDown);
+      window.removeEventListener("keydown", handleSwitchPanel);
+      window.removeEventListener("keydown", onWindowKeyDown, true);
+      window.removeEventListener("focusin", handleFocusChange, true);
 
       // Clean up hover timer
       if (hoverTimer) {
         clearTimeout(hoverTimer);
+      }
+      clearTypeAhead();
+      if (rowScrollTimer) {
+        clearTimeout(rowScrollTimer);
+        rowScrollTimer = null;
       }
     };
   });
@@ -1985,9 +2506,28 @@
           </div>
         </div>
 
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div
           class="panel-content file-tree-panel"
+          class:tree-keyboard-active={treeIsKeyboardActive}
           bind:this={fileTreeContainer}
+          role="group"
+          aria-label="File tree"
+          tabindex="0"
+          onkeydown={(event) =>
+            keydownFromTree(
+              // A key on the panel itself (Tab focus, or a click on empty
+              // space) starts from the current row.
+              // The panel is not a row, so navigation starts from the row it
+              // contains: the cursor, else the selection, else the first row.
+              visibleRows[rowIndexOf(visibleRows, activeRowPath)]?.path ??
+                visibleRows[rowIndexOf(visibleRows, selectedRowPath)]?.path ??
+                visibleRows[0]?.path ??
+                "",
+              event,
+            )}
+          onpointerdown={handleTreePanelPointerDown}
         >
           {#if isLoading && treeData.length === 0}
             <div class="empty-state">
@@ -2056,6 +2596,12 @@
                   {#each sortedTreeData as item (item.path)}
                     <TreeNode
                       {item}
+                      rowIdPrefix={isSearching ? "search-" : ""}
+                      cursorPath={cursorRowPath}
+                      rovingPath={rovingRowPath}
+                      onRowKeys={handleTreeNavigation}
+                      onCursor={handleRowClicked}
+                      onOpenInEditor={activateRowInEditor}
                       expanded={expandedForDisplay}
                       {toggleDir}
                       {selectFile}
@@ -2085,7 +2631,11 @@
       ></div>
 
       <!-- Right Panel - Metadata Editing -->
-      <div class="panel right-panel" style="width: {100 - leftPanelWidth}%;">
+      <div
+        class="panel right-panel"
+        bind:this={rightPanel}
+        style="width: {100 - leftPanelWidth}%;"
+      >
         <div class="panel-header">
           <h3>
             {#if selectedFile && selectedFile.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)}
