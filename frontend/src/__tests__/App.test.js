@@ -1150,6 +1150,26 @@ describe("App", () => {
     expect(callsTo("/api/delete")).toHaveLength(0);
   });
 
+  it("never deletes the file for a Delete pressed in the right panel", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+
+    await fireEvent.click(node(view, "loose.flac"));
+    await screen.findByRole("heading", { name: "Metadata Editor" });
+
+    // Focus can end up on the editor container itself (not a text field) after
+    // a tag is removed; plain Delete must not escalate to deleting the file.
+    const editor = /** @type {HTMLElement | null} */ (
+      view.container.querySelector(".right-panel .metadata-editor")
+    );
+    expect(editor).toBeTruthy();
+    editor?.focus();
+    await fireEvent.keyDown(editor ?? window, { key: "Delete", bubbles: true });
+    await tick();
+
+    expect(callsTo("/api/delete")).toHaveLength(0);
+  });
+
   it("accepts the delete key in the panel context", async () => {
     isAuthenticated.set(true);
     const view = await renderAuthenticated();
