@@ -461,11 +461,8 @@ describe("MetadataEditor editing actions", () => {
     // falling to <body>, where the tree shortcuts would take over.
     let deleted = false;
     const fetchMock = vi.fn(
-      /**
-       * @param {string} url
-       * @param {RequestInit} [options]
-       */
-      (url, options = {}) => {
+      /** @param {string} url */
+      (url) => {
         if (url === "/api/metadata/field/delete") {
           deleted = true;
           return Promise.resolve(jsonResponse(200, { success: true }));
