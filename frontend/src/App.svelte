@@ -57,6 +57,7 @@
     firstChildRow,
     parentRow,
     findByPrefix,
+    treeRowId,
     shouldIgnoreShortcut,
     isTypeAheadKey,
     isTypingTarget,
@@ -429,7 +430,7 @@
    */
   function rowIdFor(path) {
     // Same scheme as TreeNode's rowId (`rowIdPrefix` stays empty).
-    return `tree-row-${path.replace(/[^a-zA-Z0-9]/g, "-")}`;
+    return treeRowId(path);
   }
 
   /** Which tree page the keyboard is in, for PgUp/PgDn and the focus ring. */

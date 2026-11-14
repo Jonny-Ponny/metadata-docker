@@ -24,6 +24,7 @@
     getAudioFormatLabel,
     noteTreePointerClick,
     readApiError,
+    treeRowId,
   } from "../utils/index.js";
 
   // How long the pointer must rest on a folder before its deep totals are
@@ -213,9 +214,7 @@
   // Row id for the keyboard focus model. The app scrolls the row it moves the
   // cursor to by id, so the id must be unique even when the tree is rendered
   // more than once (the search view and the normal tree can both be mounted).
-  const rowId = $derived(
-    `${rowIdPrefix}tree-row-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`,
-  );
+  const rowId = $derived(treeRowId(item.path, rowIdPrefix));
 
   // Roving tabindex: one row is reachable with Tab, the rest only by arrow key.
   const rowTabIndex = $derived(rovingPath === item.path ? 0 : -1);

@@ -132,6 +132,28 @@ export function flattenVisibleRows(
 }
 
 /**
+ * DOM id of a tree row.
+ *
+ * Row ids must be unique: the keyboard model moves DOM focus by looking the
+ * target row up with `getElementById`, so two rows sharing an id make the
+ * cursor stall on the first of them. Encoding every character outside
+ * `[A-Za-z0-9]` as `-<code point>` keeps the ASCII case short
+ * (`Zulu.flac` -> `tree-row-Zulu-2eflac`) while keeping names that differ only
+ * by non-ASCII characters apart; a plain `-` replacement collapses
+ * `そこに鳴る` and `ゆよゆっぺ` to the same id.
+ *
+ * @param {string} path library-relative path of the row
+ * @param {string} [prefix] extra prefix, so the search tree cannot clash
+ * @returns {string}
+ */
+export function treeRowId(path, prefix = "") {
+  return `${prefix}tree-row-${String(path).replace(
+    /[^a-zA-Z0-9]/g,
+    (char) => `-${/** @type {string} */ (char).codePointAt(0)?.toString(16)}`,
+  )}`;
+}
+
+/**
  * Index of a path in the row list, or `-1`.
  * @param {VisibleRow[]} rows
  * @param {string | null | undefined} path

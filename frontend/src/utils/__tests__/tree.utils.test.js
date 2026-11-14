@@ -10,6 +10,7 @@ import {
   parentRow,
   rowIndexOf,
   stepRow,
+  treeRowId,
 } from "../tree.utils.js";
 
 /**
@@ -321,5 +322,34 @@ describe("row helpers", () => {
     expect(findByPrefix(rows, "c", 3)).toBe(3);
     expect(findByPrefix(rows, "zzz", -1)).toBe(-1);
     expect(findByPrefix(rows, "", 0)).toBe(-1);
+  });
+
+  describe("treeRowId", () => {
+    it("keeps ids apart for names that differ only outside [A-Za-z0-9]", () => {
+      // The keyboard moves focus by id, so a collision freezes the cursor.
+      const names = [
+        "Zero Boys",
+        "きくお",
+        "そこに鳴る",
+        "ゆよゆっぺ",
+        "オカメP",
+        "ピノキオピー",
+        "ミドリ",
+      ];
+      const ids = names.map((name) => treeRowId(name));
+      expect(new Set(ids).size).toBe(names.length);
+    });
+
+    it("stays readable for ASCII paths and honours the prefix", () => {
+      expect(treeRowId("Zulu.flac")).toBe("tree-row-Zulu-2eflac");
+      expect(treeRowId("Zulu.flac", "search-")).toBe(
+        "search-tree-row-Zulu-2eflac",
+      );
+    });
+
+    it("does not clash when letter codes could be ambiguous", () => {
+      // "-2e" plus "flac" must not be reachable from a different name.
+      expect(treeRowId("a.2e")).not.toBe(treeRowId("a-2e"));
+    });
   });
 });

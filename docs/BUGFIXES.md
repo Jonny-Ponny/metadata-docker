@@ -384,6 +384,28 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/__tests__/App.test.js` - `keeps the recursive
       overview accurate for a nested selected folder`.
 
+- [x] **B-44 (P1) Arrow keys stopped moving the tree cursor on non-ASCII folder names.**
+      Row elements were identified as
+      `tree-row-${path.replace(/[^a-zA-Z0-9]/g, "-")}` in both `App.svelte`
+      (`rowIdFor`, used to focus and scroll the cursor row) and
+      `TreeNode.svelte` (`rowId`, used to render the id). Every character
+      outside `[A-Za-z0-9]` collapsed to a single `-`, so `そこに鳴る` and
+      `ゆよゆっぺ` both became `tree-row------`, and `ピノキオピー` and
+      `ミドリ` both became `tree-row-------`. `findRowElement` resolves the
+      row with `getElementById`, which always returns the first match, so DOM
+      focus stayed on the earlier duplicate while `activeRowPath` moved on.
+      The next arrow key was then handled relative to the stale row, which
+      looked like the cursor freezing: the cursor outline advanced while
+      focus (and with it the selection styling) did not, and the folder after
+      the collided one appeared to be selected with a dashed border.
+      **Fix:** a shared `treeRowId(path, prefix)` in `tree.utils.js` encodes
+      each disallowed character as `-<code point>` (e.g. `Zulu.flac` ->
+      `tree-row-Zulu-2eflac`), so ids stay unique without changing the ASCII
+      shape. Both call sites now use it.
+      **Test:** `frontend/src/__tests__/App.test.js` - `keeps distinct row ids
+      for non-ASCII folder names`, plus `treeRowId` cases in
+      `frontend/src/utils/__tests__/tree.utils.test.js`.
+
 ## Lyrics editor
 
 - [x] **B-36 (P2) Synced-lyrics timestamps lagged behind the live playback position.**
@@ -490,3 +512,4 @@ silently.
 | B-41 | `frontend/src/__tests__/App.test.js` - `clears a pending selection scroll when unmounted` |
 | B-42 | `frontend/src/__tests__/App.test.js` - `fills the direct folder overview after a lazy folder arrives` |
 | B-43 | `frontend/src/__tests__/App.test.js` - `keeps the recursive overview accurate for a nested selected folder` |
+| B-44 | `frontend/src/__tests__/App.test.js` - `keeps distinct row ids for non-ASCII folder names` |

@@ -20,6 +20,7 @@ import { theme } from "../stores/theme.store.js";
 import { toast } from "../stores/toast.store.js";
 import { dismiss, upload } from "../stores/upload.store.js";
 import { settings } from "../utils/settings.utils.js";
+import { treeRowId } from "../utils/tree.utils.js";
 
 const startDropMock = vi.hoisted(() => vi.fn());
 
@@ -1333,6 +1334,49 @@ describe("App", () => {
       );
     });
 
+    it("keeps distinct row ids for non-ASCII folder names", async () => {
+      // Every character of these names is non-alphanumeric, so a sanitiser
+      // that maps each one to "-" gives several folders the same DOM id and
+      // the focused row no longer matches the cursor: ArrowDown then appears
+      // to stall on whichever row happens to hold that id.
+      const names = [
+        "Zero Boys",
+        "きくお",
+        "そこに鳴る",
+        "ゆよゆっぺ",
+        "オカメP",
+        "ピノキオピー",
+        "ミドリ",
+      ];
+      useTree(
+        names.map((name) => ({
+          name,
+          path: name,
+          type: "directory",
+          children: [],
+        })),
+      );
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+
+      const ids = names.map((name) =>
+        document
+          .querySelector(`[data-folder-path="${name}"]`)
+          ?.getAttribute("id"),
+      );
+      expect(new Set(ids).size).toBe(names.length);
+
+      // Walk the whole list; focus must follow the cursor on every step.
+      for (const name of names.slice(1)) {
+        await pressKey("ArrowDown");
+        expect(cursorPath()).toBe(name);
+        expect(document.activeElement?.getAttribute("id")).toBe(
+          treeRowId(name),
+        );
+      }
+    });
+
     it("starts from the selection and clamps at both ends", async () => {
       useTree(keyboardTree());
       view = await renderAuthenticated();
@@ -1518,7 +1562,7 @@ describe("App", () => {
 
       // The row is the event target for the shortcuts, as in a browser.
       await fireEvent.keyDown(
-        document.getElementById("tree-row-Zulu-flac") ?? window,
+        document.getElementById(treeRowId("Zulu.flac")) ?? window,
         {
           key: "F2",
         },
@@ -1527,7 +1571,7 @@ describe("App", () => {
 
       renamingPath.set(null);
       await fireEvent.keyDown(
-        document.getElementById("tree-row-Zulu-flac") ?? window,
+        document.getElementById(treeRowId("Zulu.flac")) ?? window,
         {
           key: "Delete",
         },
@@ -1603,10 +1647,10 @@ describe("App", () => {
 
       await waitFor(() =>
         expect(
-          document.getElementById("search-tree-row-Zulu-flac"),
+          document.getElementById(treeRowId("Zulu.flac", "search-")),
         ).toBeTruthy(),
       );
-      expect(document.getElementById("tree-row-Zulu-flac")).toBeNull();
+      expect(document.getElementById(treeRowId("Zulu.flac"))).toBeNull();
     });
 
     it("returns focus to the renamed row after F2 + Enter", async () => {
@@ -1623,7 +1667,7 @@ describe("App", () => {
       await pressKey("End");
       await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
 
-      const target = document.getElementById("tree-row-Zulu-flac") ?? window;
+      const target = document.getElementById(treeRowId("Zulu.flac")) ?? window;
       fireEvent.keyDown(target, { key: "F2" });
       const input = /** @type {HTMLInputElement} */ (
         view.container.querySelector(".rename-input")
@@ -1639,12 +1683,12 @@ describe("App", () => {
       // keeps serving the old name, so the row may be the old path.
       await waitFor(() =>
         expect(document.activeElement?.getAttribute("id")).not.toBe(
-          "tree-row-Charlie-flac",
+          treeRowId("Charlie.flac"),
         ),
       );
       expect(document.activeElement).not.toBe(document.body);
       expect(document.activeElement?.getAttribute("id")).toBe(
-        `tree-row-${cursorPath()?.replace(/[^a-zA-Z0-9]/g, "-")}`,
+        treeRowId(cursorPath() ?? ""),
       );
       // The selection keeps showing the audio file in the player and editor.
       expect(cursorPath()).not.toBe("Charlie.flac");
@@ -1667,7 +1711,7 @@ describe("App", () => {
       await pressKey("End");
       await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
 
-      const target = document.getElementById("tree-row-Zulu-flac") ?? window;
+      const target = document.getElementById(treeRowId("Zulu.flac")) ?? window;
       fireEvent.keyDown(target, { key: "F2" });
       const input = /** @type {HTMLInputElement} */ (
         view.container.querySelector(".rename-input")
@@ -1678,7 +1722,7 @@ describe("App", () => {
       // Cancelling returns to the cursor row, not the selection.
       await waitFor(() =>
         expect(document.activeElement?.getAttribute("id")).toBe(
-          "tree-row-Zulu-flac",
+          treeRowId("Zulu.flac"),
         ),
       );
       expect(callsTo("/api/rename")).toHaveLength(0);
@@ -1738,7 +1782,7 @@ describe("App", () => {
       await pressKey("End");
       await waitFor(() => expect(cursorPath()).toBe("Zulu.flac"));
 
-      const focused = document.getElementById("tree-row-Zulu-flac") ?? window;
+      const focused = document.getElementById(treeRowId("Zulu.flac")) ?? window;
       fireEvent.keyDown(focused, {
         key: "Enter",
         ctrlKey: true,
@@ -1759,7 +1803,7 @@ describe("App", () => {
 
       // The direction follows where the key is pressed: from the tree it goes
       // to the right panel, from the right panel back to the cursor row.
-      const treeRow = document.getElementById("tree-row-Charlie-flac");
+      const treeRow = document.getElementById(treeRowId("Charlie.flac"));
       fireEvent.keyDown(treeRow ?? window, {
         key: "E",
         ctrlKey: true,
