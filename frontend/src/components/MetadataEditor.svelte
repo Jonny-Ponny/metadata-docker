@@ -3,6 +3,7 @@
   import HoldButton from "./HoldButton.svelte";
   import LyricsEditorModal from "./LRCEditor.svelte";
   import { SvelteSet } from "svelte/reactivity";
+  import { tick } from "svelte";
 
   import {
     toast,
@@ -50,6 +51,9 @@
 
   /** @type {Props} */
   let { filePath } = $props();
+
+  /** The editor container, for keeping focus inside it when no field is left. */
+  let editorRoot = $state(/** @type {HTMLDivElement | null} */ (null));
 
   // Reactive state for metadata
   /** @type {MetadataFields & Record<string, any>} */
@@ -205,6 +209,32 @@
           : order.length - 1
         : (index + direction + order.length) % order.length;
     focusField(order[next]);
+  }
+
+  /**
+   * Keep focus in the editor after a field disappears (a deleted tag unmounts
+   * its row). Without this the browser drops focus to `<body>`, where the tree
+   * shortcuts take over and a following Delete would remove the whole file.
+   * @param {string} field the field that was removed
+   */
+  async function refocusAfterFieldRemoved(field) {
+    if (
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest(".metadata-editor")
+    ) {
+      return;
+    }
+    const order = fieldOrder;
+    const index = order.indexOf(field);
+    // Prefer the next field, then the previous one, then the first field.
+    const target =
+      order[index + 1] ?? order[index - 1] ?? order[0] ?? mainFields[0] ?? null;
+    await tick();
+    focusField(target);
+    if (!target) {
+      // Nothing editable is left: keep the keyboard in the editor anyway.
+      editorRoot?.focus();
+    }
   }
 
   // One hold runs at a time; its progress is drawn on the focused field.
@@ -907,6 +937,7 @@
       if (editingFields.has(field)) {
         editingFields.delete(field);
       }
+      await refocusAfterFieldRemoved(field);
     } catch (error) {
       console.error("Error deleting field:", error);
       toast.error(
@@ -1187,6 +1218,7 @@
       if (editingFields.has(field)) {
         editingFields.delete(field);
       }
+      await refocusAfterFieldRemoved(field);
     } catch (error) {
       console.error("Error deleting field from folder:", error);
       toast.error(
@@ -1261,7 +1293,12 @@
   });
 </script>
 
-<div class="metadata-editor" class:readonly={readOnly}>
+<div
+  class="metadata-editor"
+  class:readonly={readOnly}
+  bind:this={editorRoot}
+  tabindex="-1"
+>
   {#if !readOnly}
     <div class="operation-controls">
       <label
@@ -1899,6 +1936,13 @@
                 onkeydown={handleFieldKeydown}
                 readonly={readOnly}
               />
+              {#if keyboardHoldField === key}
+                <div
+                  class="hold-progress"
+                  aria-hidden="true"
+                  style="--progress: {keyboardHoldProgress};"
+                ></div>
+              {/if}
               {#if editingFields.has(key)}
                 <div class="field-actions">
                   <!-- Delete button -->

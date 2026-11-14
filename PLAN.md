@@ -73,6 +73,8 @@ image build. What remains is optional hardening and new features.
   progress fill on the field, so a folder-wide change cannot happen by a slip.
   `Alt+ArrowUp/Down` move between fields. The hold timing is shared with the
   existing pointer hold buttons (`createHold` in `hold2confirm.utils.js`).
+  Advanced tags from the file (custom fields such as `LANGUAGE`, listed under
+  "Other") show the same hold progress as the built-in fields.
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are

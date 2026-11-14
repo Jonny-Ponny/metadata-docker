@@ -1344,6 +1344,15 @@
     }
 
     if ($settings.allowDeleteKey && e.key === "Delete" && target) {
+      // A plain Delete only reaches here from the tree or the page background.
+      // Never delete a file while the keyboard is inside the editor or the
+      // other viewer panels: Ctrl+Delete there is the tag delete, and focus
+      // that fell out of a removed tag must not escalate to the whole file.
+      const active = document.activeElement;
+      const fromEditor =
+        (active instanceof Element && !!active.closest(".right-panel")) ||
+        (e.target instanceof Element && !!e.target.closest(".right-panel"));
+      if (fromEditor) return;
       e.preventDefault();
       handleDelete(target);
     }

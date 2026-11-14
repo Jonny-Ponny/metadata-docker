@@ -418,6 +418,99 @@ describe("MetadataEditor editing actions", () => {
     expect(document.activeElement).toBe(screen.getByLabelText("Genre"));
   });
 
+  it("shows progress while holding a shortcut on an advanced tag", async () => {
+    // Unknown tags from the file ("LANGUAGE", freeform MP4 atoms, ...) render
+    // in the "Other" section and must show the same hold progress.
+    stubMetadata({ customFields: [{ name: "LANGUAGE", value: "eng" }] });
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    await fireEvent.click(screen.getByText(/Other/));
+    await tick();
+
+    const input = /** @type {HTMLInputElement} */ (
+      document.getElementById("LANGUAGE")
+    );
+    expect(input).toBeTruthy();
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(400);
+      await tick();
+
+      const progress = input.closest(".field")?.querySelector(".hold-progress");
+      expect(progress).toBeTruthy();
+      expect(
+        /** @type {HTMLElement} */ (progress).style.getPropertyValue(
+          "--progress",
+        ),
+      ).not.toBe("0");
+
+      await fireEvent.keyUp(input, { key: "Enter", ctrlKey: true });
+      await tick();
+      expect(
+        input.closest(".field")?.querySelector(".hold-progress"),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps focus in the editor after an advanced tag is deleted", async () => {
+    // The deleted tag unmounts; focus must move to a surviving field instead of
+    // falling to <body>, where the tree shortcuts would take over.
+    let deleted = false;
+    const fetchMock = vi.fn(
+      /** @param {string} url */
+      (url) => {
+        if (url === "/api/metadata/field/delete") {
+          deleted = true;
+          return Promise.resolve(jsonResponse(200, { success: true }));
+        }
+        return Promise.resolve(
+          jsonResponse(200, {
+            title: "Song",
+            album: "Album",
+            artist: "Artist",
+            albumArtist: "Album Artist",
+            trackNumber: 3,
+            diskNumber: 1,
+            date: "2024",
+            genre: "Rock",
+            ...(deleted
+              ? {}
+              : { customFields: [{ name: "LANGUAGE", value: "eng" }] }),
+          }),
+        );
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    await fireEvent.click(screen.getByText(/Other/));
+    await tick();
+    const input = /** @type {HTMLInputElement} */ (
+      document.getElementById("LANGUAGE")
+    );
+    input.focus();
+    await fireEvent.focus(input);
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(input, { key: "Delete", ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(800);
+      await fireEvent.keyUp(input, { key: "Delete", ctrlKey: true });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await waitFor(() => expect(document.getElementById("LANGUAGE")).toBeNull());
+    const active = /** @type {HTMLElement} */ (document.activeElement);
+    expect(active).not.toBe(document.body);
+    expect(active.closest(".metadata-editor")).toBeTruthy();
+  });
+
   it("walks the other fields and custom fields with Alt+Arrow", async () => {
     stubMetadata();
     render(MetadataEditor, { props: { filePath } });
