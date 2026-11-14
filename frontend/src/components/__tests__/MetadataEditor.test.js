@@ -138,6 +138,141 @@ describe("MetadataEditor", () => {
     );
   });
 
+  /**
+   * Hold a key on a field for its whole duration, the way Ctrl+Enter and
+   * Ctrl+Delete work: keydown, timers run, keyup.
+   * @param {HTMLElement} field
+   * @param {string} key
+   * @param {number} duration
+   */
+  async function holdKey(field, key, duration) {
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(field, { key, ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(duration);
+      await fireEvent.keyUp(field, { key, ctrlKey: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it("applies to the folder only after holding Ctrl+Enter", async () => {
+    const fetchMock = stubMetadata();
+
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    const title = screen.getByLabelText("Title");
+
+    // A tap of Ctrl+Enter must not touch the folder.
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(title, { key: "Enter", ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(300);
+      await fireEvent.keyUp(title, { key: "Enter", ctrlKey: true });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(
+      fetchMock.mock.calls.some(
+        ([url]) => url === "/api/metadata/folder/current",
+      ),
+    ).toBe(false);
+
+    await holdKey(title, "Enter", 800);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/metadata/folder/current",
+        expect.objectContaining({
+          body: JSON.stringify({
+            path: "folder",
+            field: "title",
+            value: "Song",
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("shows progress on the field while Ctrl+Enter is held", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    const title = screen.getByLabelText("Title");
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(title, { key: "Enter", ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(400);
+      await tick();
+      const progress =
+        /** @type {HTMLElement | null} */ (
+          title.closest(".field")?.querySelector(".hold-progress")
+        ) ?? null;
+      expect(progress).toBeTruthy();
+      expect(progress?.style.getPropertyValue("--progress")).not.toBe("0");
+      await fireEvent.keyUp(title, { key: "Enter", ctrlKey: true });
+      await tick();
+      expect(
+        title.closest(".field")?.querySelector(".hold-progress"),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("deletes a field only after holding Ctrl+Delete", async () => {
+    const fetchMock = stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    const title = screen.getByLabelText("Title");
+
+    // Plain Delete keeps clearing text; it does not delete the tag.
+    await fireEvent.keyDown(title, { key: "Delete" });
+    await tick();
+    expect(
+      fetchMock.mock.calls.some(
+        ([url]) => url === "/api/metadata/field/delete",
+      ),
+    ).toBe(false);
+
+    await holdKey(title, "Delete", 800);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/metadata/field/delete",
+        expect.objectContaining({
+          body: JSON.stringify({ path: filePath, field: "title" }),
+        }),
+      ),
+    );
+  });
+
+  it("deletes from the folder with Ctrl+Delete when configured", async () => {
+    const fetchMock = stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    await fireEvent.click(
+      screen.getByLabelText("Tag deletion applies to folder"),
+    );
+    const title = screen.getByLabelText("Title");
+
+    await holdKey(title, "Delete", 800);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/metadata/field/delete",
+        expect.objectContaining({
+          body: JSON.stringify({
+            path: "folder",
+            field: "title",
+            recursive: false,
+          }),
+        }),
+      ),
+    );
+  });
+
   it("saves a field on Enter without leaving the input", async () => {
     const fetchMock = stubMetadata();
 
@@ -256,6 +391,106 @@ describe("MetadataEditor editing actions", () => {
     await fireEvent.focus(screen.getByLabelText(label));
     await tick();
   }
+
+  it("moves between fields with Alt+Arrow keys and wraps", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    await focusField("Title");
+
+    await fireEvent.keyDown(screen.getByLabelText("Title"), {
+      key: "ArrowDown",
+      altKey: true,
+    });
+    expect(document.activeElement).toBe(screen.getByLabelText("Album"));
+
+    await fireEvent.keyDown(screen.getByLabelText("Album"), {
+      key: "ArrowUp",
+      altKey: true,
+    });
+    expect(document.activeElement).toBe(screen.getByLabelText("Title"));
+
+    // Up from the first field wraps to the last field in the current list.
+    await fireEvent.keyDown(screen.getByLabelText("Title"), {
+      key: "ArrowUp",
+      altKey: true,
+    });
+    expect(document.activeElement).toBe(screen.getByLabelText("Genre"));
+  });
+
+  it("walks the other fields and custom fields with Alt+Arrow", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    // The "Other" textareas join the order when the section is open.
+    await fireEvent.click(screen.getByText(/Other/));
+    await tick();
+    // Custom field rows are part of it too, name before value.
+    await fireEvent.click(screen.getByText("+ Add new field"));
+    await tick();
+
+    document.getElementById("genre")?.focus();
+    const seen = [];
+    for (let i = 0; i < 6; i += 1) {
+      await fireEvent.keyDown(document.activeElement ?? window, {
+        key: "ArrowDown",
+        altKey: true,
+      });
+      seen.push(/** @type {HTMLElement} */ (document.activeElement).id);
+    }
+
+    // Genres sits before the "Other" section: textareas, the other tags and
+    // then the custom row, after which the list wraps back to the top.
+    expect(seen).toEqual([
+      "comment",
+      "description",
+      "composer",
+      "custom-0-name",
+      "custom-0-value",
+      "title",
+    ]);
+  });
+
+  it("jumps to a custom field through the other fields first", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+
+    // With "Other" closed the textareas are not rendered, so the order skips
+    // straight from the last main field to the custom field.
+    await fireEvent.click(screen.getByText("+ Add new field"));
+    await tick();
+    document.getElementById("genre")?.focus();
+    await fireEvent.keyDown(document.getElementById("genre") ?? window, {
+      key: "ArrowDown",
+      altKey: true,
+    });
+
+    expect(/** @type {HTMLElement} */ (document.activeElement).id).toBe(
+      "custom-0-name",
+    );
+  });
+
+  it("keeps the field action icons out of the tab order", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    await focusField("Title");
+    await tick();
+
+    const actions = document.querySelector(".field-actions");
+    expect(actions).toBeTruthy();
+    const controls = [
+      ...(actions?.querySelectorAll("button, [role='button']") ?? []),
+    ];
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of controls) {
+      expect(control.getAttribute("tabindex")).toBe("-1");
+    }
+    // The text fields themselves stay reachable by Tab.
+    expect(screen.getByLabelText("Title").getAttribute("tabindex")).toBeNull();
+  });
 
   it("hides every editing control for a read-only file", async () => {
     stubMetadata({ readOnly: true, supported: false, format: "wav" });
@@ -905,6 +1140,22 @@ describe("MetadataEditor editing actions", () => {
         screen.queryByPlaceholderText("Enter unsynced lyrics here..."),
       ).toBeNull(),
     );
+  });
+
+  it("closes the unsynced lyrics modal with Escape from the textarea", async () => {
+    stubMetadata();
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    await fireEvent.click(screen.getByText("Edit unsynced lyrics"));
+
+    const textarea = screen.getByPlaceholderText(
+      "Enter unsynced lyrics here...",
+    );
+    await fireEvent.keyDown(textarea, { key: "Escape" });
+
+    expect(
+      screen.queryByPlaceholderText("Enter unsynced lyrics here..."),
+    ).toBeNull();
   });
 
   it("closes the unsynced lyrics modal without saving", async () => {

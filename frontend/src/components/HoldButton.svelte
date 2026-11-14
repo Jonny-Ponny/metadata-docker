@@ -9,6 +9,9 @@
    * @property {string} [title]
    * @property {boolean} [disabled]
    * @property {string} [class]
+   * @property {number} [tabindex] -1 keeps a pointer-only control out of the
+   *   tab order (the metadata editor uses this; its keyboard shortcuts replace
+   *   the icons)
    * @property {import("svelte").Snippet} children
    */
 
@@ -20,6 +23,7 @@
     title = "",
     disabled = false,
     class: className = "",
+    tabindex = 0,
     children,
   } = $props();
 
@@ -72,7 +76,7 @@
   bind:this={buttonRef}
   {title}
   role="button"
-  tabindex="0"
+  {tabindex}
   aria-disabled={disabled}
 >
   <!-- Progress indicator -->

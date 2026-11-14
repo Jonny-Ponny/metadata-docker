@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 
-import { createHoldToConfirm, holdToConfirm } from "../hold2confirm.utils.js";
+import {
+  createHold,
+  createHoldToConfirm,
+  holdToConfirm,
+} from "../hold2confirm.utils.js";
 
 /**
  * @param {number} [duration]
@@ -86,6 +90,26 @@ describe("hold2confirm", () => {
 
     expect(options.onStart).toHaveBeenCalledTimes(1);
     expect(options.onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the callbacks when only the duration is updated", () => {
+    const hold = createHold({ duration: 800, onConfirm: vi.fn() });
+    const onConfirm = vi.fn();
+
+    // A component may adjust the timing without losing its handlers.
+    hold.update({ duration: 200, onConfirm });
+    hold.start(new Event("start"));
+    vi.advanceTimersByTime(250);
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes the shared hold for keyboard use", () => {
+    const node = document.createElement("button");
+    const instance = createHoldToConfirm(node, { duration: 100 });
+    expect(instance.hold).toBeTruthy();
+    expect(instance.progress).toBe(instance.hold.progress);
+    instance.destroy();
   });
 
   it("supports touch events", () => {

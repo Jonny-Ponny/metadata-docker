@@ -86,6 +86,20 @@ describe("LRCEditor", () => {
     expect(screen.queryByText("Synced Lyrics Editor")).toBeNull();
   });
 
+  it("closes on Escape, including from a focused field", async () => {
+    const onClose = vi.fn();
+    render(LRCEditor, { props: { ...baseProps, onClose } });
+
+    // An unfocused target: the modal reacts wherever the key is pressed.
+    await fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    // And from a textarea, where S/C are ignored but Escape still closes.
+    const field = document.querySelector("textarea");
+    if (field) await fireEvent.keyDown(field, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(field ? 2 : 1);
+  });
+
   it("lays out the timestamps, lyrics and synchronized columns", () => {
     render(LRCEditor, { props: baseProps });
 

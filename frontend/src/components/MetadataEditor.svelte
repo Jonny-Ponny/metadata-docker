@@ -16,6 +16,7 @@
     setCoverFromUrl,
     formatImageDimensions,
     probeImageSize,
+    createHold,
   } from "../utils/index.js";
 
   /**
@@ -106,6 +107,257 @@
     ),
   );
 
+  // ========== KEYBOARD MODEL ==========
+  // The editor is made of text fields with action icons, so the icons stay out
+  // of the tab order and every action is a shortcut on the focused field:
+  //
+  //   Enter          apply this field to the file
+  //   Ctrl+Enter     HOLD to apply to the folder (progress fills the field)
+  //   Ctrl+Delete    HOLD to delete the field (from the file or from the folder
+  //                  when "Tag deletion applies to folder" is on)
+  //   Alt+ArrowDown  next field        Alt+ArrowUp   previous field
+  //   Tab/Shift+Tab  next/previous text field or checkbox
+  //
+  // Holding matches the mouse hold-to-confirm controls and uses the same
+  // configured durations, so a folder-wide change cannot happen by a slip.
+
+  /** Field ids in the order they are rendered, used by Alt+Arrow. */
+  let fieldOrder = $derived.by(() => {
+    if (readOnly) return [];
+    const order = [...mainFields];
+    if (otherExpanded) {
+      // These are the order the sections render in: the textareas, then the
+      // tags from `otherFields`, then the custom rows.
+      order.push(...textareaFields);
+      order.push(...Object.keys(metadata.otherFields ?? {}));
+    }
+    for (let i = 0; i < customFields.length; i += 1) {
+      order.push(customFieldId(i, "name"), customFieldId(i, "value"));
+    }
+    return order;
+  });
+
+  /**
+   * @param {number} index
+   * @param {"name" | "value"} part
+   */
+  function customFieldId(index, part) {
+    return `custom-${index}-${part}`;
+  }
+
+  /**
+   * The control a field id belongs to.
+   * @param {string} field
+   * @returns {HTMLInputElement | HTMLTextAreaElement | null}
+   */
+  function fieldControl(field) {
+    return /** @type {HTMLInputElement | HTMLTextAreaElement | null} */ (
+      document.getElementById(field) ??
+        document.querySelector(`[data-field-id="${CSS.escape(field)}"] input`)
+    );
+  }
+
+  /**
+   * The field a control belongs to (a control's id is its field). Passing the
+   * keydown target keeps the mapping correct even when focus has not moved yet;
+   * without an element the focused control is used (Alt+Arrow navigation).
+   * @param {EventTarget | null} [target]
+   * @returns {string | null}
+   */
+  function fieldIdOf(target) {
+    const element =
+      target instanceof HTMLElement
+        ? target
+        : document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+    if (!element) return null;
+    if (!element.closest(".metadata-editor")) return null;
+    // A control's own id is its field; the custom row's data-field-id is only a
+    // fallback for controls that have none (it names the row, not one input).
+    if (element.id) return element.id;
+    const custom = element.closest("[data-field-id]");
+    return custom?.getAttribute("data-field-id") ?? null;
+  }
+
+  /**
+   * Move keyboard focus to one of the editor's fields.
+   * @param {string | null} fieldId
+   */
+  function focusField(fieldId) {
+    if (!fieldId) return;
+    fieldControl(fieldId)?.focus();
+  }
+
+  /**
+   * @param {1 | -1} direction
+   * @param {EventTarget | null} [target] the control the key was pressed on
+   */
+  function moveField(direction, target) {
+    const order = fieldOrder;
+    if (!order.length) return;
+    const current = fieldIdOf(target ?? null);
+    const index = current ? order.indexOf(current) : -1;
+    const next =
+      index < 0
+        ? direction > 0
+          ? 0
+          : order.length - 1
+        : (index + direction + order.length) % order.length;
+    focusField(order[next]);
+  }
+
+  // One hold runs at a time; its progress is drawn on the focused field.
+  /** @type {{ field: string, run: () => void } | null} */
+  let keyboardHoldTarget = $state(null);
+  let keyboardHoldProgress = $state(0);
+  let keyboardHoldField = $state(/** @type {string | null} */ (null));
+
+  const keyboardHold = createHold({
+    onProgress: (value) => {
+      keyboardHoldProgress = value;
+    },
+    onCancel: () => {
+      keyboardHoldProgress = 0;
+      keyboardHoldField = null;
+    },
+    onConfirm: () => {
+      const target = keyboardHoldTarget;
+      keyboardHoldProgress = 0;
+      keyboardHoldField = null;
+      target?.run();
+    },
+  });
+
+  /**
+   * Value of a field, read from the control that shows it so a hold applies
+   * exactly what the user typed.
+   * @param {string} field
+   * @returns {string}
+   */
+  function fieldValue(field) {
+    const control = fieldControl(field);
+    if (control) return control.value;
+    if (field === "lyrics" || field === "unsyncedLyrics") {
+      return String(metadata[field] ?? "");
+    }
+    const own = /** @type {Record<string, unknown>} */ (metadata)[field];
+    return typeof own === "string" ? own : "";
+  }
+
+  /**
+   * Start a hold on the focused field.
+   * @param {string} field
+   * @param {"folder" | "delete"} kind
+   * @param {KeyboardEvent} event
+   */
+  function startKeyboardHold(field, kind, event) {
+    if (readOnly || keyboardHold.isHolding) return;
+    if (kind === "folder") {
+      keyboardHold.update({ duration: holdApplyDuration });
+      keyboardHoldTarget = {
+        field,
+        run: () => applyToFolder(field, fieldValue(field)),
+      };
+    } else {
+      if (!fieldValue(field)) return;
+      keyboardHold.update({ duration: holdTagDeleteDuration });
+      keyboardHoldTarget = {
+        field,
+        run: () =>
+          applyDeleteToFolder
+            ? deleteFieldFromFolder(field)
+            : deleteField(field),
+      };
+    }
+    keyboardHoldField = field;
+    keyboardHoldProgress = 0;
+    keyboardHold.start(event);
+  }
+
+  /** @param {Event} event */
+  function endKeyboardHold(event) {
+    keyboardHold.cancel(event);
+    keyboardHoldTarget = null;
+    keyboardHoldProgress = 0;
+    keyboardHoldField = null;
+  }
+
+  /**
+   * Keydown shared by every field. Native behaviour (word-wise arrows,
+   * selection with Shift, typing) is left alone.
+   * @param {KeyboardEvent} event
+   */
+  function handleFieldKeydown(event) {
+    const field = fieldIdOf(event.target);
+    if (!field) return;
+    const isTagField = !field.endsWith("-name");
+
+    if (
+      event.altKey &&
+      (event.key === "ArrowDown" || event.key === "ArrowUp")
+    ) {
+      event.preventDefault();
+      moveField(event.key === "ArrowDown" ? 1 : -1, event.target);
+      return;
+    }
+
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      if (!isTagField) return;
+      event.preventDefault();
+      // Auto-repeat while the hold is running must not restart it.
+      if (event.repeat && keyboardHold.isHolding) return;
+      startKeyboardHold(field, "folder", event);
+      return;
+    }
+
+    if (event.key === "Delete" && (event.ctrlKey || event.metaKey)) {
+      if (!isTagField) return;
+      event.preventDefault();
+      if (event.repeat && keyboardHold.isHolding) return;
+      startKeyboardHold(field, "delete", event);
+      return;
+    }
+
+    // Plain Enter applies the field to this file (unchanged behaviour).
+    if (event.key === "Enter" && !event.shiftKey) {
+      if (!isTagField) return;
+      event.preventDefault();
+      const value = fieldValue(field);
+      const custom = field.match(/^custom-\d+-value$/);
+      if (custom) {
+        const index = Number(field.split("-")[1]);
+        applyToFile(customFields[index].name, customFields[index].value);
+      } else {
+        applyToFile(field, value);
+      }
+    }
+  }
+
+  /**
+   * Releasing the key that started a hold ends it. The window listener below
+   * catches a release outside the field.
+   * @param {KeyboardEvent} event
+   */
+  function handleFieldKeyup(event) {
+    if (!keyboardHold.isHolding) return;
+    if (event.key === "Enter" || event.key === "Delete") endKeyboardHold(event);
+  }
+
+  $effect(() => {
+    /** @param {KeyboardEvent | FocusEvent} event */
+    const release = (event) => {
+      if (event instanceof KeyboardEvent) handleFieldKeyup(event);
+      else endKeyboardHold(event);
+    };
+    window.addEventListener("keyup", release);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("keyup", release);
+      window.removeEventListener("blur", release);
+    };
+  });
+
   // Derived: filename from path
   let filename = $derived(filePath ? filePath.split(/[\\/]/).pop() : "");
 
@@ -137,6 +389,20 @@
   // Separate modals for synced and unsynced lyrics
   let showSyncedLyricsModal = $state(false);
   let showUnsyncedLyricsModal = $state(false);
+
+  // Escape closes the unsynced lyrics modal, like the other modals. It is a
+  // window listener so it works from the textarea as well.
+  $effect(() => {
+    if (!showUnsyncedLyricsModal) return;
+    /** @param {KeyboardEvent} event */
+    const handleEscape = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeUnsyncedLyricsModal();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  });
   let syncedLyricsData = $state(
     /** @type {{ lyrics: string, timestamps: string[] }} */ ({
       lyrics: "",
@@ -1100,6 +1366,7 @@
             <div class="cover-art-actions">
               <button
                 class="icon-btn"
+                tabindex={-1}
                 title="Set cover art from URL"
                 onclick={() => (coverUrlOpen = !coverUrlOpen)}
                 disabled={isUploadingPicture || isSavingCoverUrl}
@@ -1127,6 +1394,7 @@
               </button>
               <button
                 class="icon-btn"
+                tabindex={-1}
                 title="Upload cover art for this file only"
                 onclick={() => triggerPictureUpload(false)}
                 disabled={isUploadingPicture}
@@ -1152,6 +1420,7 @@
                 </svg>
               </button>
               <HoldButton
+                tabindex={-1}
                 variant="icon"
                 duration={holdApplyDuration}
                 onConfirm={() => triggerPictureUpload(true)}
@@ -1178,6 +1447,7 @@
               </HoldButton>
               {#if metadata.picture}
                 <HoldButton
+                  tabindex={-1}
                   variant="icon"
                   duration={holdTagDeleteDuration}
                   onConfirm={deleteCoverArt}
@@ -1203,6 +1473,7 @@
                 </HoldButton>
                 <button
                   class="icon-btn"
+                  tabindex={-1}
                   title="Save as cover.*"
                   onclick={saveCoverAsFile}
                   disabled={isUploadingPicture || !metadata.picture}
@@ -1267,6 +1538,7 @@
         <div class="cover-url-actions">
           <button
             class="icon-btn"
+            tabindex={-1}
             title="Apply this URL to the current file"
             onclick={() => applyCoverUrl(false)}
             disabled={!canApplyCoverUrl || isSavingCoverUrl}
@@ -1292,6 +1564,7 @@
             </svg>
           </button>
           <HoldButton
+            tabindex={-1}
             variant="icon"
             duration={holdApplyDuration}
             onConfirm={() => applyCoverUrl(true)}
@@ -1346,20 +1619,23 @@
             }}
             onfocus={() => startEditing(field)}
             onblur={() => stopEditing(field)}
-            onkeydown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                applyToFile(field, metadata[field]);
-              }
-            }}
+            onkeydown={handleFieldKeydown}
             placeholder={field}
             readonly={readOnly}
           />
+          {#if keyboardHoldField === field}
+            <div
+              class="hold-progress"
+              aria-hidden="true"
+              style="--progress: {keyboardHoldProgress};"
+            ></div>
+          {/if}
           {#if editingFields.has(field)}
             <div class="field-actions">
               <!-- Delete button -->
               {#if metadata[field]}
                 <HoldButton
+                  tabindex={-1}
                   variant="icon"
                   duration={holdTagDeleteDuration}
                   onConfirm={() => {
@@ -1394,6 +1670,7 @@
               <!-- File button -->
               <button
                 class="icon-btn"
+                tabindex={-1}
                 title="Apply to this file only"
                 onclick={() => applyToFile(field, value)}
               >
@@ -1419,6 +1696,7 @@
               </button>
               <!-- Folder button -->
               <HoldButton
+                tabindex={-1}
                 variant="icon"
                 duration={holdApplyDuration}
                 onConfirm={() => applyToFolder(field, metadata[field])}
@@ -1494,14 +1772,23 @@
                 }}
                 onfocus={() => startEditing(field)}
                 onblur={() => stopEditing(field)}
+                onkeydown={handleFieldKeydown}
                 placeholder={field}
                 rows="2"
                 readonly={readOnly}></textarea>
+              {#if keyboardHoldField === field}
+                <div
+                  class="hold-progress"
+                  aria-hidden="true"
+                  style="--progress: {keyboardHoldProgress};"
+                ></div>
+              {/if}
               {#if editingFields.has(field)}
                 <div class="field-actions textarea-actions">
                   <!-- Delete button -->
                   {#if metadata[field]}
                     <HoldButton
+                      tabindex={-1}
                       variant="icon"
                       duration={holdTagDeleteDuration}
                       onConfirm={() => {
@@ -1536,6 +1823,7 @@
                   <!-- File button -->
                   <button
                     class="icon-btn"
+                    tabindex={-1}
                     onclick={() => applyToFile(field, value)}
                   >
                     <!-- File icon SVG -->
@@ -1560,6 +1848,7 @@
                   </button>
                   <!-- Folder button -->
                   <HoldButton
+                    tabindex={-1}
                     variant="icon"
                     duration={holdApplyDuration}
                     onConfirm={() => applyToFolder(field, value)}
@@ -1607,12 +1896,7 @@
                 }}
                 onfocus={() => startEditing(key)}
                 onblur={() => stopEditing(key)}
-                onkeydown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    applyToFile(key, metadata.otherFields[key]);
-                  }
-                }}
+                onkeydown={handleFieldKeydown}
                 readonly={readOnly}
               />
               {#if editingFields.has(key)}
@@ -1620,6 +1904,7 @@
                   <!-- Delete button -->
                   {#if value}
                     <HoldButton
+                      tabindex={-1}
                       variant="icon"
                       duration={holdTagDeleteDuration}
                       onConfirm={() => {
@@ -1654,6 +1939,7 @@
                   <!-- File button -->
                   <button
                     class="icon-btn"
+                    tabindex={-1}
                     onclick={() => applyToFile(key, value)}
                   >
                     <!-- File icon SVG -->
@@ -1678,6 +1964,7 @@
                   </button>
                   <!-- Folder button -->
                   <HoldButton
+                    tabindex={-1}
                     variant="icon"
                     duration={holdApplyDuration}
                     onConfirm={() => applyToFolder(key, value)}
@@ -1721,6 +2008,7 @@
     <div
       class="field custom"
       class:editing={customFieldEditing[i]}
+      data-field-id={customFieldId(i, "value")}
       onfocusin={() => (customFieldEditing[i] = true)}
       onfocusout={(e) => {
         // @ts-ignore
@@ -1732,28 +2020,34 @@
       <!-- Field name input -->
       <input
         type="text"
+        id={customFieldId(i, "name")}
         placeholder="Field name"
         bind:value={customFields[i].name}
+        onkeydown={handleFieldKeydown}
       />
 
       <!-- Value row: input and icons -->
       <div class="value-row">
         <input
           type="text"
+          id={customFieldId(i, "value")}
           placeholder="Value"
           bind:value={customFields[i].value}
-          onkeydown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              applyToFile(customFields[i].name, customFields[i].value);
-            }
-          }}
+          onkeydown={handleFieldKeydown}
         />
+        {#if keyboardHoldField === customFieldId(i, "value")}
+          <div
+            class="hold-progress"
+            aria-hidden="true"
+            style="--progress: {keyboardHoldProgress};"
+          ></div>
+        {/if}
         {#if customFieldEditing[i]}
           <div class="field-actions" style="position: static; transform: none;">
             <!-- File button -->
             <button
               class="icon-btn"
+              tabindex={-1}
               title="Apply to this file only"
               onclick={() =>
                 applyToFile(customFields[i].name, customFields[i].value)}
@@ -1780,6 +2074,7 @@
             </button>
             <!-- Folder button -->
             <HoldButton
+              tabindex={-1}
               variant="icon"
               duration={holdApplyDuration}
               onConfirm={() =>
@@ -2010,6 +2305,22 @@
     flex: 1; /* Take remaining space */
     min-width: 0; /* Prevent overflow */
     width: 100%;
+  }
+
+  /* Progress of a held shortcut (Ctrl+Enter / Ctrl+Delete) on the field. It
+     sits above the input and never takes pointer events. */
+  .hold-progress {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    border-radius: 4px;
+    background: linear-gradient(
+      to right,
+      var(--color-primary-transparent) calc(var(--progress) * 100%),
+      transparent 0
+    );
+    box-shadow: inset 0 0 0 1px var(--color-primary);
   }
 
   /* Base input styles */

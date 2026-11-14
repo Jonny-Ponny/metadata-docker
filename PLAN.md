@@ -66,6 +66,13 @@ image build. What remains is optional hardening and new features.
   between the tree and the right panel, and Space is reserved for play/pause.
   Typing targets and open overlays turn the tree keys off. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tree-keyboard-navigation).
+- **Metadata editor keyboard handling (T-17).** Complete: the field action
+  icons are out of the tab order and every action is a shortcut on the focused
+  field. `Enter` applies to the file; **holding** `Ctrl/Cmd+Enter` applies to
+  the folder and **holding** `Ctrl/Cmd+Delete` deletes the field, both with a
+  progress fill on the field, so a folder-wide change cannot happen by a slip.
+  `Alt+ArrowUp/Down` move between fields. The hold timing is shared with the
+  existing pointer hold buttons (`createHold` in `hold2confirm.utils.js`).
 - **Frontend static checks.** ESLint 10 flat config (`@eslint/js`,
   `eslint-plugin-svelte` recommended rules, `eslint-config-prettier`),
   Prettier 3 with `prettier-plugin-svelte`, and `svelte-check`. Scripts are
@@ -85,10 +92,6 @@ image build. What remains is optional hardening and new features.
 Started from the "more keyboard shortcuts and modal focus handling" item under
 Features and split into three numbered tasks:
 
-- **T-17 (P3) - keyboard handling in the metadata editor.** A defined key map
-  inside `MetadataEditor` (move between fields, apply, jump to the next file)
-  so the per-input `Enter` handlers and the app-level shortcuts stop competing.
-  Needs T-16's cursor and guards, which are now in place.
 - **T-18 (P3) - ARIA tree semantics.** `role="tree"`/`treeitem`, `aria-level`,
   `aria-expanded`, `aria-setsize`/`aria-posinset` and `aria-activedescendant`,
   plus focus containment in the modals. Builds on T-16's flat row list; left
@@ -126,9 +129,8 @@ No open items.
   file onto a selection.
 - **UX and performance** - smart-rename dry-run preview with a conflict
   strategy, addon reload from Settings, responsive/mobile layout, metadata
-  CSV/JSON export-import and library normalisation tools. The keyboard tree
-  navigation part is done (T-16); the editor key map and ARIA roles follow as
-  T-17 and T-18 above.
+  CSV/JSON export-import and library normalisation tools. The keyboard work is
+  done (T-16, T-17); ARIA roles follow as T-18 above.
 - **More audio formats** - extend `formats.py` and `tag_backends.py`.
 
 ### Housekeeping
