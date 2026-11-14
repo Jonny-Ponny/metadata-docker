@@ -1899,6 +1899,13 @@
                 onkeydown={handleFieldKeydown}
                 readonly={readOnly}
               />
+              {#if keyboardHoldField === key}
+                <div
+                  class="hold-progress"
+                  aria-hidden="true"
+                  style="--progress: {keyboardHoldProgress};"
+                ></div>
+              {/if}
               {#if editingFields.has(key)}
                 <div class="field-actions">
                   <!-- Delete button -->

@@ -418,6 +418,44 @@ describe("MetadataEditor editing actions", () => {
     expect(document.activeElement).toBe(screen.getByLabelText("Genre"));
   });
 
+  it("shows progress while holding a shortcut on an advanced tag", async () => {
+    // Unknown tags from the file ("LANGUAGE", freeform MP4 atoms, ...) render
+    // in the "Other" section and must show the same hold progress.
+    stubMetadata({ customFields: [{ name: "LANGUAGE", value: "eng" }] });
+    render(MetadataEditor, { props: { filePath } });
+    await screen.findByDisplayValue("Song");
+    await fireEvent.click(screen.getByText(/Other/));
+    await tick();
+
+    const input = /** @type {HTMLInputElement} */ (
+      document.getElementById("LANGUAGE")
+    );
+    expect(input).toBeTruthy();
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(400);
+      await tick();
+
+      const progress = input.closest(".field")?.querySelector(".hold-progress");
+      expect(progress).toBeTruthy();
+      expect(
+        /** @type {HTMLElement} */ (progress).style.getPropertyValue(
+          "--progress",
+        ),
+      ).not.toBe("0");
+
+      await fireEvent.keyUp(input, { key: "Enter", ctrlKey: true });
+      await tick();
+      expect(
+        input.closest(".field")?.querySelector(".hold-progress"),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("walks the other fields and custom fields with Alt+Arrow", async () => {
     stubMetadata();
     render(MetadataEditor, { props: { filePath } });
