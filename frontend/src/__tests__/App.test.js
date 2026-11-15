@@ -350,7 +350,14 @@ function stubApi() {
   fetchMock = vi.fn((/** @type {string | URL | Request} */ input) => {
     const url = urlOf(input);
 
-    if (apiOverrides[url]) return Promise.resolve(apiOverrides[url]);
+    // An override is either a ready response or a function, so a test can
+    // change state (a rename, a folder being created) when the call arrives.
+    const override = apiOverrides[url];
+    if (override) {
+      return Promise.resolve(
+        typeof override === "function" ? override() : override,
+      );
+    }
     if (url === "/api/files") return Promise.resolve(filesReply());
     if (url.startsWith("/api/files/dir")) {
       return Promise.resolve(
@@ -1377,6 +1384,69 @@ describe("App", () => {
       }
     });
 
+    it("renames a folder created in the root from the header button", async () => {
+      // Creating a folder selects it, so F2 must act on it too. It used to act
+      // on the cursor row from before, renaming an unrelated folder.
+      const tree = keyboardTree();
+      useTree(tree);
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+      await pressKey("ArrowDown");
+      expect(cursorPath()).toBe("Albums");
+
+      tree.push({
+        name: "New Folder",
+        path: "New Folder",
+        type: "directory",
+        children: [],
+      });
+      apiOverrides["/api/mkdir"] = makeResponse({ path: "New Folder" });
+      // The header button creates in the library root.
+      await fireEvent.click(screen.getByRole("button", { name: "New Folder" }));
+      await screen.findByText(/Folder created/);
+      // Wait for the create to settle: its refresh is what moves the cursor.
+      await waitFor(() => expect(cursorPath()).toBe("New Folder"));
+
+      await fireEvent.keyDown(window, { key: "F2" });
+      expect(get(renamingPath)).toBe("New Folder");
+      renamingPath.set(null);
+    });
+
+    it("renames a folder created inside another folder", async () => {
+      const tree = keyboardTree();
+      useTree(tree);
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+      await pressKey("ArrowDown");
+      expect(cursorPath()).toBe("Albums");
+
+      const albums = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "Albums")
+      );
+      apiOverrides["/api/mkdir"] = () => {
+        albums.children?.push({
+          name: "New Folder",
+          path: "Albums/New Folder",
+          type: "directory",
+          children: [],
+        });
+        return makeResponse({ path: "Albums/New Folder" });
+      };
+      await fireEvent.contextMenu(row("Albums"), {
+        clientX: 10,
+        clientY: 10,
+      });
+      await fireEvent.click(screen.getByText("Create folder"));
+      await screen.findByText(/Folder created: Albums\/New Folder/);
+      await waitFor(() => expect(cursorPath()).toBe("Albums/New Folder"));
+
+      await fireEvent.keyDown(window, { key: "F2" });
+      expect(get(renamingPath)).toBe("Albums/New Folder");
+      renamingPath.set(null);
+    });
+
     it("starts from the selection and clamps at both ends", async () => {
       useTree(keyboardTree());
       view = await renderAuthenticated();
@@ -2191,6 +2261,54 @@ describe("App", () => {
     expect(
       await screen.findByText("Folder created: Albums/New Folder"),
     ).toBeTruthy();
+  });
+
+  it("shows a folder created inside a folder that was never expanded", async () => {
+    // `refreshFolders` only reloads folders the tree already cached, so a new
+    // folder under an unexpanded one used to appear only after a reload.
+    /** @type {TreeItem[]} */
+    const tree = [
+      {
+        name: "Albums",
+        path: "Albums",
+        type: "directory",
+        children: [
+          {
+            name: "song.mp3",
+            path: "Albums/song.mp3",
+            type: "file",
+            file_type: "audio",
+          },
+        ],
+      },
+    ];
+    isAuthenticated.set(true);
+    useTree(tree);
+    apiOverrides["/api/mkdir"] = () => {
+      tree[0].children?.push({
+        name: "New Folder",
+        path: "Albums/New Folder",
+        type: "directory",
+        children: [],
+      });
+      return makeResponse({ path: "Albums/New Folder" });
+    };
+    const view = await renderAuthenticated();
+
+    await fireEvent.contextMenu(node(view, "Albums"), {
+      clientX: 10,
+      clientY: 10,
+    });
+    await fireEvent.click(screen.getByText("Create folder"));
+    await screen.findByText(/Folder created/);
+    expect(callsTo("/api/mkdir")).toHaveLength(1);
+
+    // The parent is expanded so the new row is on screen straight away.
+    await waitFor(() =>
+      expect(
+        view.container.querySelector('[data-folder-path="Albums/New Folder"]'),
+      ).toBeTruthy(),
+    );
   });
 
   it("reports a folder creation failure", async () => {

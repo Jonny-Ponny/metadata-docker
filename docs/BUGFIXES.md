@@ -406,6 +406,21 @@ continue` (and keep the directory-level `PermissionError` handling).
       for non-ASCII folder names`, plus `treeRowId` cases in
       `frontend/src/utils/__tests__/tree.utils.test.js`.
 
+- [x] **B-45 (P1) F2 after creating a folder renamed the folder that had focus before.**
+      `handleCreateFolder` selected the new folder but left the keyboard cursor
+      (`activeRowPath`) on the row it was on. F2 and Delete read the cursor in
+      preference to the selection, so the next F2 renamed the previously focused
+      folder. Renaming `Albums` to "New Folder" then collided with the folder
+      that had just been created and surfaced as "An item with that name already
+      exists", which looked like the new folder was not there.
+      **Fix:** the create flow moves the cursor onto the new folder (and keeps
+      the dashed outline visible, so it is clear which row F2 would rename).
+      Both entry points create through `handleCreateFolder`, so the header
+      button (root) and the context menu (inside a folder) share the fix.
+      **Tests:** `frontend/src/__tests__/App.test.js` - `renames a folder
+      created in the root from the header button` and `renames a folder
+      created inside another folder`.
+
 ## Lyrics editor
 
 - [x] **B-36 (P2) Synced-lyrics timestamps lagged behind the live playback position.**
@@ -513,3 +528,4 @@ silently.
 | B-42 | `frontend/src/__tests__/App.test.js` - `fills the direct folder overview after a lazy folder arrives` |
 | B-43 | `frontend/src/__tests__/App.test.js` - `keeps the recursive overview accurate for a nested selected folder` |
 | B-44 | `frontend/src/__tests__/App.test.js` - `keeps distinct row ids for non-ASCII folder names` |
+| B-45 | `frontend/src/__tests__/App.test.js` - `renames a folder created in the root from the header button` |
