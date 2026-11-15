@@ -1384,7 +1384,7 @@ describe("App", () => {
       }
     });
 
-    it("renames the new folder after creating it", async () => {
+    it("renames a folder created in the root from the header button", async () => {
       // Creating a folder selects it, so F2 must act on it too. It used to act
       // on the cursor row from before, renaming an unrelated folder.
       const tree = keyboardTree();
@@ -1402,6 +1402,7 @@ describe("App", () => {
         children: [],
       });
       apiOverrides["/api/mkdir"] = makeResponse({ path: "New Folder" });
+      // The header button creates in the library root.
       await fireEvent.click(screen.getByRole("button", { name: "New Folder" }));
       await screen.findByText(/Folder created/);
       // Wait for the create to settle: its refresh is what moves the cursor.
@@ -1409,6 +1410,40 @@ describe("App", () => {
 
       await fireEvent.keyDown(window, { key: "F2" });
       expect(get(renamingPath)).toBe("New Folder");
+      renamingPath.set(null);
+    });
+
+    it("renames a folder created inside another folder", async () => {
+      const tree = keyboardTree();
+      useTree(tree);
+      view = await renderAuthenticated();
+      await enterTree();
+      await pressKey("Home");
+      await pressKey("ArrowDown");
+      expect(cursorPath()).toBe("Albums");
+
+      const albums = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "Albums")
+      );
+      apiOverrides["/api/mkdir"] = () => {
+        albums.children?.push({
+          name: "New Folder",
+          path: "Albums/New Folder",
+          type: "directory",
+          children: [],
+        });
+        return makeResponse({ path: "Albums/New Folder" });
+      };
+      await fireEvent.contextMenu(row("Albums"), {
+        clientX: 10,
+        clientY: 10,
+      });
+      await fireEvent.click(screen.getByText("Create folder"));
+      await screen.findByText(/Folder created: Albums\/New Folder/);
+      await waitFor(() => expect(cursorPath()).toBe("Albums/New Folder"));
+
+      await fireEvent.keyDown(window, { key: "F2" });
+      expect(get(renamingPath)).toBe("Albums/New Folder");
       renamingPath.set(null);
     });
 

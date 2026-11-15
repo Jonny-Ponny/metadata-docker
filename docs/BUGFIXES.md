@@ -415,8 +415,11 @@ continue` (and keep the directory-level `PermissionError` handling).
       exists", which looked like the new folder was not there.
       **Fix:** the create flow moves the cursor onto the new folder (and keeps
       the dashed outline visible, so it is clear which row F2 would rename).
-      **Test:** `frontend/src/__tests__/App.test.js` - `renames the new folder
-      after creating it`.
+      Both entry points create through `handleCreateFolder`, so the header
+      button (root) and the context menu (inside a folder) share the fix.
+      **Tests:** `frontend/src/__tests__/App.test.js` - `renames a folder
+      created in the root from the header button` and `renames a folder
+      created inside another folder`.
 
 ## Lyrics editor
 
@@ -525,4 +528,4 @@ silently.
 | B-42 | `frontend/src/__tests__/App.test.js` - `fills the direct folder overview after a lazy folder arrives` |
 | B-43 | `frontend/src/__tests__/App.test.js` - `keeps the recursive overview accurate for a nested selected folder` |
 | B-44 | `frontend/src/__tests__/App.test.js` - `keeps distinct row ids for non-ASCII folder names` |
-| B-45 | `frontend/src/__tests__/App.test.js` - `renames the new folder after creating it` |
+| B-45 | `frontend/src/__tests__/App.test.js` - `renames a folder created in the root from the header button` |
