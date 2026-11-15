@@ -546,6 +546,16 @@
     }
   }
 
+  /**
+   * Copy the item and close the menu. Every other menu action closes it too;
+   * leaving it open left `isOverlayOpen()` true, which swallowed the tree
+   * shortcuts (F2 did nothing until the menu was dismissed by hand).
+   */
+  function handleCopy() {
+    contextMenu.update((curr) => ({ ...curr, isOpen: false }));
+    onCopy(item.path);
+  }
+
   async function handleDownload() {
     // Close the context menu immediately so the click has visible feedback.
     contextMenu.update((curr) => ({ ...curr, isOpen: false }));
@@ -786,7 +796,7 @@
             Fetch Album Metadata
           </li>
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={() => onCopy(item.path)}>Copy</li>
+          <li onclick={handleCopy}>Copy</li>
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <li onclick={handleDownload}>Download</li>
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -964,7 +974,7 @@
             </li>
           {/if}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={() => onCopy(item.path)}>Copy</li>
+          <li onclick={handleCopy}>Copy</li>
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <li onclick={handleDownload}>Download</li>
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

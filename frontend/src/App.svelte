@@ -1058,10 +1058,16 @@
       : "";
     if (targetFolder === parent) return;
 
-    // A drag is not a click, so nothing was selected or focused. Put the
-    // keyboard cursor on the item that was moved so F2/Delete act on it.
-    cursorIsKeyboard = false;
-    setActiveRow(item.path);
+    // A drag is not a click, so nothing may have been selected or focused. Put
+    // the keyboard cursor on the item that was moved so F2/Delete act on it.
+    // When a *different* row is selected the cursor stays with that selection:
+    // dragging a fresh copy while the original is highlighted must not leave
+    // F2/Delete pointing at a row the user does not see as selected.
+    const selection = selectedFile ?? selectedFolder;
+    if (!selection || selection === item.path) {
+      cursorIsKeyboard = false;
+      setActiveRow(item.path);
+    }
     handleMove(item.path, targetFolder);
   }
 
@@ -1942,10 +1948,19 @@
         throw new Error(await readApiError(res));
       }
 
-      // Clear selection if the item was selected
-      if (selectedFolder === path) selectedFolder = null;
-      if (selectedFile === path) selectedFile = null;
-
+      // The original stays where it is, so keep it where the keyboard expects
+      // it. Clearing the selection (as delete does) left F2/Delete with no
+      // target after a copy, so the shortcuts did nothing until another click.
+      const copiedIsFolder = visibleRows.some(
+        (row) => row.path === path && row.type === "directory",
+      );
+      if (copiedIsFolder) {
+        selectFolder(path);
+      } else {
+        selectFile(path);
+      }
+      setActiveRow(path);
+      await tick();
       await refreshFolders(parentPath(path));
       toast.success("Copied successfully");
     } catch (e) {
