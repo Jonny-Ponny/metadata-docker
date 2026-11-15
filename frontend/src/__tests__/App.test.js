@@ -628,6 +628,133 @@ describe("App", () => {
     });
   });
 
+  it("renames a file that was dragged into a folder", async () => {
+    // A drag is not a click, so before this nothing was selected or focused
+    // after dropping a file: F2 had no target and silently did nothing.
+    isAuthenticated.set(true);
+    const tree = makeTree();
+    useTree(tree);
+    apiOverrides["/api/move"] = () => {
+      const albums = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "Albums")
+      );
+      const file = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "loose.flac")
+      );
+      albums.children?.push({ ...file, path: "Albums/loose.flac" });
+      tree.splice(tree.indexOf(file), 1);
+      return makeResponse({ success: true });
+    };
+    const view = await renderAuthenticated();
+
+    await fireEvent.pointerDown(node(view, "loose.flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    await fireEvent.pointerMove(node(view, "Albums"), {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 60,
+      clientY: 60,
+    });
+    await fireEvent.pointerUp(node(view, "Albums"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 60,
+      clientY: 60,
+    });
+    await waitFor(() => expect(callsTo("/api/move")).toHaveLength(1));
+
+    // The keyboard follows the file into its new folder, so F2 renames it
+    // instead of doing nothing.
+    await waitFor(() =>
+      expect(
+        view.container.querySelector('[data-file-path="Albums/loose.flac"]'),
+      ).toBeTruthy(),
+    );
+    await fireEvent.keyDown(window, { key: "F2" });
+    expect(get(renamingPath)).toBe("Albums/loose.flac");
+    renamingPath.set(null);
+  });
+
+  it("follows a selected file into its new folder when it is moved", async () => {
+    // The selection kept the old path, so F2 aimed at a row that no longer
+    // existed and the rename input never appeared.
+    isAuthenticated.set(true);
+    const tree = makeTree();
+    useTree(tree);
+    apiOverrides["/api/move"] = () => {
+      const albums = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "Albums")
+      );
+      const file = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "loose.flac")
+      );
+      albums.children?.push({ ...file, path: "Albums/loose.flac" });
+      tree.splice(tree.indexOf(file), 1);
+      return makeResponse({ success: true });
+    };
+    const view = await renderAuthenticated();
+
+    // Select it first, as a click before dragging does.
+    await fireEvent.click(node(view, "loose.flac"));
+    await tick();
+
+    await fireEvent.pointerDown(node(view, "loose.flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    await fireEvent.pointerMove(node(view, "Albums"), {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 60,
+      clientY: 60,
+    });
+    await fireEvent.pointerUp(node(view, "Albums"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 60,
+      clientY: 60,
+    });
+    await waitFor(() => expect(callsTo("/api/move")).toHaveLength(1));
+
+    // The moved row is the one that keeps the selection.
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          '[data-file-path="Albums/loose.flac"].file.selected',
+        ),
+      ).toBeTruthy(),
+    );
+    await fireEvent.keyDown(window, { key: "F2" });
+    expect(get(renamingPath)).toBe("Albums/loose.flac");
+    renamingPath.set(null);
+  });
+
   it("warns instead of moving when an item is dropped on itself", async () => {
     isAuthenticated.set(true);
     const view = await renderAuthenticated();

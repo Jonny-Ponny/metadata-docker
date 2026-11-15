@@ -44,6 +44,7 @@
     refreshDirectories,
     resetTree,
     parentPath,
+    childPath,
     getChildren,
     searchResults,
     searchLibrary,
@@ -1057,6 +1058,10 @@
       : "";
     if (targetFolder === parent) return;
 
+    // A drag is not a click, so nothing was selected or focused. Put the
+    // keyboard cursor on the item that was moved so F2/Delete act on it.
+    cursorIsKeyboard = false;
+    setActiveRow(item.path);
     handleMove(item.path, targetFolder);
   }
 
@@ -1851,8 +1856,25 @@
         throw new Error(await readApiError(res));
       }
       toast.success("Moved successfully");
+      // The item now lives in the destination, so follow it there: the cursor
+      // and the selection would otherwise keep pointing at a path that is gone
+      // (F2/Delete then had nothing to act on, or aimed at the old row).
+      const movedName = sourcePath.split("/").pop() ?? sourcePath;
+      const movedPath = childPath(destFolderPath, movedName);
+      // The destination is opened so the moved row is on screen; a collapsed
+      // folder would otherwise hide the row the keyboard just followed.
+      expandedDirs.add(destFolderPath);
+      const followCursor = activeRowPath === sourcePath;
+      if (followCursor) setActiveRow(movedPath);
+      if (selectedFile === sourcePath) selectedFile = movedPath;
+      if (selectedFolder === sourcePath) selectedFolder = movedPath;
       // Reload the source and the destination folders.
       await refreshFolders(parentPath(sourcePath), destFolderPath);
+      if (followCursor) {
+        // The destination row only exists once its folder has loaded.
+        await tick();
+        scheduleRowScroll(movedPath);
+      }
     } catch (e) {
       toast.error(`Move failed: ${e instanceof Error ? e.message : String(e)}`);
     }
