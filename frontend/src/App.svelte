@@ -1891,6 +1891,13 @@
       toast.success(`Folder created: ${data.path}`);
       // The parent is expanded above, so make sure its children are loaded.
       await loadDirectory(parentPath, { force: true });
+      // Move the keyboard cursor onto the new folder. It is selected above, and
+      // F2/Delete read the cursor in preference to the selection: leaving it on
+      // a previously focused row made the next F2 rename that row instead. The
+      // dashed outline stays visible so it is clear which row F2 would rename.
+      await tick();
+      cursorIsKeyboard = true;
+      setActiveRow(data.path);
     } catch (e) {
       toast.error(
         `Create folder failed: ${e instanceof Error ? e.message : String(e)}`,
