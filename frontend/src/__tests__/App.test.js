@@ -15,7 +15,7 @@ import {
   isAuthenticated,
   tokenExpiry,
 } from "../stores/auth.store.js";
-import { renamingPath } from "../stores/context.store.js";
+import { contextMenu, renamingPath } from "../stores/context.store.js";
 import { theme } from "../stores/theme.store.js";
 import { toast } from "../stores/toast.store.js";
 import { dismiss, upload } from "../stores/upload.store.js";
@@ -626,6 +626,252 @@ describe("App", () => {
       method: "POST",
       body: JSON.stringify({ source: "loose.flac", destination: "Albums" }),
     });
+  });
+
+  it("renames a file that was dragged into a folder", async () => {
+    // A drag is not a click, so before this nothing was selected or focused
+    // after dropping a file: F2 had no target and silently did nothing.
+    isAuthenticated.set(true);
+    const tree = makeTree();
+    useTree(tree);
+    apiOverrides["/api/move"] = () => {
+      const albums = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "Albums")
+      );
+      const file = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "loose.flac")
+      );
+      albums.children?.push({ ...file, path: "Albums/loose.flac" });
+      tree.splice(tree.indexOf(file), 1);
+      return makeResponse({ success: true });
+    };
+    const view = await renderAuthenticated();
+
+    await fireEvent.pointerDown(node(view, "loose.flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    await fireEvent.pointerMove(node(view, "Albums"), {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 60,
+      clientY: 60,
+    });
+    await fireEvent.pointerUp(node(view, "Albums"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 60,
+      clientY: 60,
+    });
+    await waitFor(() => expect(callsTo("/api/move")).toHaveLength(1));
+
+    // The keyboard follows the file into its new folder, so F2 renames it
+    // instead of doing nothing.
+    await waitFor(() =>
+      expect(
+        view.container.querySelector('[data-file-path="Albums/loose.flac"]'),
+      ).toBeTruthy(),
+    );
+    await fireEvent.keyDown(window, { key: "F2" });
+    expect(get(renamingPath)).toBe("Albums/loose.flac");
+    renamingPath.set(null);
+  });
+
+  it("follows a selected file into its new folder when it is moved", async () => {
+    // The selection kept the old path, so F2 aimed at a row that no longer
+    // existed and the rename input never appeared.
+    isAuthenticated.set(true);
+    const tree = makeTree();
+    useTree(tree);
+    apiOverrides["/api/move"] = () => {
+      const albums = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "Albums")
+      );
+      const file = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "loose.flac")
+      );
+      albums.children?.push({ ...file, path: "Albums/loose.flac" });
+      tree.splice(tree.indexOf(file), 1);
+      return makeResponse({ success: true });
+    };
+    const view = await renderAuthenticated();
+
+    // Select it first, as a click before dragging does.
+    await fireEvent.click(node(view, "loose.flac"));
+    await tick();
+
+    await fireEvent.pointerDown(node(view, "loose.flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    await fireEvent.pointerMove(node(view, "Albums"), {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 60,
+      clientY: 60,
+    });
+    await fireEvent.pointerUp(node(view, "Albums"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 60,
+      clientY: 60,
+    });
+    await waitFor(() => expect(callsTo("/api/move")).toHaveLength(1));
+
+    // The moved row is the one that keeps the selection.
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          '[data-file-path="Albums/loose.flac"].file.selected',
+        ),
+      ).toBeTruthy(),
+    );
+    await fireEvent.keyDown(window, { key: "F2" });
+    expect(get(renamingPath)).toBe("Albums/loose.flac");
+    renamingPath.set(null);
+  });
+
+  it("closes the context menu and keeps F2 working after a copy", async () => {
+    // Copy was the one menu action that neither closed the menu nor kept the
+    // item selected. The open menu made `isOverlayOpen()` true, so F2 was
+    // swallowed until the menu was dismissed by hand.
+    isAuthenticated.set(true);
+    apiOverrides["/api/copy"] = makeResponse({ success: true });
+    const view = await renderAuthenticated();
+
+    await fireEvent.contextMenu(node(view, "loose.flac"), {
+      clientX: 10,
+      clientY: 10,
+    });
+    await fireEvent.click(screen.getByText("Copy"));
+    await waitFor(() => expect(callsTo("/api/copy")).toHaveLength(1));
+
+    expect(get(contextMenu).isOpen).toBe(false);
+    await fireEvent.keyDown(window, { key: "F2" });
+    expect(get(renamingPath)).toBe("loose.flac");
+    renamingPath.set(null);
+  });
+
+  it("closes the context menu and keeps F2 working after copying a folder", async () => {
+    isAuthenticated.set(true);
+    apiOverrides["/api/copy"] = makeResponse({ success: true });
+    const view = await renderAuthenticated();
+
+    await fireEvent.contextMenu(node(view, "Albums"), {
+      clientX: 10,
+      clientY: 10,
+    });
+    await fireEvent.click(screen.getByText("Copy"));
+    await waitFor(() => expect(callsTo("/api/copy")).toHaveLength(1));
+
+    expect(get(contextMenu).isOpen).toBe(false);
+    await fireEvent.keyDown(window, { key: "F2" });
+    expect(get(renamingPath)).toBe("Albums");
+    renamingPath.set(null);
+  });
+
+  it("keeps the selection and the keyboard on the same row when a fresh copy is dragged", async () => {
+    // Copying leaves the original selected. Dragging the new copy away must not
+    // move F2/Delete onto the copy while the original stays highlighted.
+    isAuthenticated.set(true);
+    const tree = makeTree();
+    const albums = /** @type {TreeItem} */ (
+      tree.find((entry) => entry.path === "Albums")
+    );
+    useTree(tree);
+    apiOverrides["/api/copy"] = () => {
+      tree.push({
+        name: "loose (1).flac",
+        path: "loose (1).flac",
+        type: "file",
+        file_type: "audio",
+        size: 30,
+      });
+      return makeResponse({ success: true });
+    };
+    apiOverrides["/api/move"] = () => {
+      const copy = /** @type {TreeItem} */ (
+        tree.find((entry) => entry.path === "loose (1).flac")
+      );
+      albums.children?.push({ ...copy, path: "Albums/loose (1).flac" });
+      tree.splice(tree.indexOf(copy), 1);
+      return makeResponse({ success: true });
+    };
+    const view = await renderAuthenticated();
+
+    await fireEvent.contextMenu(node(view, "loose.flac"), {
+      clientX: 10,
+      clientY: 10,
+    });
+    await fireEvent.click(screen.getByText("Copy"));
+    await waitFor(() => expect(callsTo("/api/copy")).toHaveLength(1));
+    await waitFor(() => expect(node(view, "loose (1).flac")).toBeTruthy());
+
+    // Drag the copy into Albums without selecting it first.
+    await fireEvent.pointerDown(node(view, "loose (1).flac"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 20,
+      clientY: 20,
+    });
+    await fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    await fireEvent.pointerMove(node(view, "Albums"), {
+      pointerId: 1,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX: 60,
+      clientY: 60,
+    });
+    await fireEvent.pointerUp(node(view, "Albums"), {
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 60,
+      clientY: 60,
+    });
+    await waitFor(() => expect(callsTo("/api/move")).toHaveLength(1));
+    await tick();
+
+    // The visible selection (the original) is what F2 acts on.
+    expect(
+      view.container
+        .querySelector(".file.selected")
+        ?.getAttribute("data-file-path"),
+    ).toBe("loose.flac");
+    await fireEvent.keyDown(window, { key: "F2" });
+    expect(get(renamingPath)).toBe("loose.flac");
+    renamingPath.set(null);
   });
 
   it("warns instead of moving when an item is dropped on itself", async () => {

@@ -421,6 +421,45 @@ continue` (and keep the directory-level `PermissionError` handling).
       created in the root from the header button` and `renames a folder
       created inside another folder`.
 
+- [x] **B-46 (P1) F2 did nothing after a file was dragged into another folder.**
+      A drag is not a click (`handleTreePointerUp` sets `suppressTreeClick`, so
+      the follow-up click cannot select the drop target), and the drag itself
+      only moved the file server-side. Afterwards nothing was selected and the
+      cursor was empty, so `handleShortcutKeyDown` had no `target` and F2
+      silently returned. When the file had been clicked before the drag, the
+      selection and cursor still held the **old** path, so F2 opened a rename
+      input for a row that no longer existed and nothing appeared.
+      **Fix:** a completed drag puts the cursor on the dragged item, and
+      `handleMove` remaps the cursor and the selection from the source path to
+      the destination path, expands the destination folder and scrolls the
+      moved row into view.
+      **Tests:** `frontend/src/__tests__/App.test.js` - `renames a file that
+      was dragged into a folder` and `follows a selected file into its new
+      folder when it is moved`.
+
+- [x] **B-47 (P1) F2 did nothing after Copy until the context menu was dismissed.**
+      Two gaps met. The menu root stops click propagation
+      (`onclick={(e) => e.stopPropagation()}`), so `handleClickOutside` never saw
+      clicks inside it, and every menu action closes the menu explicitly -
+      except Copy, so `isOverlayOpen()` stayed true and swallowed the tree
+      shortcuts. `handleCopyItem` also cleared the selection, which left F2 with
+      no target even once the menu was closed. Copying leaves the original in
+      place, so clearing it was unnecessary in the first place.
+      **Fix:** a `handleCopy` in `TreeNode.svelte` closes the menu before
+      delegating, and `handleCopyItem` selects the copied item (file or folder)
+      and puts the keyboard cursor on it instead of clearing them.
+      Restoring the selection exposed a second half, fixed in the same change:
+      the drop handler put the cursor on the dragged row unconditionally, so
+      dragging the fresh copy away left the selection on the original and the
+      cursor on the copy. The dashed cursor is hidden after a pointer gesture,
+      so the two disagreed invisibly and F2/Delete acted on a row the user did
+      not see as selected. The drop handler now only moves the cursor onto the
+      dragged row when nothing is selected or the dragged row is the selected
+      one; otherwise the cursor stays with the selection.
+      **Tests:** `frontend/src/__tests__/App.test.js` - `closes the context menu
+      and keeps F2 working after a copy`, the same for a folder, and `keeps the
+      selection and the keyboard on the same row when a fresh copy is dragged`.
+
 ## Lyrics editor
 
 - [x] **B-36 (P2) Synced-lyrics timestamps lagged behind the live playback position.**
@@ -529,3 +568,5 @@ silently.
 | B-43 | `frontend/src/__tests__/App.test.js` - `keeps the recursive overview accurate for a nested selected folder` |
 | B-44 | `frontend/src/__tests__/App.test.js` - `keeps distinct row ids for non-ASCII folder names` |
 | B-45 | `frontend/src/__tests__/App.test.js` - `renames a folder created in the root from the header button` |
+| B-46 | `frontend/src/__tests__/App.test.js` - `renames a file that was dragged into a folder` |
+| B-47 | `frontend/src/__tests__/App.test.js` - `closes the context menu and keeps F2 working after a copy` |
