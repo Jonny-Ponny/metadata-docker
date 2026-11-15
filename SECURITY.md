@@ -213,6 +213,12 @@ the build:
   the pins do not silently miss upstream security fixes.
 - Run `pip-audit` / `npm audit` periodically or as a non-blocking CI job rather
   than making every release depend on it.
+- `npm audit` still reports three low-severity findings for `deepmerge`
+  (GHSA-gcqx-w48m-w2h4) through `@sveltejs/vite-plugin-svelte`. Every published
+  version of that plugin depends on `deepmerge@^4.3.1`, which is the newest
+  release, so the advisory has no fix. It is a build-time dependency only: it
+  is not in the shipped bundle and handles no user input. Recheck when the
+  plugin drops it.
 
 ## Accepted risks / non-goals
 
