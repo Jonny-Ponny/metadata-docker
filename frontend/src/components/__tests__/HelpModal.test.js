@@ -165,6 +165,27 @@ describe("HelpModal", () => {
       }
     });
 
+    it("gives focus back to the button that opened it", async () => {
+      // Closing used to drop focus, so the next Tab restarted from the top of
+      // the page instead of from the control the user came from.
+      const trigger = document.createElement("button");
+      trigger.textContent = "Help";
+      document.body.appendChild(trigger);
+      trigger.focus();
+      const view = render(HelpModal, {
+        props: { isOpen: true, onClose: vi.fn() },
+      });
+      const dialog = screen.getByRole("dialog", {
+        name: "Help and information",
+      });
+      /** @type {HTMLElement} */ (dialog.querySelector("button")).focus();
+
+      await view.rerender({ isOpen: false, onClose: vi.fn() });
+
+      expect(document.activeElement).toBe(trigger);
+      trigger.remove();
+    });
+
     it("wraps Tab from the last control back to the first", async () => {
       // Without the wrap, Tab leaves the dialog and drives the page behind it.
       render(HelpModal, { props: { isOpen: true, onClose: vi.fn() } });

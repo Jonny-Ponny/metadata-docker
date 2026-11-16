@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   closeDialog,
   closeTopDialogOnEscape,
+  dialogOpenEffect,
   focusableIn,
   isTopDialog,
   keepFocusInDialog,
@@ -129,6 +130,71 @@ describe("focus utils", () => {
 
       expect(isTopDialog(outer)).toBe(true);
       expect(isTopDialog(inner)).toBe(false);
+    });
+  });
+
+  describe("dialogOpenEffect", () => {
+    /**
+     * Mount the effect for a dialog the way a component's `$effect` does.
+     * @param {HTMLElement} panel
+     * @param {() => void} onClose
+     * @returns {() => void} the cleanup the component would run
+     */
+    function mountDialog(panel, onClose) {
+      const cleanup = dialogOpenEffect(panel, true, onClose);
+      expect(cleanup).toBeTypeOf("function");
+      return /** @type {() => void} */ (cleanup);
+    }
+
+    it("returns focus to the control that opened the dialog", () => {
+      const trigger = document.createElement("button");
+      const panel = document.createElement("div");
+      const field = document.createElement("textarea");
+      panel.appendChild(field);
+      document.body.append(trigger, panel);
+      trigger.focus();
+
+      const cleanup = mountDialog(panel, () => {});
+      // Opening moves focus into the dialog, as every dialog here does.
+      field.focus();
+      expect(document.activeElement).toBe(field);
+
+      cleanup();
+
+      expect(document.activeElement).toBe(trigger);
+      expect(isTopDialog(panel)).toBe(false);
+    });
+
+    it("returns focus to the opener even when the dialog moved focus inside", () => {
+      const trigger = document.createElement("button");
+      const panel = document.createElement("div");
+      const field = document.createElement("textarea");
+      panel.appendChild(field);
+      document.body.append(trigger, panel);
+      trigger.focus();
+
+      const cleanup = mountDialog(panel, () => {});
+      // A dialog usually focuses its first field after opening.
+      field.focus();
+      cleanup();
+
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it("closes the dialog on Escape when it is on top", () => {
+      const panel = document.createElement("div");
+      const opener = document.createElement("button");
+      document.body.append(opener, panel);
+      opener.focus();
+      const onClose = vi.fn();
+
+      const cleanup = mountDialog(panel, onClose);
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", cancelable: true }),
+      );
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      cleanup();
     });
   });
 

@@ -178,8 +178,8 @@ export function closeTopDialogOnEscape(event, panel, onClose) {
 }
 
 /**
- * Register a dialog while it is open and close it on Escape when it is the
- * topmost one.
+ * Register a dialog while it is open, close it on Escape when it is the
+ * topmost one, and give focus back to its opener when it closes.
  *
  * Use as a one-liner in the dialog component:
  *
@@ -189,7 +189,8 @@ export function closeTopDialogOnEscape(event, panel, onClose) {
  * ```
  *
  * The returned cleanup unregisters the dialog when it hides or unmounts, so a
- * closed dialog never claims Escape or the top of the stack.
+ * closed dialog never claims Escape or the top of the stack, and restores the
+ * focus that was on the opener before the dialog opened.
  * @param {HTMLElement | null | undefined} panel
  * @param {boolean | undefined} open
  * @param {() => void} onClose
@@ -198,6 +199,14 @@ export function closeTopDialogOnEscape(event, panel, onClose) {
 export function dialogOpenEffect(panel, open, onClose) {
   if (!open || !panel) return;
   const element = panel;
+  // Where focus was when the dialog opened: closing returns it there, so a
+  // keyboard user carries on from the control they used rather than from the
+  // top of the page. A trigger that was removed meanwhile falls back to none.
+  const opener =
+    document.activeElement instanceof HTMLElement &&
+    !panel.contains(document.activeElement)
+      ? document.activeElement
+      : null;
   openDialog(element);
   /**
    * @param {KeyboardEvent} event
@@ -209,7 +218,23 @@ export function dialogOpenEffect(panel, open, onClose) {
   return () => {
     window.removeEventListener("keydown", handleKeyDown);
     closeDialog(element);
+    restoreFocus(opener);
   };
+}
+
+/**
+ * Give focus back to the element that opened a dialog.
+ *
+ * A dialog can close because its trigger went away (the file was deleted, the
+ * row was renamed); focus() on a detached element is a no-op, so the caller's
+ * own focus handling stays in charge in that case.
+ * @param {HTMLElement | null} opener
+ * @returns {boolean} whether an opener was given focus
+ */
+function restoreFocus(opener) {
+  if (!opener) return false;
+  opener.focus();
+  return true;
 }
 
 /**

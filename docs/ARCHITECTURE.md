@@ -276,9 +276,15 @@ help.
 Escape is owned by the **topmost** dialog. Dialogs are mounted while closed and
 nested (the synced lyrics editor opens its own text and timestamp dialogs), so a
 plain window listener in each one closed all of them on a single keypress.
-`dialogOpenEffect(panel, isOpen, onClose)` registers a dialog while it is open
-and closes it on Escape only when it is on top of the stack, stopping the event
-so the dialogs underneath and the app's own Escape handling never see it. Use
+`dialogOpenEffect(panel, isOpen, onClose)` registers a dialog while it is open,
+closes it on Escape only when it is on top of the stack (stopping the event so
+the dialogs underneath and the app's own Escape handling never see it), and
+gives focus back to the element that opened it when it closes. Without that
+last part a keyboard user's next Tab restarted from the top of the page. Focus
+is captured synchronously, before a dialog auto-focuses its first field, so it
+is the trigger and not that field that gets restored. A nested dialog returns
+focus to the control inside its parent (closing the lyrics text editor puts
+focus back on the "Edit lyrics" button, not past it). Use
 it in every dialog: `let panel = $state(null)`, `bind:this={panel}` on the
 panel, and `$effect(() => dialogOpenEffect(panel, isOpen, onClose))`. Dialogs
 that also block app shortcuts (the lyrics and timestamp editors) stop those
