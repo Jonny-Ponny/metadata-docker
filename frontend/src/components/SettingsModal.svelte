@@ -12,6 +12,8 @@
     DEFAULT_HOLD_DURATIONS,
     HOLD_DURATION_MIN,
     HOLD_DURATION_MAX,
+    keepFocusInDialog,
+    keepTabInDialog,
   } from "../utils/index.js";
 
   /**
@@ -297,7 +299,16 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="settings-modal-overlay" onclick={handleCancel}>
-    <div class="settings-modal" onclick={handleModalClick}>
+    <div
+      class="settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+      tabindex="-1"
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={handleModalClick}
+    >
       <!-- Header -->
       <div class="settings-modal-header">
         <h2>Settings</h2>

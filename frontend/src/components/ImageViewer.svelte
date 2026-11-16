@@ -2,6 +2,8 @@
 <script>
   import {
     formatImageDimensions,
+    keepFocusInDialog,
+    keepTabInDialog,
     probeImageSize,
     toast,
   } from "../utils/index.js";
@@ -210,7 +212,16 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div role="img" class="full-image-modal" onclick={closeFullImage}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Full-size image"
+      tabindex="-1"
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={(e) => e.stopPropagation()}
+    >
       <button class="modal-close-btn" title="Close" onclick={closeFullImage}>
         <svg
           width="20"

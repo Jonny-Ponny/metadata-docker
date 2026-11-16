@@ -2,6 +2,8 @@
 <script>
   import { onMount } from "svelte";
 
+  import { keepFocusInDialog, keepTabInDialog } from "../utils/index.js";
+
   /**
    * @typedef {Object} Props
    * @property {boolean} [isOpen]
@@ -47,7 +49,16 @@
   <div class="help-modal-overlay" onclick={onClose}>
     <!-- Modal content -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="help-modal" onclick={handleModalClick}>
+    <div
+      class="help-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Help and information"
+      tabindex="-1"
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={handleModalClick}
+    >
       <!-- Header -->
       <div class="help-modal-header">
         <h2>Help & Information</h2>

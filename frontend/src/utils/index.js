@@ -16,6 +16,7 @@ export * from "./tree.utils";
 export * from "./hold2confirm.utils";
 export * from "./lyrics.utils";
 export * from "./dom.utils.js";
+export * from "./focus.utils.js";
 export * from "./settings.utils";
 export * from "./folderSummary.utils";
 export * from "./fieldMetadata.utils";

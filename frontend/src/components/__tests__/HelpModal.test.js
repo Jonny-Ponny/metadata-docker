@@ -131,4 +131,34 @@ describe("HelpModal", () => {
     expect(openLogs).toHaveBeenCalledTimes(1);
     window.removeEventListener("openLogs", openLogs);
   });
+
+  describe("dialog semantics and focus", () => {
+    it("is announced as a modal dialog with a name", () => {
+      render(HelpModal, { props: { isOpen: true, onClose: vi.fn() } });
+
+      const dialog = screen.getByRole("dialog", {
+        name: "Help and information",
+      });
+
+      expect(dialog.getAttribute("aria-modal")).toBe("true");
+      expect(dialog.className).toContain("help-modal");
+    });
+
+    it("wraps Tab from the last control back to the first", async () => {
+      // Without the wrap, Tab leaves the dialog and drives the page behind it.
+      render(HelpModal, { props: { isOpen: true, onClose: vi.fn() } });
+      const dialog = screen.getByRole("dialog", {
+        name: "Help and information",
+      });
+      const stops = [...dialog.querySelectorAll("button, a[href]")].filter(
+        (element) => /** @type {HTMLElement} */ (element).tabIndex >= 0,
+      );
+      const last = /** @type {HTMLElement} */ (stops[stops.length - 1]);
+      last.focus();
+
+      await fireEvent.keyDown(last, { key: "Tab" });
+
+      expect(document.activeElement).toBe(stops[0]);
+    });
+  });
 });

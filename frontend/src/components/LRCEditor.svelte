@@ -15,6 +15,8 @@
     debounce,
     toast,
     equalizeElementHeights,
+    keepFocusInDialog,
+    keepTabInDialog,
   } from "../utils/index.js";
 
   // Import the old modals
@@ -831,7 +833,16 @@
     }}
   >
     <!-- Make the entire modal scrollable -->
-    <div class="lyrics-modal" onclick={stopPropagation}>
+    <div
+      class="lyrics-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Synced lyrics editor"
+      tabindex="-1"
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={stopPropagation}
+    >
       <input
         class="hidden-file-input"
         type="file"

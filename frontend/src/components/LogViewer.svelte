@@ -1,6 +1,11 @@
 <!-- src/components/LogViewer.svelte -->
 <script>
-  import { toast, getAuthHeaders } from "../utils/index.js";
+  import {
+    toast,
+    getAuthHeaders,
+    keepFocusInDialog,
+    keepTabInDialog,
+  } from "../utils/index.js";
   import { SvelteURLSearchParams } from "svelte/reactivity";
 
   /**
@@ -266,7 +271,16 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="log-modal-overlay" onclick={handleOverlayClick}>
-    <div class="log-modal" onclick={stopPropagation}>
+    <div
+      class="log-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Application logs"
+      tabindex="-1"
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={stopPropagation}
+    >
       <!-- Header -->
       <div class="log-modal-header">
         <h2>Application Logs</h2>

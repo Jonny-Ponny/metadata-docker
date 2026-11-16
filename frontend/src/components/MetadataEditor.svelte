@@ -18,6 +18,8 @@
     formatImageDimensions,
     probeImageSize,
     createHold,
+    keepFocusInDialog,
+    keepTabInDialog,
   } from "../utils/index.js";
 
   /**
@@ -2152,7 +2154,16 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div class="lyrics-modal-overlay" onclick={closeUnsyncedLyricsModal}>
-      <div class="lyrics-modal" onclick={stopPropagation}>
+      <div
+        class="lyrics-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit unsynced lyrics"
+        tabindex="-1"
+        onkeydown={keepTabInDialog}
+        onfocusin={keepFocusInDialog}
+        onclick={stopPropagation}
+      >
         <div class="lyrics-modal-header">
           <h3>Edit Unsynced Lyrics</h3>
           <button
@@ -2228,7 +2239,16 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div role="img" class="full-image-modal" onclick={closeFullImage}>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+      <div
+        class="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Full-size cover"
+        tabindex="-1"
+        onkeydown={keepTabInDialog}
+        onfocusin={keepFocusInDialog}
+        onclick={(e) => e.stopPropagation()}
+      >
         <button class="modal-close-btn" title="Close" onclick={closeFullImage}>
           <svg
             width="20"

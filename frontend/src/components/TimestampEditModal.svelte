@@ -1,6 +1,8 @@
 <!-- src/components/TimestampEditModal.svelte -->
 <script>
   import {
+    keepFocusInDialog,
+    keepTabInDialog,
     parseTimestampToSeconds,
     secondsToTimestamp,
     validateTimestampFormat,
@@ -260,7 +262,16 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={handleClose}>
-    <div class="timestamp-editor" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="timestamp-editor"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit timestamp"
+      tabindex="-1"
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={(e) => e.stopPropagation()}
+    >
       <div class="modal-header">
         <h3>Edit Timestamp for Line {lineIndex + 1}</h3>
         <button title="Close" class="modal-close" onclick={handleClose}>
