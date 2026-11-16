@@ -84,4 +84,43 @@ describe("EditModal", () => {
     await fireEvent.click(overlay);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("closes on Escape from the lyrics textarea", async () => {
+    // Escape used to do nothing here: the capture listener that stops the app
+    // shortcuts behind the dialog swallowed it too. Every other modal closes
+    // on Escape.
+    const onClose = vi.fn();
+    render(EditModal, {
+      props: { show: true, editingText: "lyrics", onClose },
+    });
+
+    await fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops app shortcuts while letting Escape through", async () => {
+    // The dialog stops keys in the capture phase so F2/Delete do not fire on
+    // the tree behind it, but Escape must still reach the window so the dialog
+    // can close.
+    const onClose = vi.fn();
+    render(EditModal, {
+      props: { show: true, editingText: "lyrics", onClose },
+    });
+
+    /** @type {string[]} */
+    const appSaw = [];
+    /** @param {KeyboardEvent} e */
+    const listener = (e) => appSaw.push(e.key);
+    window.addEventListener("keydown", listener);
+    try {
+      await fireEvent.keyDown(screen.getByRole("textbox"), { key: "Delete" });
+      await fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+    } finally {
+      window.removeEventListener("keydown", listener);
+    }
+
+    expect(appSaw).not.toContain("Delete");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

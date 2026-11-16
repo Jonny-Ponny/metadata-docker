@@ -39,23 +39,36 @@
     }
   });
 
-  // Add event listener to prevent keyboard events from bubbling
+  // While the dialog is open the app-wide shortcuts (F2, Delete, the tree keys)
+  // must not act behind it. Escape is deliberately left alone: it has to reach
+  // this component's own close handler below, which runs in the bubble phase.
+  // Stopping every key here (as this used to) swallowed Escape too, so the
+  // dialog was the one modal that could not be closed with the keyboard.
   $effect(() => {
-    if (show) {
-      /**
-       * @param {KeyboardEvent} e
-       */
-      const handleKeyDown = (e) => {
-        // Stop propagation for all keyboard events when modal is open
-        e.stopPropagation();
-      };
+    if (!show) return;
+    /**
+     * @param {KeyboardEvent} e
+     */
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") return;
+      e.stopPropagation();
+    };
+    // Capture phase, so the app's window listeners (bubble phase) never run.
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  });
 
-      window.addEventListener("keydown", handleKeyDown, true); // Use capture phase
-
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown, true);
-      };
-    }
+  // Escape closes the dialog, like every other modal in the app.
+  $effect(() => {
+    if (!show) return;
+    /**
+     * @param {KeyboardEvent} e
+     */
+    const handleEscape = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
   });
 </script>
 
@@ -86,8 +99,7 @@
           bind:value={editingText}
           placeholder="Enter lyrics here. You can include timestamps like [00:00.00] at the beginning of lines..."
           class="edit-textarea"
-          rows="15"
-          onkeydown={(e) => e.stopPropagation()}></textarea>
+          rows="15"></textarea>
         <div class="modal-info">
           <p>Each line will create a timestamp entry</p>
           <p>You can add timestamps like [00:00.00] at line beginnings</p>
