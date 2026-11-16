@@ -100,11 +100,12 @@ Features and split into numbered tasks:
   `svelte-ignore` comments in `TreeNode.svelte` removed. Focus containment for
   the dialogs, which was originally part of this task, is now T-19. See
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- **T-19 (P3) - focus containment in the dialogs.** Tab and Shift+Tab wrap
-  inside an open dialog instead of walking into the page behind it, and focus
-  that lands outside a dialog is pulled back in. The tree panel, the search box
-  and the modals need one shared helper. The dialogs are pointer-reachable
-  today (every one closes on an overlay click) but not keyboard-contained.
+- **T-19 (P3) - focus containment in the dialogs.** Done: the eight dialogs
+  (help, settings, logs, both lyrics editors, both full-size image overlays and
+  the timestamp editor) are `role="dialog"` with `aria-modal`, a label and an
+  Escape close, and Tab/Shift+Tab wrap inside them instead of walking into the
+  page behind the overlay. `utils/focus.utils.js` holds the shared helpers. The
+  search box sits outside every dialog, so it needed no change.
 - **T-20 (P3) - LRCEditor rework.** Interface rework and quality-of-life
   improvements to the synced-lyrics editor. Scope to be defined when the work
   starts.
@@ -146,7 +147,7 @@ No open items.
 - **UX and performance** - smart-rename dry-run preview with a conflict
   strategy, addon reload from Settings, responsive/mobile layout, metadata
   CSV/JSON export-import and library normalisation tools. The keyboard work is
-  done (T-16 to T-18); dialog focus containment follows as T-19 above.
+  done (T-16 to T-19); the context menu follows as T-21 above.
 - **More audio formats** - extend `formats.py` and `tag_backends.py`.
 
 ### Housekeeping

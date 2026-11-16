@@ -234,8 +234,7 @@ that differ only in non-ASCII characters (see B-44 in
 [BUGFIXES.md](BUGFIXES.md)). The guards live in
 `stores/keyboard.store.js` (`shouldIgnoreShortcut`, `isTypingTarget`,
 `isOverlayOpen`); F2 and Delete read the same cursor, so they act on the row
-the keyboard is on. Focus containment for the dialogs is tracked separately
-(T-19 in [PLAN.md](../PLAN.md)).
+the keyboard is on.
 
 The rows are exposed as an ARIA tree (T-18). The `.file-tree` `<ul>` carries
 `role="tree"`, a label ("Music library", or "Search results" while searching)
@@ -258,6 +257,22 @@ those); the tree then keeps the keyboard reachable by focusing itself. The
 search box sits outside the tree rather than inside its `role="tree"`
 container, and the rows keep DOM focus, which is why the panel no longer needs
 a `role` or a tabindex of its own.
+
+### Dialogs
+
+Every dialog is an overlay plus a panel, and the panel carries the semantics:
+`role="dialog"`, `aria-modal="true"`, a label, and `tabindex="-1"` so the panel
+itself can hold focus when it has no controls. `utils/focus.utils.js` provides
+the two handlers they share: `keepTabInDialog` (Tab wraps from the last control
+to the first and Shift+Tab the other way, and focus that has escaped is pulled
+to the first control) and `keepFocusInDialog` (focus landing on `body` or on a
+control behind the overlay is sent back into the dialog). Both read the panel
+from `event.currentTarget`, so they are wired straight onto the panel's
+`onkeydown` / `onfocusin` and never need a selector — two dialogs that share a
+class name, or are mounted together, cannot capture each other's keys. The
+overlay click still closes a dialog; that is the pointer path and needs no
+help. Escape closes every dialog, and the dialogs that stop app shortcuts stop
+them in the capture phase _except_ for Escape, so the close still reaches it.
 
 ### Metadata editor keyboard handling
 
