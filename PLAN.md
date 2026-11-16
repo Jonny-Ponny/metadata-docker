@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-20`, `B-47`. Next:
-  `T-21`, `B-48`.
+- IDs are permanent and never reused. Last used: `T-21`, `B-47`. Next:
+  `T-22`, `B-48`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -108,6 +108,13 @@ Features and split into numbered tasks:
 - **T-20 (P3) - LRCEditor rework.** Interface rework and quality-of-life
   improvements to the synced-lyrics editor. Scope to be defined when the work
   starts.
+- **T-21 (P3) - context menu keyboard access.** The tree's right-click menu is
+  a `<ul>` of `<li onclick>` items: no `role="menu"`/`menuitem`, no roving
+  focus, and no key that opens it (Shift+F10 / the context-menu key). Menu ARIA
+  is easy to get wrong, so decide the shape (true `menu` role with managed
+  focus, or a small roving-focus list) before writing it. The file row already
+  advertises `aria-keyshortcuts="Shift+F10"` from T-18, so today it promises a
+  key that does nothing.
 
 ### Known issues and small fixes
 
