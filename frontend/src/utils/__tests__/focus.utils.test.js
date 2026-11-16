@@ -182,6 +182,29 @@ describe("focus utils", () => {
       expect(document.activeElement).toBe(trigger);
     });
 
+    it("moves focus into the dialog when it opens", () => {
+      // Otherwise focus stays on the opener behind the overlay and Tab walks
+      // the page underneath instead of the dialog.
+      const trigger = document.createElement("button");
+      const panel = document.createElement("div");
+      panel.tabIndex = -1;
+      const field = document.createElement("input");
+      panel.appendChild(field);
+      document.body.append(trigger, panel);
+      trigger.focus();
+
+      vi.useFakeTimers();
+      try {
+        const cleanup = mountDialog(panel, () => {});
+        vi.runAllTimers();
+
+        expect(panel.contains(document.activeElement)).toBe(true);
+        cleanup();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("closes the dialog on Escape when it is on top", () => {
       const panel = document.createElement("div");
       const opener = document.createElement("button");

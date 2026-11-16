@@ -146,6 +146,19 @@ export function keepTabInDialog(event) {
   if (event.key !== "Tab") return false;
   const panel = dialogFrom(event);
   if (!panel) return false;
+  return keepTabInDialogWith(event, panel);
+}
+
+/**
+ * The Tab wrap itself, against an explicit panel. Used by the panel's own
+ * `onkeydown` and by the window-level fallback that runs when focus is still
+ * outside the dialog.
+ * @param {KeyboardEvent} event
+ * @param {HTMLElement} panel
+ * @returns {boolean} whether focus was moved
+ */
+export function keepTabInDialogWith(event, panel) {
+  if (event.key !== "Tab") return false;
   const items = focusableIn(panel);
   if (!items.length) {
     event.preventDefault();
@@ -242,14 +255,35 @@ export function dialogOpenEffect(panel, open, onClose) {
       ? document.activeElement
       : null;
   openDialog(element);
+  // Move focus into the dialog. Without this it stays on the opener behind the
+  // overlay, and Tab then walks the page underneath instead of the dialog. The
+  // panel is focused rather than its first control, so a dialog that focuses
+  // its own field (the fetcher's query input, the lyrics editor) still wins.
+  // Deferred, because focusing from inside the effect re-enters the renderer's
+  // update cycle and can loop.
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  const focusTimer = setTimeout(() => {
+    if (!element.contains(document.activeElement)) element.focus();
+  }, 0);
   /**
    * @param {KeyboardEvent} event
    */
   const handleKeyDown = (event) => {
+    // Tab and Escape are handled at window level so they work even while focus
+    // is still outside the dialog (for example on the opener): the panel's own
+    // `onkeydown` only fires for events that start inside it.
+    if (event.key === "Tab" && !event.defaultPrevented) {
+      const top = topDialog();
+      if (top && !top.contains(document.activeElement)) {
+        keepTabInDialogWith(event, top);
+        return;
+      }
+    }
     closeTopDialogOnEscape(event, element, onClose);
   };
   window.addEventListener("keydown", handleKeyDown);
   return () => {
+    clearTimeout(focusTimer);
     window.removeEventListener("keydown", handleKeyDown);
     closeDialog(element);
     restoreFocus(opener);

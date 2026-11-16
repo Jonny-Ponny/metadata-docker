@@ -854,7 +854,16 @@
               <div
                 class="result-item"
                 class:selected={selectedResultId === result.id}
+                role="button"
+                tabindex="0"
+                aria-pressed={selectedResultId === result.id}
                 onclick={() => selectResult(result.id)}
+                onkeydown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    selectResult(result.id);
+                  }
+                }}
               >
                 <div class="result-info">
                   {#if mode === "song"}
@@ -1249,6 +1258,11 @@
     background: var(--color-primary-transparent);
     border-left: 3px solid var(--color-primary);
     border-radius: 3px;
+  }
+  /* Results are focusable rows, so the keyboard needs to see where it is. */
+  .result-item:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
   }
   .result-extra-info {
     margin-top: 2px;

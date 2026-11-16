@@ -368,6 +368,28 @@ describe("MetadataFetcher", () => {
     expect(screen.getByText("MusicBrainz score 100")).toBeTruthy();
   });
 
+  it("lets the keyboard select a search result", async () => {
+    // Results were <div onclick> with no tab stop, so they could only be
+    // chosen with the mouse.
+    await renderSong({ search: { success: true, results: searchResults } });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    const result = await screen.findByRole("button", {
+      name: /Search Title/,
+    });
+    expect(result.getAttribute("tabindex")).toBe("0");
+    expect(
+      /** @type {HTMLElement} */ (result).getAttribute("aria-pressed"),
+    ).toBe("false");
+
+    await fireEvent.keyDown(result, { key: "Enter" });
+
+    expect(
+      /** @type {HTMLElement} */ (result).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
   it("reports a failed search", async () => {
     await renderSong({ searchError: true });
 
