@@ -1369,10 +1369,13 @@
   function handleShortcutKeyDown(e) {
     if (shouldIgnoreShortcut(e)) return;
 
-    // Space plays/pauses the current track wherever focus is, except on
-    // controls and links that use Space themselves. The tree no longer uses
-    // it: Space is the player key, Right/Left toggle folders.
-    if (e.key === " " && !isSpaceOwner(e.target)) {
+    // Space is the player key everywhere: it plays/pauses whatever has focus,
+    // so one key always means the same thing. Typing surfaces are already
+    // excluded by `shouldIgnoreShortcut`, and so is an open dialog.
+    // `preventDefault` also stops the browser from activating a focused
+    // button with Space, which would otherwise make a keyboard user re-open
+    // the dialog they just closed; buttons are activated with Enter instead.
+    if (e.key === " ") {
       e.preventDefault();
       if ($settings.enablePlayer) void playerComponent?.togglePlay();
       return;
@@ -1403,19 +1406,6 @@
       e.preventDefault();
       handleDelete(target);
     }
-  }
-
-  /**
-   * Whether Space belongs to the target control (a button, link or summary)
-   * rather than the player.
-   * @param {EventTarget | null} target
-   * @returns {boolean}
-   */
-  function isSpaceOwner(target) {
-    if (!(target instanceof Element)) return false;
-    return !!target.closest(
-      "button, a[href], summary, [role='button'], input[type='checkbox'], input[type='radio']",
-    );
   }
 
   /**

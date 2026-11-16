@@ -336,8 +336,8 @@
                 letters
               </li>
               <li>
-                <strong>Space</strong> - play or pause the current track (unless a
-                button or link has focus)
+                <strong>Space</strong> - play or pause the current track, wherever
+                focus is (typing fields keep it for a space character)
               </li>
               <li><strong>F2</strong> - Rename selected item</li>
               <li>

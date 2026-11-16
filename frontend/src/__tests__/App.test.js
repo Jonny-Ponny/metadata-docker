@@ -2241,17 +2241,47 @@ describe("App", () => {
       );
     });
 
-    it("leaves Space to a focused button", async () => {
+    it("plays and pauses with Space on a focused button too", async () => {
+      // Space is the player key everywhere. Leaving it to the focused button
+      // meant that after a dialog closed, focus return put focus back on the
+      // opener and Space re-opened the dialog instead of playing.
       isAuthenticated.set(true);
-      await renderAuthenticated();
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
       const playSpy = vi
         .spyOn(HTMLMediaElement.prototype, "play")
         .mockResolvedValue(undefined);
+      const help = screen.getByRole("button", { name: "Help" });
+      help.focus();
 
-      fireEvent.keyDown(screen.getByRole("button", { name: "Help" }), {
-        key: " ",
-      });
+      fireEvent.keyDown(help, { key: " " });
+      await waitFor(() => expect(playSpy).toHaveBeenCalled());
+
+      fireEvent.keyDown(help, { key: " " });
+      await waitFor(() =>
+        expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled(),
+      );
+    });
+
+    it("still types a space into a text field", async () => {
+      // Typing surfaces keep their own Space; only the player takes the key
+      // elsewhere.
+      isAuthenticated.set(true);
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+      const field = /** @type {HTMLInputElement} */ (
+        view.container.querySelector(".right-panel input[type='text']")
+      );
+      expect(field).toBeTruthy();
+
+      fireEvent.keyDown(field, { key: " " });
       await Promise.resolve();
+
       expect(playSpy).not.toHaveBeenCalled();
     });
   });
@@ -2732,6 +2762,41 @@ describe("App", () => {
     await fireEvent.change(input, { target: { files: [] } });
 
     expect(startDropMock).not.toHaveBeenCalled();
+  });
+
+  it("does not re-open a dialog when Space is pressed after closing it", async () => {
+    // Closing returns focus to the opener (T-19), so Space used to activate
+    // that button again. Space is the player key now, not an activator.
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    await fireEvent.click(node(view, "loose.flac"));
+    await screen.findByRole("heading", { name: "Metadata Editor" });
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockResolvedValue(undefined);
+
+    const help = screen.getByRole("button", { name: "Help" });
+    // A real click focuses the button first; `fireEvent.click` does not.
+    help.focus();
+    await fireEvent.click(help);
+    const dialog = await screen.findByRole("dialog", {
+      name: "Help and information",
+    });
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Help and information" }),
+      ).toBeNull(),
+    );
+    // Focus came back to the button...
+    expect(document.activeElement).toBe(help);
+
+    // ...but Space plays/pauses instead of activating it.
+    await fireEvent.keyDown(help, { key: " " });
+    await waitFor(() => expect(playSpy).toHaveBeenCalled());
+    expect(
+      screen.queryByRole("dialog", { name: "Help and information" }),
+    ).toBeNull();
   });
 
   it("opens the settings, help and log modals", async () => {
