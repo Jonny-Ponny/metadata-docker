@@ -33,12 +33,34 @@ const FOCUSABLE_SELECTOR = [
 const dialogStack = [];
 
 /**
+ * Mark everything outside the topmost dialog `inert`, so the browser's own tab
+ * order cannot walk into the page behind it or into a dialog underneath it.
+ *
+ * The Tab helpers only intervene at the ends of a dialog's own control list;
+ * in the middle they deliberately leave the move to the browser. That works
+ * until a second dialog opens as a sibling (the lyrics editor's text editor
+ * does), because then the browser's next step is a control of the dialog
+ * underneath.
+ */
+function syncInert() {
+  const root = document.body;
+  const active = topDialog();
+  for (const child of [...root.children]) {
+    // Only the top-level subtree that holds the active dialog stays live; the
+    // page behind it and any dialog underneath become inert.
+    /** @type {HTMLElement} */
+    (child).inert = !!active && !child.contains(active);
+  }
+}
+
+/**
  * Register a dialog as the topmost open one.
  * @param {HTMLElement | null | undefined} panel
  */
 export function openDialog(panel) {
   if (!panel || dialogStack.includes(panel)) return;
   dialogStack.push(panel);
+  syncInert();
 }
 
 /**
@@ -48,7 +70,9 @@ export function openDialog(panel) {
 export function closeDialog(panel) {
   if (!panel) return;
   const index = dialogStack.indexOf(panel);
-  if (index !== -1) dialogStack.splice(index, 1);
+  if (index === -1) return;
+  dialogStack.splice(index, 1);
+  syncInert();
 }
 
 /**

@@ -371,6 +371,48 @@ describe("focus utils", () => {
     });
   });
 
+  describe("inert background", () => {
+    /**
+     * @returns {{ background: HTMLElement, outerWrap: HTMLElement, outer: HTMLElement, innerWrap: HTMLElement, inner: HTMLElement }}
+     */
+    function scene() {
+      document.body.innerHTML = "";
+      const background = document.createElement("main");
+      const outerWrap = document.createElement("div");
+      const outer = document.createElement("div");
+      outerWrap.appendChild(outer);
+      const innerWrap = document.createElement("div");
+      const inner = document.createElement("div");
+      innerWrap.appendChild(inner);
+      document.body.append(background, outerWrap, innerWrap);
+      return { background, outerWrap, outer, innerWrap, inner };
+    }
+
+    it("only the topmost dialog stays reachable", () => {
+      // Two dialogs open as siblings: without this, the browser's tab order
+      // walked out of the upper dialog and into the one underneath it.
+      const { background, outerWrap, outer, innerWrap, inner } = scene();
+
+      openDialog(outer);
+      expect(background.inert).toBe(true);
+      expect(outerWrap.inert).toBe(false);
+      expect(innerWrap.inert).toBe(true);
+
+      openDialog(inner);
+      expect(outerWrap.inert).toBe(true);
+      expect(innerWrap.inert).toBe(false);
+
+      closeDialog(inner);
+      expect(outerWrap.inert).toBe(false);
+      expect(innerWrap.inert).toBe(true);
+
+      closeDialog(outer);
+      expect(background.inert).toBe(false);
+      expect(outerWrap.inert).toBe(false);
+      expect(innerWrap.inert).toBe(false);
+    });
+  });
+
   describe("keepTabInDialog", () => {
     it("moves past the panel itself when Tab starts on it", () => {
       // The panel is tabindex="-1" for programmatic focus, but it is not a

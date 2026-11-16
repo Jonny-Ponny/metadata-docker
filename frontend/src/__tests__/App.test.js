@@ -2285,6 +2285,24 @@ describe("App", () => {
       select.remove();
     });
 
+    it("plays on Space over the volume slider", async () => {
+      // The slider kept Space reserved but did nothing with it, so touching the
+      // volume made playback control stop working.
+      isAuthenticated.set(true);
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+      const slider = view.container.querySelector("input[type='range']");
+      expect(slider).toBeTruthy();
+      /** @type {HTMLElement} */ (slider).focus();
+
+      fireEvent.keyDown(/** @type {HTMLElement} */ (slider), { key: " " });
+      await waitFor(() => expect(playSpy).toHaveBeenCalled());
+    });
+
     it("still types a space into a text field", async () => {
       // Typing surfaces keep their own Space; only the player takes the key
       // elsewhere.

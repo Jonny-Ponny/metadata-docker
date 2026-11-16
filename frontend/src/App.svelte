@@ -1411,17 +1411,20 @@
   }
 
   /**
-   * Whether Space types a character or drags a value, so the player must leave
-   * it alone. Buttons, links and selects are deliberately *not* included: a
-   * focused button is activated with Enter, and a select is opened with
-   * Enter/Arrow keys, so Space stays the player key there (T-19).
+   * Whether Space types a character, so the player must leave it alone.
+   *
+   * Only text entry qualifies. A button or link is activated with Enter, and a
+   * select opens with Enter or the arrow keys, so Space stays the player key
+   * there. Sliders are excluded too: Space did nothing on a range input, so
+   * leaving it reserved only silenced playback after touching the volume
+   * (T-19).
    * @param {EventTarget | null} target
    * @returns {boolean}
    */
   function spaceBelongsToControl(target) {
     if (!(target instanceof Element)) return false;
     return !!target.closest(
-      "input, textarea, [contenteditable='true'], [role='textbox'], [role='slider']",
+      "textarea, input[type='text'], input[type='search'], input[type='number'], input[type='email'], input[type='url'], input[type='password'], input:not([type]), [contenteditable='true'], [role='textbox']",
     );
   }
 
