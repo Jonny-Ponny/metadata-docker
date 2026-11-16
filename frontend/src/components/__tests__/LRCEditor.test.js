@@ -123,6 +123,28 @@ describe("LRCEditor", () => {
     ).toBeTruthy();
   });
 
+  it("makes the editor inert while its text dialog is open", async () => {
+    // The text dialog renders as a sibling of the editor, not inside it, so
+    // without inert the browser's tab order walked out of the dialog and into
+    // the editor underneath.
+    render(LRCEditor, { props: { ...baseProps, onClose: vi.fn() } });
+    const editorOverlay = /** @type {HTMLElement} */ (
+      document.querySelector(".lyrics-modal-overlay")
+    );
+    expect(editorOverlay.inert).toBeFalsy();
+
+    await fireEvent.click(screen.getByTitle("Edit lyrics"));
+    await screen.findByRole("dialog", {
+      name: "Edit unsynchronized lyrics",
+    });
+
+    expect(editorOverlay.inert).toBe(true);
+    expect(
+      /** @type {HTMLElement} */ (document.querySelector(".modal-overlay"))
+        .inert,
+    ).toBeFalsy();
+  });
+
   it("lays out the timestamps, lyrics and synchronized columns", () => {
     render(LRCEditor, { props: baseProps });
 

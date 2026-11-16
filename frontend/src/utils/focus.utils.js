@@ -43,15 +43,32 @@ const dialogStack = [];
  * underneath.
  */
 function syncInert() {
-  const root = document.body;
   const active = topDialog();
-  for (const child of [...root.children]) {
-    // Only the top-level subtree that holds the active dialog stays live; the
-    // page behind it and any dialog underneath become inert.
-    /** @type {HTMLElement} */
-    (child).inert = !!active && !child.contains(active);
+  // Clear everything this last marked, so the state is rebuilt from scratch.
+  for (const element of inerted) element.inert = false;
+  inerted.length = 0;
+  if (!active) return;
+  // The app is mounted inside a wrapper, so a dialog is never a child of
+  // <body>: walking up from the panel and inerting its siblings at every level
+  // is what leaves exactly one path to the dialog reachable, with the page and
+  // any dialog underneath hidden.
+  for (let node = active; node.parentElement; node = node.parentElement) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling === node) continue;
+      /** @type {HTMLElement} */
+      const element = /** @type {HTMLElement} */ (sibling);
+      element.inert = true;
+      inerted.push(element);
+    }
   }
 }
+
+/**
+ * Elements this module marked inert, so they can be restored precisely without
+ * clearing an `inert` some other code set.
+ * @type {HTMLElement[]}
+ */
+const inerted = [];
 
 /**
  * Register a dialog as the topmost open one.

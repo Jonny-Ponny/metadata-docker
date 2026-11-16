@@ -373,10 +373,13 @@ describe("focus utils", () => {
 
   describe("inert background", () => {
     /**
-     * @returns {{ background: HTMLElement, outerWrap: HTMLElement, outer: HTMLElement, innerWrap: HTMLElement, inner: HTMLElement }}
+     * @returns {{ app: HTMLElement, background: HTMLElement, outerWrap: HTMLElement, outer: HTMLElement, innerWrap: HTMLElement, inner: HTMLElement }}
      */
     function scene() {
+      // Mirror the app: everything is mounted inside one wrapper, so a dialog
+      // is never a child of <body>.
       document.body.innerHTML = "";
+      const app = document.createElement("div");
       const background = document.createElement("main");
       const outerWrap = document.createElement("div");
       const outer = document.createElement("div");
@@ -384,32 +387,37 @@ describe("focus utils", () => {
       const innerWrap = document.createElement("div");
       const inner = document.createElement("div");
       innerWrap.appendChild(inner);
-      document.body.append(background, outerWrap, innerWrap);
-      return { background, outerWrap, outer, innerWrap, inner };
+      app.append(background, outerWrap, innerWrap);
+      document.body.appendChild(app);
+      return { app, background, outerWrap, outer, innerWrap, inner };
     }
 
     it("only the topmost dialog stays reachable", () => {
       // Two dialogs open as siblings: without this, the browser's tab order
       // walked out of the upper dialog and into the one underneath it.
-      const { background, outerWrap, outer, innerWrap, inner } = scene();
+      const { app, background, outerWrap, outer, innerWrap, inner } = scene();
 
       openDialog(outer);
       expect(background.inert).toBe(true);
-      expect(outerWrap.inert).toBe(false);
       expect(innerWrap.inert).toBe(true);
+      expect(outerWrap.inert).toBeFalsy();
+      // The dialog's own ancestors stay live, or it could not be reached.
+      expect(app.inert).toBeFalsy();
 
       openDialog(inner);
       expect(outerWrap.inert).toBe(true);
-      expect(innerWrap.inert).toBe(false);
+      expect(innerWrap.inert).toBeFalsy();
+      expect(app.inert).toBeFalsy();
 
       closeDialog(inner);
-      expect(outerWrap.inert).toBe(false);
+      expect(outerWrap.inert).toBeFalsy();
       expect(innerWrap.inert).toBe(true);
 
       closeDialog(outer);
-      expect(background.inert).toBe(false);
-      expect(outerWrap.inert).toBe(false);
-      expect(innerWrap.inert).toBe(false);
+      expect(background.inert).toBeFalsy();
+      expect(outerWrap.inert).toBeFalsy();
+      expect(innerWrap.inert).toBeFalsy();
+      expect(app.inert).toBeFalsy();
     });
   });
 
