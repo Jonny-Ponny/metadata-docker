@@ -372,6 +372,24 @@ describe("focus utils", () => {
   });
 
   describe("keepTabInDialog", () => {
+    it("moves past the panel itself when Tab starts on it", () => {
+      // The panel is tabindex="-1" for programmatic focus, but it is not a
+      // control: landing on it shows the focus ring on the dialog's edge and
+      // Tab appears to cycle between the border and the close button.
+      const { panel, first, last } = dialog();
+      panel.tabIndex = -1;
+      panel.focus();
+
+      const forward = pressTab(panel, panel);
+      expect(forward.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(first);
+
+      panel.focus();
+      const backward = pressTab(panel, panel, true);
+      expect(backward.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(last);
+    });
+
     it("wraps Tab from the last control to the first", () => {
       const { panel, first, last } = dialog();
       last.focus();

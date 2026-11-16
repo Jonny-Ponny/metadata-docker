@@ -165,9 +165,16 @@ export function keepTabInDialogWith(event, panel) {
     panel.focus();
     return true;
   }
-  const index = items.indexOf(
-    /** @type {HTMLElement} */ (document.activeElement),
-  );
+  const active = /** @type {HTMLElement} */ (document.activeElement);
+  const index = items.indexOf(active);
+  // The dialog panel itself is `tabindex="-1"` so it can be focused
+  // programmatically, but it is not a control: some browsers step onto it
+  // during Tab, which shows the focus ring on the dialog's edge. Move past it.
+  if (active === panel) {
+    event.preventDefault();
+    (event.shiftKey ? items[items.length - 1] : items[0]).focus();
+    return true;
+  }
   // Focus outside the dialog (removed, or behind it) is pulled to the first
   // control; otherwise Tab moves by one and wraps at either end.
   if (index !== -1) {
@@ -256,14 +263,19 @@ export function dialogOpenEffect(panel, open, onClose) {
       : null;
   openDialog(element);
   // Move focus into the dialog. Without this it stays on the opener behind the
-  // overlay, and Tab then walks the page underneath instead of the dialog. The
-  // panel is focused rather than its first control, so a dialog that focuses
-  // its own field (the fetcher's query input, the lyrics editor) still wins.
+  // overlay, and Tab then walks the page underneath instead of the dialog.
+  // A dialog that focuses its own field (the fetcher's query input, the lyrics
+  // editors) has already done so by this point and keeps it.
   // Deferred, because focusing from inside the effect re-enters the renderer's
   // update cycle and can loop.
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   const focusTimer = setTimeout(() => {
-    if (!element.contains(document.activeElement)) element.focus();
+    if (element.contains(document.activeElement)) return;
+    // The first control rather than the panel: leaving focus on the
+    // `tabindex="-1"` panel makes the browser step onto it during Tab, which
+    // shows up as the dialog's edge getting the focus ring.
+    const first = focusableIn(element)[0];
+    (first ?? element).focus();
   }, 0);
   /**
    * @param {KeyboardEvent} event
