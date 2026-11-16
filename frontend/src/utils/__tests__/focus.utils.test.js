@@ -198,6 +198,49 @@ describe("focus utils", () => {
     });
   });
 
+  describe("focusableIn and disabled controls", () => {
+    /**
+     * A dialog whose last control is disabled, as the metadata fetcher's
+     * "Apply" button is until a result is chosen.
+     * @returns {{ panel: HTMLElement, close: HTMLButtonElement, apply: HTMLButtonElement }}
+     */
+    function dialogWithDisabledLast() {
+      document.body.innerHTML = "";
+      const panel = document.createElement("div");
+      panel.innerHTML = [
+        '<button id="close">close</button>',
+        '<button id="apply" disabled>apply</button>',
+      ].join("");
+      document.body.appendChild(panel);
+      return {
+        panel,
+        close: /** @type {HTMLButtonElement} */ (panel.querySelector("#close")),
+        apply: /** @type {HTMLButtonElement} */ (panel.querySelector("#apply")),
+      };
+    }
+
+    it("skips a disabled control", () => {
+      const { panel, close, apply } = dialogWithDisabledLast();
+
+      expect(focusableIn(panel)).toEqual([close]);
+      // The browser agrees it is unreachable, but its tabIndex still says 0.
+      expect(apply.tabIndex).toBe(0);
+    });
+
+    it("wraps Tab from the last enabled control past a disabled one", () => {
+      // The helper used to think the disabled button was the last stop, so it
+      // let Tab through and focus left the dialog entirely.
+      const { panel, close } = dialogWithDisabledLast();
+      close.focus();
+
+      const event = pressTab(panel, close);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(close);
+      expect(panel.contains(document.activeElement)).toBe(true);
+    });
+  });
+
   describe("keepTabInDialog", () => {
     it("wraps Tab from the last control to the first", () => {
       const { panel, first, last } = dialog();

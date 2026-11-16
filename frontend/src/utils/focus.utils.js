@@ -77,10 +77,15 @@ export function resetDialogStack() {
 /**
  * Focusable descendants of a container, in DOM order.
  *
- * Negative tab stops are skipped on purpose: the tree icons and the editor's
- * per-field buttons are pointer-only and must not join the Tab cycle. Hidden
- * elements (the `hidden` attribute or `display: none`) are skipped too, so an
- * inactive tab or a collapsed section cannot take focus.
+ * Only real tab stops are listed, so the caller's idea of "the last control"
+ * matches what Tab does:
+ *
+ *  - a disabled control is never focusable, even though it still reports
+ *    `tabIndex === 0`. Missing this made a dialog with a disabled Apply button
+ *    let Tab escape: the helper thought a button further down was the last one;
+ *  - negative tab stops are skipped on purpose: the tree icons and the editor's
+ *    per-field buttons are pointer-only and must not join the Tab cycle;
+ *  - hidden elements (`hidden`, or `display: none`) cannot take focus either.
  * @param {HTMLElement} container
  * @returns {HTMLElement[]}
  */
@@ -88,8 +93,11 @@ export function focusableIn(container) {
   return /** @type {HTMLElement[]} */ (
     /** @type {unknown} */ (
       [...container.querySelectorAll(FOCUSABLE_SELECTOR)].filter((element) => {
-        const tabIndex = /** @type {HTMLElement} */ (element).tabIndex;
-        if (tabIndex < 0) return false;
+        const control = /** @type {HTMLElement} */ (element);
+        if (control.tabIndex < 0) return false;
+        // `:disabled` covers button, input, select, textarea, optgroup and
+        // option, plus a fieldset that disables its children.
+        if (control.matches(":disabled")) return false;
         if (element.closest("[hidden]")) return false;
         return getComputedStyle(element).display !== "none";
       })
