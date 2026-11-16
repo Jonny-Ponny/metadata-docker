@@ -434,6 +434,41 @@
     return treeRowId(path);
   }
 
+  // DOM ids the rows report. They carry the search prefix while searching, so
+  // `aria-activedescendant` can point at the cursor row in either view.
+  let renderedRowIds = $state(/** @type {Record<string, string>} */ ({}));
+
+  /**
+   * @param {string} path
+   * @param {string} id
+   */
+  function registerRowId(path, id) {
+    renderedRowIds[path] = id;
+  }
+
+  // The cursor row exists whenever the keyboard is in the tree; the id is only
+  // known after the row reports it, so the attribute is absent before that.
+  let activeRowId = $derived(
+    cursorRowPath ? (renderedRowIds[cursorRowPath] ?? null) : null,
+  );
+
+  // Which row currently holds the tree's Tab stop. DOM focus stays on the row
+  // the user activated, so a deep selection has to keep its stop even though
+  // the roving path (which prefers a top-level row) points elsewhere.
+  /** @type {Record<string, boolean>} */
+  let renderedTabStops = $state({});
+
+  /**
+   * @param {string} path
+   * @param {boolean} isTabStop
+   */
+  function registerTabStop(path, isTabStop) {
+    if (isTabStop) renderedTabStops[path] = true;
+    else delete renderedTabStops[path];
+  }
+
+  let treeHasRowTabStop = $derived(Object.keys(renderedTabStops).length > 0);
+
   /** Which tree page the keyboard is in, for PgUp/PgDn and the focus ring. */
   let treeIsKeyboardActive = $state(false);
 
@@ -1727,10 +1762,10 @@
   /**
    * Turns the tree keys on when the tree itself is clicked, including empty
    * space below the rows.
-   * @param {PointerEvent} event
    */
-  function handleTreePanelPointerDown(event) {
-    if (!(event.target instanceof Element)) return;
+  function handleTreePanelPointerDown() {
+    // Any press in the tree means the keyboard now belongs to it (the focus
+    // ring shows on the panel); the next key resumes from the clicked row.
     setTreeKeyboardActive(true);
   }
 
@@ -2560,28 +2595,10 @@
           </div>
         </div>
 
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div
           class="panel-content file-tree-panel"
           class:tree-keyboard-active={treeIsKeyboardActive}
           bind:this={fileTreeContainer}
-          role="group"
-          aria-label="File tree"
-          tabindex="0"
-          onkeydown={(event) =>
-            keydownFromTree(
-              // A key on the panel itself (Tab focus, or a click on empty
-              // space) starts from the current row.
-              // The panel is not a row, so navigation starts from the row it
-              // contains: the cursor, else the selection, else the first row.
-              visibleRows[rowIndexOf(visibleRows, activeRowPath)]?.path ??
-                visibleRows[rowIndexOf(visibleRows, selectedRowPath)]?.path ??
-                visibleRows[0]?.path ??
-                "",
-              event,
-            )}
-          onpointerdown={handleTreePanelPointerDown}
         >
           {#if isLoading && treeData.length === 0}
             <div class="empty-state">
@@ -2645,12 +2662,33 @@
                   {/if}
                 </div>
               {:else}
-                <!-- Update TreeNode usage to pass folder path data attributes -->
-                <ul class="file-tree">
-                  {#each sortedTreeData as item (item.path)}
+                <!-- The tree is the panel's only focus stop: it owns the
+                     cursor, so `aria-activedescendant` and the roving row
+                     tabindex point a screen reader at the same row. -->
+                <ul
+                  class="file-tree"
+                  role="tree"
+                  aria-label={isSearching ? "Search results" : "Music library"}
+                  aria-activedescendant={activeRowId ?? undefined}
+                  tabindex={treeHasRowTabStop ? -1 : 0}
+                  onpointerdown={handleTreePanelPointerDown}
+                  onkeydown={(event) =>
+                    keydownFromTree(
+                      activeRowPath ??
+                        rovingRowPath ??
+                        visibleRows[0]?.path ??
+                        null,
+                      event,
+                    )}
+                >
+                  {#each sortedTreeData as item, index (item.path)}
                     <TreeNode
                       {item}
                       rowIdPrefix={isSearching ? "search-" : ""}
+                      onRowId={registerRowId}
+                      onTabStop={registerTabStop}
+                      rowCount={sortedTreeData.length}
+                      rowPosition={index + 1}
                       cursorPath={cursorRowPath}
                       rovingPath={rovingRowPath}
                       onRowKeys={handleTreeNavigation}

@@ -1529,27 +1529,38 @@ describe("App", () => {
     }
 
     /**
-     * Put the keyboard in the tree, as a click on its panel does.
+     * Put the keyboard in the tree, as a press on it does.
      */
     async function enterTree() {
-      const panel = /** @type {HTMLElement} */ (
-        view.container.querySelector(".file-tree-panel")
-      );
-      fireEvent.pointerDown(panel, { bubbles: true });
+      fireEvent.pointerDown(/** @type {HTMLElement} */ (treeElement()), {
+        bubbles: true,
+      });
       await tick();
     }
 
     /**
+     * The tree element itself: the ARIA tree, which owns the cursor and the
+     * keys pressed on it.
+     * @returns {Element}
+     */
+    function treeElement() {
+      const tree = view.container.querySelector(".file-tree");
+      if (!tree) throw new Error("the tree is not rendered");
+      return tree;
+    }
+
+    /**
      * Press a key on the tree. Keys act on the app's cursor row, so this
-     * presses on the panel exactly like a focused row would forward them.
+     * presses on the tree itself exactly like a focused row would forward them.
      * @param {string} key
      * @param {{ ctrlKey?: boolean }} [init]
      */
     async function pressKey(key, init = {}) {
-      const panel = /** @type {HTMLElement} */ (
-        view.container.querySelector(".file-tree-panel")
-      );
-      fireEvent.keyDown(panel, { key, bubbles: true, ...init });
+      fireEvent.keyDown(/** @type {HTMLElement} */ (treeElement()), {
+        key,
+        bubbles: true,
+        ...init,
+      });
       await tick();
     }
 
@@ -1741,6 +1752,74 @@ describe("App", () => {
       // Space belongs to the player, not the tree: it must not reopen it.
       await pressKey(" ");
       expect(screen.queryByText("inner.mp3")).toBeNull();
+    });
+
+    it("exposes the flat rows as an ARIA tree", async () => {
+      // Screen readers need the tree structure the keyboard model already has:
+      // a tree owning the cursor through aria-activedescendant, treeitem rows
+      // with their depth, and a leaf that reports no aria-expanded at all.
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+
+      const tree = treeElement();
+      expect(tree.getAttribute("role")).toBe("tree");
+      const topLevel = visiblePaths();
+      expect(tree.getAttribute("aria-label")).toBe("Music library");
+
+      const albums = row("Albums");
+      expect(albums.getAttribute("role")).toBe("treeitem");
+      expect(albums.getAttribute("aria-level")).toBe("1");
+      expect(albums.getAttribute("aria-expanded")).toBe("false");
+      expect(albums.getAttribute("aria-setsize")).toBe(String(topLevel.length));
+      expect(albums.getAttribute("aria-posinset")).toBe(
+        String(topLevel.indexOf("Albums") + 1),
+      );
+
+      // A file cannot be expanded, so it must not claim to be collapsed.
+      const charlie = row("Charlie.flac");
+      expect(charlie.getAttribute("role")).toBe("treeitem");
+      expect(charlie.hasAttribute("aria-expanded")).toBe(false);
+      expect(charlie.getAttribute("aria-posinset")).toBe(
+        String(topLevel.indexOf("Charlie.flac") + 1),
+      );
+
+      // The active descendant is the row the keyboard is on, and that row is
+      // the tree's single Tab stop.
+      await pressKey("Home");
+      const first = topLevel[0];
+      expect(tree.getAttribute("aria-activedescendant")).toBe(row(first).id);
+      expect(row(first).getAttribute("tabindex")).toBe("0");
+      // Only the cursor row is in the Tab order.
+      expect([
+        ...view.container.querySelectorAll(".file-tree [tabindex='0']"),
+      ]).toEqual([tree.children[0]?.querySelector("[role='treeitem']")]);
+      await pressKey("ArrowDown");
+      expect(row(first).getAttribute("tabindex")).toBe("-1");
+      expect(row(topLevel[1]).getAttribute("tabindex")).toBe("0");
+
+      // Open a folder so the test has a nested row to inspect.
+      await pressKey("ArrowRight");
+      await tick();
+      expect(row("Albums").getAttribute("aria-expanded")).toBe("true");
+      const inner = row("Albums/inner.mp3");
+      expect(inner.getAttribute("aria-level")).toBe("2");
+      expect(inner.getAttribute("aria-posinset")).toBe("1");
+      expect(inner.getAttribute("aria-setsize")).toBe("1");
+
+      // The active descendant follows the cursor into the nested row; the
+      // treeitem itself is not a Tab stop. DOM focus stays on the row the
+      // user activated, so no top-level row can carry the stop either: the
+      // tree element becomes its own, which is why it is focusable.
+      await pressKey("ArrowRight");
+      expect(cursorPath()).toBe("Albums/inner.mp3");
+      expect(tree.getAttribute("aria-activedescendant")).toBe(inner.id);
+      expect(inner.getAttribute("tabindex")).toBe("-1");
+      expect(row("Albums").getAttribute("tabindex")).toBe("-1");
+      expect(
+        view.container.querySelector(".file-tree [tabindex='0']"),
+      ).toBeNull();
+      expect(tree.getAttribute("tabindex")).toBe("0");
     });
 
     it("does not open a collapsed folder with Right when it is empty", async () => {

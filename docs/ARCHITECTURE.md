@@ -234,8 +234,30 @@ that differ only in non-ASCII characters (see B-44 in
 [BUGFIXES.md](BUGFIXES.md)). The guards live in
 `stores/keyboard.store.js` (`shouldIgnoreShortcut`, `isTypingTarget`,
 `isOverlayOpen`); F2 and Delete read the same cursor, so they act on the row
-the keyboard is on. ARIA tree roles are tracked separately (T-18 in
-[PLAN.md](../PLAN.md)).
+the keyboard is on. Focus containment for the dialogs is tracked separately
+(T-19 in [PLAN.md](../PLAN.md)).
+
+The rows are exposed as an ARIA tree (T-18). The `.file-tree` `<ul>` carries
+`role="tree"`, a label ("Music library", or "Search results" while searching)
+and `aria-activedescendant`, pointing at the cursor row. Focus stays on the
+row itself, so the row's own `id` is what gets announced; the rows report it up
+through `onRowId`, because the search view renders the same rows with a
+`search-` prefix. Each row is `role="treeitem"` with `aria-level` from its
+depth, `aria-selected` from the selection, and `aria-posinset`/`aria-setsize`
+from its position among its siblings (folders and files are sorted separately,
+so the count is not simply the folder listing length). Only folders get
+`aria-expanded`, since a file cannot expand. Nested lists are `role="group"`
+and their `<li>` wrappers are `role="none"`, so the tree is flat to a screen
+reader as it is to the keyboard model.
+
+The tree element, not the panel, is the keyboard element: it handles `keydown`
+and the press that marks the tree as keyboard-active, and it is a Tab stop only
+when no row holds one. DOM focus stays on the activated row, so after moving
+into a folder no top-level row holds the stop (the roving path prefers one of
+those); the tree then keeps the keyboard reachable by focusing itself. The
+search box sits outside the tree rather than inside its `role="tree"`
+container, and the rows keep DOM focus, which is why the panel no longer needs
+a `role` or a tabindex of its own.
 
 ### Metadata editor keyboard handling
 

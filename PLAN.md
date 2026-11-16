@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-18`, `B-47`. Next:
-  `T-19`, `B-48`.
+- IDs are permanent and never reused. Last used: `T-20`, `B-47`. Next:
+  `T-21`, `B-48`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -92,15 +92,22 @@ image build. What remains is optional hardening and new features.
 ### Keyboard and accessibility (tree navigation)
 
 Started from the "more keyboard shortcuts and modal focus handling" item under
-Features and split into three numbered tasks:
+Features and split into numbered tasks:
 
-- **T-18 (P3) - ARIA tree semantics.** `role="tree"`/`treeitem`, `aria-level`,
-  `aria-expanded`, `aria-setsize`/`aria-posinset` and `aria-activedescendant`,
-  plus focus containment in the modals. Builds on T-16's flat row list; left
-  out of it to keep the keyboard change reviewable. The rows currently carry
-  `role="listitem"` and a roving tabindex, which the a11y linter accepts with
-  two local `svelte-ignore` comments in `TreeNode.svelte` that this task
-  removes.
+- **T-18 (P3) - ARIA tree semantics.** Done: `role="tree"`/`treeitem`,
+  `aria-level`, `aria-expanded` (folders only), `aria-setsize`/`aria-posinset`,
+  `aria-selected` and `aria-activedescendant`, with the two local
+  `svelte-ignore` comments in `TreeNode.svelte` removed. Focus containment for
+  the dialogs, which was originally part of this task, is now T-19. See
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **T-19 (P3) - focus containment in the dialogs.** Tab and Shift+Tab wrap
+  inside an open dialog instead of walking into the page behind it, and focus
+  that lands outside a dialog is pulled back in. The tree panel, the search box
+  and the modals need one shared helper. The dialogs are pointer-reachable
+  today (every one closes on an overlay click) but not keyboard-contained.
+- **T-20 (P3) - LRCEditor rework.** Interface rework and quality-of-life
+  improvements to the synced-lyrics editor. Scope to be defined when the work
+  starts.
 
 ### Known issues and small fixes
 
@@ -132,7 +139,7 @@ No open items.
 - **UX and performance** - smart-rename dry-run preview with a conflict
   strategy, addon reload from Settings, responsive/mobile layout, metadata
   CSV/JSON export-import and library normalisation tools. The keyboard work is
-  done (T-16, T-17); ARIA roles follow as T-18 above.
+  done (T-16 to T-18); dialog focus containment follows as T-19 above.
 - **More audio formats** - extend `formats.py` and `tag_backends.py`.
 
 ### Housekeeping
