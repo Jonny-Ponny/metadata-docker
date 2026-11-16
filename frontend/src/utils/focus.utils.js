@@ -1,15 +1,17 @@
 // src/utils/focus.utils.js
 //
-// Keeping the keyboard inside an open dialog (T-19).
+// Dialogs: keeping the keyboard inside one, and deciding which one owns Escape.
 //
-// Every dialog in the app renders as an overlay plus a panel. The overlay covers
-// the page for the pointer, but nothing stops Tab from walking into the controls
-// behind it: a keyboard user can press Tab out of an open dialog and drive the
-// page underneath. These helpers close that gap.
+// Every dialog in the app renders as an overlay plus a panel. Two things need
+// app-wide coordination rather than per-component handling:
 //
-// They are driven from the panel's own `onkeydown` / `onfocusin` handlers rather
-// than from a window listener, so a dialog only reacts to events that happened
-// inside it and two dialogs never fight over the same key.
+//  - Focus. The overlay covers the page for the pointer, but nothing stops Tab
+//    from walking into the controls behind it.
+//  - Escape. Dialogs are mounted while closed (and nested: the lyrics editor
+//    opens its own edit dialog), so a plain window listener in every dialog
+//    closes all of them at once. Only the topmost open dialog may react.
+//
+// Both are handled here so every dialog behaves identically.
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -20,6 +22,57 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]",
   "[contenteditable='true']",
 ].join(",");
+
+/**
+ * Open dialogs, bottom to top. A dialog registers when it opens and unregisters
+ * when it closes; the last entry is the one the user is looking at.
+ * @type {HTMLElement[]}
+ */
+const dialogStack = [];
+
+/**
+ * Register a dialog as the topmost open one.
+ * @param {HTMLElement | null | undefined} panel
+ */
+export function openDialog(panel) {
+  if (!panel || dialogStack.includes(panel)) return;
+  dialogStack.push(panel);
+}
+
+/**
+ * Remove a dialog from the stack (it closed).
+ * @param {HTMLElement | null | undefined} panel
+ */
+export function closeDialog(panel) {
+  if (!panel) return;
+  const index = dialogStack.indexOf(panel);
+  if (index !== -1) dialogStack.splice(index, 1);
+}
+
+/**
+ * Whether this panel is the topmost open dialog.
+ * @param {HTMLElement | null | undefined} panel
+ * @returns {boolean}
+ */
+export function isTopDialog(panel) {
+  return !!panel && dialogStack[dialogStack.length - 1] === panel;
+}
+
+/**
+ * The topmost open dialog panel, or `null` when none is open.
+ * @returns {HTMLElement | null}
+ */
+export function topDialog() {
+  return dialogStack[dialogStack.length - 1] ?? null;
+}
+
+/**
+ * Clear the stack. Only for tests, so one case cannot leak a dialog into the
+ * next.
+ */
+export function resetDialogStack() {
+  dialogStack.length = 0;
+}
 
 /**
  * Focusable descendants of a container, in DOM order.
@@ -103,9 +156,66 @@ export function keepFocusInDialog(event) {
 }
 
 /**
+ * Close the topmost dialog on Escape.
+ *
+ * Every dialog is mounted while closed and listens on `window`, so without this
+ * a single Escape closes a dialog *and* the dialog that opened it (the lyrics
+ * editor and its text edit dialog, for example). Only the panel at the top of
+ * the stack reacts; it also stops the event so the dialogs underneath, and the
+ * app's own Escape handling, do not see it.
+ * @param {KeyboardEvent} event
+ * @param {HTMLElement | null | undefined} panel the dialog asking to close
+ * @param {() => void} onClose
+ * @returns {boolean} whether this dialog handled the key
+ */
+export function closeTopDialogOnEscape(event, panel, onClose) {
+  if (event.key !== "Escape") return false;
+  if (!isTopDialog(panel)) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  onClose();
+  return true;
+}
+
+/**
+ * Register a dialog while it is open and close it on Escape when it is the
+ * topmost one.
+ *
+ * Use as a one-liner in the dialog component:
+ *
+ * ```js
+ * let panel = $state(null);
+ * $effect(() => dialogOpenEffect(panel, isOpen, onClose));
+ * ```
+ *
+ * The returned cleanup unregisters the dialog when it hides or unmounts, so a
+ * closed dialog never claims Escape or the top of the stack.
+ * @param {HTMLElement | null | undefined} panel
+ * @param {boolean | undefined} open
+ * @param {() => void} onClose
+ * @returns {(() => void) | undefined}
+ */
+export function dialogOpenEffect(panel, open, onClose) {
+  if (!open || !panel) return;
+  const element = panel;
+  openDialog(element);
+  /**
+   * @param {KeyboardEvent} event
+   */
+  const handleKeyDown = (event) => {
+    closeTopDialogOnEscape(event, element, onClose);
+  };
+  window.addEventListener("keydown", handleKeyDown);
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+    closeDialog(element);
+  };
+}
+
+/**
  * The dialog panel an event was handled on.
  *
- * Both helpers are wired to the panel's own handlers, so `currentTarget` is the
+ * The helpers are wired to the panel's own handlers, so `currentTarget` is the
  * panel itself: no selector to keep in sync, and no ambiguity when two dialogs
  * share a class name or are mounted at the same time.
  * @param {KeyboardEvent | FocusEvent} event

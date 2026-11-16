@@ -1,6 +1,7 @@
 <!-- src/components/TimestampEditModal.svelte -->
 <script>
   import {
+    dialogOpenEffect,
     keepFocusInDialog,
     keepTabInDialog,
     parseTimestampToSeconds,
@@ -33,6 +34,7 @@
   // Svelte 5: Use $state() for local reactive state
   let editingTimestampValue = $state("");
   let timestampError = $state("");
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
 
   function handleClose() {
     onClose();
@@ -129,6 +131,10 @@
       };
     })(),
   );
+
+  // Escape closes the dialog from anywhere in it, not only from the input, and
+  // only while it is the topmost dialog (it is opened from the lyrics editor).
+  $effect(() => dialogOpenEffect(panel, show, handleClose));
 
   // Initialize when shown
   $effect(() => {
@@ -246,15 +252,13 @@
    * @param {KeyboardEvent} e
    */
   function handleTimestampKeydown(e) {
-    // Stop propagation to prevent App from handling Delete key
-    e.stopPropagation();
-
     if (e.key === "Enter") {
       e.preventDefault();
       handleSave();
-    } else if (e.key === "Escape") {
-      handleClose();
     }
+    // Typing keys stay out of the app shortcuts (Delete, F2). Escape is left
+    // alone so it reaches the dialog and closes it.
+    if (e.key !== "Escape") e.stopPropagation();
   }
 </script>
 
@@ -268,6 +272,7 @@
       aria-modal="true"
       aria-label="Edit timestamp"
       tabindex="-1"
+      bind:this={panel}
       onkeydown={keepTabInDialog}
       onfocusin={keepFocusInDialog}
       onclick={(e) => e.stopPropagation()}

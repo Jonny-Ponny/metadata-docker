@@ -1,8 +1,10 @@
 <!-- src/components/HelpModal.svelte -->
 <script>
-  import { onMount } from "svelte";
-
-  import { keepFocusInDialog, keepTabInDialog } from "../utils/index.js";
+  import {
+    dialogOpenEffect,
+    keepFocusInDialog,
+    keepTabInDialog,
+  } from "../utils/index.js";
 
   /**
    * @typedef {Object} Props
@@ -17,21 +19,14 @@
 
   // Track which tab is active
   let activeTab = $state("basics"); // 'basics' or 'tags'
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
 
   // Handle escape key to close
   /**
    * @param {KeyboardEvent} e
    */
-  function handleKeyDown(e) {
-    if (e.key === "Escape" && isOpen) {
-      onClose();
-    }
-  }
-
-  onMount(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  });
+  // Escape closes the topmost dialog only; a dialog underneath stays open.
+  $effect(() => dialogOpenEffect(panel, isOpen, onClose));
 
   // Stop propagation to prevent modal from closing when clicking inside
   /**
@@ -54,6 +49,7 @@
       aria-modal="true"
       aria-label="Help and information"
       tabindex="-1"
+      bind:this={panel}
       onkeydown={keepTabInDialog}
       onfocusin={keepFocusInDialog}
       onclick={handleModalClick}

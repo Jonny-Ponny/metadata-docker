@@ -14,6 +14,7 @@
     HOLD_DURATION_MAX,
     keepFocusInDialog,
     keepTabInDialog,
+    dialogOpenEffect,
   } from "../utils/index.js";
 
   /**
@@ -44,6 +45,7 @@
 
   // Refs for input elements
   let folderInputRef = $state(/** @type {HTMLInputElement | null} */ (null));
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
   let fileInputRef = $state(/** @type {HTMLInputElement | null} */ (null));
 
   // Addon state
@@ -117,20 +119,8 @@
     return preview || "Folder Name";
   }
 
-  // Handle escape key to close
-  /**
-   * @param {KeyboardEvent} e
-   */
-  function handleKeyDown(e) {
-    if (e.key === "Escape" && isOpen) {
-      handleCancel(); // Use handleCancel instead of direct onClose
-    }
-  }
-
-  onMount(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  });
+  // Escape closes the settings, and only when nothing is open on top of them.
+  $effect(() => dialogOpenEffect(panel, isOpen, handleCancel));
 
   /**
    * @param {MouseEvent} e
@@ -305,6 +295,7 @@
       aria-modal="true"
       aria-label="Settings"
       tabindex="-1"
+      bind:this={panel}
       onkeydown={keepTabInDialog}
       onfocusin={keepFocusInDialog}
       onclick={handleModalClick}

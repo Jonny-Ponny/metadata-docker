@@ -100,6 +100,29 @@ describe("LRCEditor", () => {
     expect(onClose).toHaveBeenCalledTimes(field ? 2 : 1);
   });
 
+  it("closes only the inner edit dialog on Escape", async () => {
+    // Opening "Edit lyrics" stacks a dialog over the editor. Both listen for
+    // Escape, so one keypress used to close the editor as well.
+    const onClose = vi.fn();
+    render(LRCEditor, { props: { ...baseProps, onClose } });
+
+    await fireEvent.click(screen.getByTitle("Edit lyrics"));
+    const inner = await screen.findByRole("dialog", {
+      name: "Edit unsynchronized lyrics",
+    });
+
+    await fireEvent.keyDown(inner, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Edit unsynchronized lyrics" }),
+    ).toBeNull();
+    // The editor itself is still open.
+    expect(onClose).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: "Synced lyrics editor" }),
+    ).toBeTruthy();
+  });
+
   it("lays out the timestamps, lyrics and synchronized columns", () => {
     render(LRCEditor, { props: baseProps });
 

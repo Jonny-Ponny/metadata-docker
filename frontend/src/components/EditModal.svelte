@@ -1,5 +1,11 @@
 <!-- src/components/EditModal.svelte -->
 <script>
+  import {
+    dialogOpenEffect,
+    keepFocusInDialog,
+    keepTabInDialog,
+  } from "../utils/index.js";
+
   /**
    * @typedef {Object} Props
    * @property {boolean} [show]
@@ -19,6 +25,7 @@
   let textareaElement = $state(
     /** @type {HTMLTextAreaElement | null} */ (null),
   );
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
 
   function handleClose() {
     onClose();
@@ -58,25 +65,27 @@
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   });
 
-  // Escape closes the dialog, like every other modal in the app.
-  $effect(() => {
-    if (!show) return;
-    /**
-     * @param {KeyboardEvent} e
-     */
-    const handleEscape = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  });
+  // Escape closes the dialog, like every other modal in the app, but only when
+  // it is the topmost one: it is opened from inside the lyrics editor, which
+  // has its own Escape handling, and both used to close on one keypress.
+  $effect(() => dialogOpenEffect(panel, show, onClose));
 </script>
 
 {#if show}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={handleClose}>
-    <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit unsynchronized lyrics"
+      tabindex="-1"
+      bind:this={panel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={(e) => e.stopPropagation()}
+    >
       <div class="modal-header">
         <h3>Edit Unsynchronized Lyrics</h3>
         <button title="Close" class="modal-close" onclick={handleClose}>

@@ -5,6 +5,9 @@
     getAuthHeaders,
     keepFocusInDialog,
     keepTabInDialog,
+    closeTopDialogOnEscape,
+    openDialog,
+    closeDialog,
   } from "../utils/index.js";
   import { SvelteURLSearchParams } from "svelte/reactivity";
 
@@ -29,6 +32,7 @@
   let logs = $state(/** @type {LogEntry[]} */ ([]));
   let loading = $state(false);
   let error = $state(/** @type {string | null} */ (null));
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
   let linesToShow = $state(100);
   let levelFilter = $state("");
   let searchFilter = $state("");
@@ -197,11 +201,8 @@
    * @param {KeyboardEvent} e
    */
   function handleKeyDown(e) {
-    if (e.key === "Escape" && isOpen) {
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    }
+    // Only the topmost dialog closes; the log view sits inside others.
+    closeTopDialogOnEscape(e, panel, onClose);
   }
 
   /**
@@ -253,6 +254,7 @@
       }
 
       // Add keyboard listener
+      openDialog(panel);
       window.addEventListener("keydown", handleKeyDown);
     }
 
@@ -263,6 +265,7 @@
         intervalId = null;
       }
       window.removeEventListener("keydown", handleKeyDown);
+      closeDialog(panel);
     };
   });
 </script>
@@ -277,6 +280,7 @@
       aria-modal="true"
       aria-label="Application logs"
       tabindex="-1"
+      bind:this={panel}
       onkeydown={keepTabInDialog}
       onfocusin={keepFocusInDialog}
       onclick={stopPropagation}

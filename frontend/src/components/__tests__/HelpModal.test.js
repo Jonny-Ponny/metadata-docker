@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 
 import HelpModal from "../HelpModal.svelte";
+import { closeDialog, openDialog } from "../../utils/focus.utils.js";
 
 describe("HelpModal", () => {
   it("renders nothing while closed", () => {
@@ -142,6 +143,26 @@ describe("HelpModal", () => {
 
       expect(dialog.getAttribute("aria-modal")).toBe("true");
       expect(dialog.className).toContain("help-modal");
+    });
+
+    it("stays open on Escape while another dialog is on top", async () => {
+      // Dialogs are mounted while closed and nested (the lyrics editor opens
+      // its own edit dialog), so Escape must only close the topmost one.
+      const onClose = vi.fn();
+      render(HelpModal, { props: { isOpen: true, onClose } });
+      const dialog = screen.getByRole("dialog", {
+        name: "Help and information",
+      });
+      const inner = document.createElement("div");
+      document.body.appendChild(inner);
+      openDialog(inner);
+      try {
+        await fireEvent.keyDown(dialog, { key: "Escape" });
+        expect(onClose).not.toHaveBeenCalled();
+      } finally {
+        closeDialog(inner);
+        inner.remove();
+      }
     });
 
     it("wraps Tab from the last control back to the first", async () => {

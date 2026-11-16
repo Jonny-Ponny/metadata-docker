@@ -20,6 +20,7 @@
     createHold,
     keepFocusInDialog,
     keepTabInDialog,
+    dialogOpenEffect,
   } from "../utils/index.js";
 
   /**
@@ -412,6 +413,8 @@
   const canApplyCoverUrl = $derived(isRemoteImageUrl(coverUrl.trim()));
 
   let showFullImage = $state(false);
+  let fullImagePanel = $state(/** @type {HTMLDivElement | null} */ (null));
+  let unsyncedLyricsPanel = $state(/** @type {HTMLDivElement | null} */ (null));
 
   // Lyrics modal state
   let lyricsModalContent = $state("");
@@ -422,19 +425,19 @@
   let showSyncedLyricsModal = $state(false);
   let showUnsyncedLyricsModal = $state(false);
 
-  // Escape closes the unsynced lyrics modal, like the other modals. It is a
-  // window listener so it works from the textarea as well.
-  $effect(() => {
-    if (!showUnsyncedLyricsModal) return;
-    /** @param {KeyboardEvent} event */
-    const handleEscape = (event) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      closeUnsyncedLyricsModal();
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  });
+  // Escape closes the unsynced lyrics dialog, and only when it is on top.
+  $effect(() =>
+    dialogOpenEffect(
+      unsyncedLyricsPanel,
+      showUnsyncedLyricsModal,
+      closeUnsyncedLyricsModal,
+    ),
+  );
+
+  // Escape closes the full-size cover preview.
+  $effect(() =>
+    dialogOpenEffect(fullImagePanel, showFullImage, closeFullImage),
+  );
   let syncedLyricsData = $state(
     /** @type {{ lyrics: string, timestamps: string[] }} */ ({
       lyrics: "",
@@ -2160,6 +2163,7 @@
         aria-modal="true"
         aria-label="Edit unsynced lyrics"
         tabindex="-1"
+        bind:this={unsyncedLyricsPanel}
         onkeydown={keepTabInDialog}
         onfocusin={keepFocusInDialog}
         onclick={stopPropagation}
@@ -2244,6 +2248,7 @@
         aria-modal="true"
         aria-label="Full-size cover"
         tabindex="-1"
+        bind:this={fullImagePanel}
         onkeydown={keepTabInDialog}
         onfocusin={keepFocusInDialog}
         onclick={(e) => e.stopPropagation()}

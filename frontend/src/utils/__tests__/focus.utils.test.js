@@ -1,14 +1,20 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  closeDialog,
+  closeTopDialogOnEscape,
   focusableIn,
+  isTopDialog,
   keepFocusInDialog,
   keepTabInDialog,
+  openDialog,
+  resetDialogStack,
 } from "../focus.utils.js";
 
 describe("focus utils", () => {
   afterEach(() => {
     document.body.innerHTML = "";
+    resetDialogStack();
   });
 
   /**
@@ -87,6 +93,42 @@ describe("focus utils", () => {
       expect(stops).toHaveLength(3);
       expect(stops).toContain(last);
       expect(stops).not.toContain(icon);
+    });
+  });
+
+  describe("dialog stack", () => {
+    it("only the topmost dialog closes on Escape", () => {
+      // The lyrics editor opens its own text editor on top; both used to
+      // listen on window, so one Escape closed both.
+      const outer = document.createElement("div");
+      const inner = document.createElement("div");
+      document.body.append(outer, inner);
+      openDialog(outer);
+      openDialog(inner);
+      const closeOuter = vi.fn();
+      const closeInner = vi.fn();
+
+      const event = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
+
+      expect(closeTopDialogOnEscape(event, outer, closeOuter)).toBe(false);
+      expect(closeOuter).not.toHaveBeenCalled();
+      expect(closeTopDialogOnEscape(event, inner, closeInner)).toBe(true);
+      expect(closeInner).toHaveBeenCalledTimes(1);
+    });
+
+    it("the dialog underneath takes over once the top one closes", () => {
+      const outer = document.createElement("div");
+      const inner = document.createElement("div");
+      openDialog(outer);
+      openDialog(inner);
+      closeDialog(inner);
+
+      expect(isTopDialog(outer)).toBe(true);
+      expect(isTopDialog(inner)).toBe(false);
     });
   });
 

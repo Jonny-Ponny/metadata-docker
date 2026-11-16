@@ -4,6 +4,7 @@
     formatImageDimensions,
     keepFocusInDialog,
     keepTabInDialog,
+    dialogOpenEffect,
     probeImageSize,
     toast,
   } from "../utils/index.js";
@@ -18,6 +19,7 @@
 
   let imageUrl = $state(/** @type {string | null} */ (null));
   let imageElement = $state(/** @type {HTMLImageElement | null} */ (null));
+  let fullImagePanel = $state(/** @type {HTMLDivElement | null} */ (null));
   let imageSize = $state(
     /** @type {{ width: number, height: number } | null} */ (null),
   );
@@ -113,6 +115,11 @@
   function closeFullImage() {
     showFullImage = false;
   }
+
+  // Escape closes the full-size preview, like every other dialog.
+  $effect(() =>
+    dialogOpenEffect(fullImagePanel, showFullImage, closeFullImage),
+  );
 </script>
 
 <div class="image-viewer">
@@ -217,6 +224,7 @@
       aria-modal="true"
       aria-label="Full-size image"
       tabindex="-1"
+      bind:this={fullImagePanel}
       onkeydown={keepTabInDialog}
       onfocusin={keepFocusInDialog}
       onclick={(e) => e.stopPropagation()}
