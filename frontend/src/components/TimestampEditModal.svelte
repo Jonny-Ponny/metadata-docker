@@ -147,8 +147,10 @@
        * @param {KeyboardEvent} e
        */
       const handleKeyDown = (e) => {
-        // The dialog handles Enter and Escape in the timestamp input itself.
-        // Only swallow keys that would otherwise reach the app-wide shortcuts.
+        // Escape has to reach the dialog's own close handler, wherever it was
+        // pressed (the dialog stack listens on `window`). Every other key that
+        // would otherwise reach the app-wide shortcuts is swallowed.
+        if (e.key === "Escape") return;
         if (
           e.target instanceof Element &&
           e.target.closest(".timestamp-editor")

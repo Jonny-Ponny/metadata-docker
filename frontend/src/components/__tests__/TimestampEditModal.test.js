@@ -215,6 +215,27 @@ describe("TimestampEditModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("closes on Escape pressed outside the dialog", async () => {
+    // The dialog swallows keys pressed outside it so the app shortcuts behind
+    // it never run. Escape has to stay out of that, or the dialog only closed
+    // when the click had landed on it first.
+    const onClose = vi.fn();
+    render(TimestampEditModal, {
+      props: {
+        show: true,
+        lineIndex: 1,
+        currentValue: "00:15.00",
+        timestamps,
+        onClose,
+      },
+    });
+    await tick();
+
+    await fireEvent.keyDown(document.body, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("closes on Escape from anywhere in the dialog", async () => {
     // Escape only worked while the timestamp input had focus; from the header
     // or a button it did nothing.
