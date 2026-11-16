@@ -1367,19 +1367,21 @@
    * @param {KeyboardEvent} e
    */
   function handleShortcutKeyDown(e) {
-    if (shouldIgnoreShortcut(e)) return;
-
-    // Space is the player key everywhere: it plays/pauses whatever has focus,
-    // so one key always means the same thing. Typing surfaces are already
-    // excluded by `shouldIgnoreShortcut`, and so is an open dialog.
-    // `preventDefault` also stops the browser from activating a focused
-    // button with Space, which would otherwise make a keyboard user re-open
-    // the dialog they just closed; buttons are activated with Enter instead.
+    // Space is the player key everywhere, so it is checked before the shared
+    // guard: that guard treats a <select> like a typing field, which would
+    // leave Space opening the dropdown instead of playing. Space is ignored
+    // only where it types a character or operates a control natively.
+    // `preventDefault` also stops the browser activating a focused button,
+    // which would make a keyboard user re-open the dialog they just closed;
+    // buttons are activated with Enter instead.
     if (e.key === " ") {
+      if (spaceBelongsToControl(e.target) || isOverlayOpen()) return;
       e.preventDefault();
       if ($settings.enablePlayer) void playerComponent?.togglePlay();
       return;
     }
+
+    if (shouldIgnoreShortcut(e)) return;
 
     // Rename and delete act on the row the keyboard is on, which may differ
     // from the selection while the cursor is being moved.
@@ -1406,6 +1408,21 @@
       e.preventDefault();
       handleDelete(target);
     }
+  }
+
+  /**
+   * Whether Space types a character or drags a value, so the player must leave
+   * it alone. Buttons, links and selects are deliberately *not* included: a
+   * focused button is activated with Enter, and a select is opened with
+   * Enter/Arrow keys, so Space stays the player key there (T-19).
+   * @param {EventTarget | null} target
+   * @returns {boolean}
+   */
+  function spaceBelongsToControl(target) {
+    if (!(target instanceof Element)) return false;
+    return !!target.closest(
+      "input, textarea, [contenteditable='true'], [role='textbox'], [role='slider']",
+    );
   }
 
   /**

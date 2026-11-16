@@ -223,9 +223,11 @@ is ignored only on typing surfaces (and while a dialog or the context menu owns
 the keyboard). It is deliberately _not_ handed back to a focused button or link,
 because closing a dialog returns focus to its opener (see [Dialogs](#dialogs))
 and Space would otherwise activate that button again; buttons are activated with
-Enter or a click. Checkboxes and selects keep their native Space, since they are
-typing targets to the guard. The tree itself uses Right/Left to expand and
-collapse. A roving tabindex keeps exactly one row in the Tab order; focus follows the cursor while the keyboard is
+Enter or a click. Space is therefore checked before the shared guard, which
+treats a `<select>` like a typing field; `spaceBelongsToControl` decides instead
+and keeps Space only where it types a character (inputs, textareas,
+contenteditable, `role="textbox"`) or drags a value (`role="slider"`). The tree
+itself uses Right/Left to expand and collapse. A roving tabindex keeps exactly one row in the Tab order; focus follows the cursor while the keyboard is
 in the tree, which a `focusin` listener tracks (typing targets and open overlays
 keep the tree keys off). Rows forward their keys through `onRowKeys` with their
 own path, and the tree panel forwards keys pressed on it, so both start from a

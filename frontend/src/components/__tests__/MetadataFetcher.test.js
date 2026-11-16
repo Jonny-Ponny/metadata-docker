@@ -250,6 +250,28 @@ describe("MetadataFetcher", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("is a modal dialog that closes on Escape", async () => {
+    // The fetcher had no dialog semantics and no Escape handling, so it could
+    // only be dismissed with the mouse.
+    const onClose = vi.fn();
+    stubApi();
+    render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose,
+        mode: "song",
+        targetPath: "folder/song.mp3",
+      },
+    });
+
+    const dialog = screen.getByRole("dialog", { name: "Fetch metadata" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("loads addons and prefills the song query", async () => {
     await renderSong();
 

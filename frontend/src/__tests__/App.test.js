@@ -2264,6 +2264,27 @@ describe("App", () => {
       );
     });
 
+    it("plays on Space over a focused select", async () => {
+      // A <select> used to count as a typing field, so Space opened the
+      // dropdown instead of playing. Only controls that Space genuinely
+      // operates natively keep it.
+      isAuthenticated.set(true);
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+      const select = document.createElement("select");
+      select.innerHTML = "<option>a</option>";
+      document.body.appendChild(select);
+      select.focus();
+
+      fireEvent.keyDown(select, { key: " " });
+      await waitFor(() => expect(playSpy).toHaveBeenCalled());
+      select.remove();
+    });
+
     it("still types a space into a text field", async () => {
       // Typing surfaces keep their own Space; only the player takes the key
       // elsewhere.

@@ -6,6 +6,9 @@
     getFieldDescription,
     isAudioFile,
     readApiError,
+    dialogOpenEffect,
+    keepFocusInDialog,
+    keepTabInDialog,
   } from "../utils/index.js";
   import CoverPreview from "./CoverPreview.svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -52,7 +55,11 @@
   /** @type {Props} */
   let { isOpen, onClose, mode, targetPath, isFolder = false } = $props();
 
+  // Escape closes the fetcher and returns focus to whatever opened it.
+  $effect(() => dialogOpenEffect(panel, isOpen, onClose));
+
   // ---------- State ----------
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
   let addons = $state(/** @type {AddonInfo[]} */ ([]));
   let selectedAddonId = $state("");
   let query = $state("");
@@ -774,7 +781,17 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={onClose}>
-    <div class="modal-container" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="modal-container"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Fetch metadata"
+      tabindex="-1"
+      bind:this={panel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={(e) => e.stopPropagation()}
+    >
       <div class="modal-header">
         <h2>
           {#if mode === "song"}Fetch Song Metadata
