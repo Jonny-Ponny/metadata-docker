@@ -271,8 +271,19 @@ from `event.currentTarget`, so they are wired straight onto the panel's
 `onkeydown` / `onfocusin` and never need a selector — two dialogs that share a
 class name, or are mounted together, cannot capture each other's keys. The
 overlay click still closes a dialog; that is the pointer path and needs no
-help. Escape closes every dialog, and the dialogs that stop app shortcuts stop
-them in the capture phase _except_ for Escape, so the close still reaches it.
+help.
+
+Escape is owned by the **topmost** dialog. Dialogs are mounted while closed and
+nested (the synced lyrics editor opens its own text and timestamp dialogs), so a
+plain window listener in each one closed all of them on a single keypress.
+`dialogOpenEffect(panel, isOpen, onClose)` registers a dialog while it is open
+and closes it on Escape only when it is on top of the stack, stopping the event
+so the dialogs underneath and the app's own Escape handling never see it. Use
+it in every dialog: `let panel = $state(null)`, `bind:this={panel}` on the
+panel, and `$effect(() => dialogOpenEffect(panel, isOpen, onClose))`. Dialogs
+that also block app shortcuts (the lyrics and timestamp editors) stop those
+keys in the capture phase but let Escape through, since it has to reach that
+listener.
 
 ### Metadata editor keyboard handling
 
