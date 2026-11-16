@@ -223,10 +223,13 @@ is ignored only on typing surfaces (and while a dialog or the context menu owns
 the keyboard). It is deliberately _not_ handed back to a focused button or link,
 because closing a dialog returns focus to its opener (see [Dialogs](#dialogs))
 and Space would otherwise activate that button again; buttons are activated with
-Enter or a click. Space is therefore checked before the shared guard, which
-treats a `<select>` like a typing field; `spaceBelongsToControl` decides instead
-and keeps Space only where it types a character (inputs, textareas,
-contenteditable, `role="textbox"`) or drags a value (`role="slider"`). The tree
+Enter or a click, and a select opens with Enter. Space is therefore checked
+before the shared guard, which treats a `<select>` like a typing field;
+`spaceBelongsToControl` decides instead and keeps Space only where it types a
+character (text, search, number, email, url and password inputs, textareas,
+contenteditable, `role="textbox"`). A range input is excluded: Space did nothing
+on a slider, so reserving it only silenced playback after the volume was
+touched. The tree
 itself uses Right/Left to expand and collapse. A roving tabindex keeps exactly one row in the Tab order; focus follows the cursor while the keyboard is
 in the tree, which a `focusin` listener tracks (typing targets and open overlays
 keep the tree keys off). Rows forward their keys through `onRowKeys` with their
@@ -293,10 +296,28 @@ is the trigger and not that field that gets restored. A nested dialog returns
 focus to the control inside its parent (closing the lyrics text editor puts
 focus back on the "Edit lyrics" button, not past it). Use
 it in every dialog: `let panel = $state(null)`, `bind:this={panel}` on the
-panel, and `$effect(() => dialogOpenEffect(panel, isOpen, onClose))`. Dialogs
-that also block app shortcuts (the lyrics and timestamp editors) stop those
-keys in the capture phase but let Escape through, since it has to reach that
-listener.
+panel, and `$effect(() => dialogOpenEffect(panel, isOpen, onClose))`.
+
+`openDialog`/`closeDialog` also mark everything outside the topmost dialog
+`inert`. The elements are each ancestor's siblings, walking up from the panel,
+not `body`'s children: the app is mounted inside one wrapper, so a dialog is
+never a child of `<body>` and hiding `body`'s children would hide the dialog
+along with it. Only what this module marked is restored on close, so an `inert`
+set elsewhere survives. This is the mechanism that keeps the browser's Tab
+inside the dialog: `keepTabInDialogWith` only wraps at the ends of a dialog's
+control list and leaves moves in the middle to the browser, so after the last
+control the browser stepped into a dialog underneath (the text dialog renders
+as a sibling of the lyrics editor, not inside it) or out into the page.
+`openDialog` marks synchronously, then re-runs after a microtask, because the
+open usually happens in an effect before the new dialog's DOM update lands; the
+window-level Tab listener re-runs it too, so the state is right whenever the
+browser is about to move focus.
+
+Dialogs that also block app shortcuts (the lyrics text and timestamp editors)
+stop those keys in the capture phase but must let **Escape and Tab** through:
+Escape has to reach the close handler, and a capture-phase stop swallowed Tab
+before the stack's bubble-phase listener ran, leaving that dialog with no
+containment at all so Tab walked out into the browser chrome.
 
 Every scrollable pane inside a dialog carries `tabindex="-1"` (`.modal-body`,
 `.settings-content`, `.help-content`, `.log-display`,

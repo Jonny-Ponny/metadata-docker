@@ -419,6 +419,24 @@ describe("focus utils", () => {
       expect(innerWrap.inert).toBeFalsy();
       expect(app.inert).toBeFalsy();
     });
+
+    it("hides a lower dialog that is inserted as a sibling after the open", async () => {
+      // A dialog registers before its own DOM update has landed, and it is
+      // often a sibling of the one that opened it. The first pass therefore
+      // cannot see it: without the re-run after the open it stays reachable.
+      const { app, background, innerWrap, inner } = scene();
+      openDialog(inner);
+      expect(background.inert).toBe(true);
+
+      const outerWrap = document.createElement("div");
+      const outer = document.createElement("div");
+      outerWrap.appendChild(outer);
+      app.insertBefore(outerWrap, innerWrap);
+      await Promise.resolve();
+
+      expect(outerWrap.inert).toBe(true);
+      expect(innerWrap.inert).toBeFalsy();
+    });
   });
 
   describe("keepTabInDialog", () => {

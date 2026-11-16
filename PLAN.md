@@ -86,29 +86,34 @@ image build. What remains is optional hardening and new features.
   shapes are documented with JSDoc typedefs (tree nodes, metadata, upload
   batches, player API) instead of per-file opt-ins, and CI fails on a new type
   error.
+- **ARIA tree semantics (T-18).** Complete: the `.file-tree` list is
+  `role="tree"` with a label and `aria-activedescendant`; every row is
+  `role="treeitem"` with `aria-level`, `aria-selected`, `aria-posinset` and
+  `aria-setsize`, and folders also carry `aria-expanded`. Nested lists are
+  `role="group"` with `role="none"` wrappers, and the two local `svelte-ignore`
+  comments in `TreeNode.svelte` are gone. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tree-keyboard-navigation).
+- **Focus containment in the dialogs (T-19).** Complete: every dialog is
+  `role="dialog"` with `aria-modal`, a label, `tabindex="-1"` and a close on
+  Escape; Tab and Shift+Tab wrap inside it and focus landing outside is pulled
+  back. Only the topmost dialog answers Escape, so a nested editor closes one
+  layer at a time, and closing returns focus to the opener. Everything outside
+  the topmost dialog is marked `inert` (re-evaluated on open, close and the first
+  keyboard press, since a dialog may render as a sibling of the one that opened
+  it), so the browser's own Tab cannot reach the page or a dialog underneath.
+  Every dialog scroll pane carries `tabindex="-1"`, because Firefox otherwise
+  puts a scrollable region in the tab order. Space stays the play/pause key
+  everywhere except real text entry, including over the volume slider. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#dialogs).
 
 ## Planned
 
 ### Keyboard and accessibility (tree navigation)
 
 Started from the "more keyboard shortcuts and modal focus handling" item under
-Features and split into numbered tasks:
+Features and split into numbered tasks. T-16 to T-19 are done; the context menu
+follows as T-21.
 
-- **T-18 (P3) - ARIA tree semantics.** Done: `role="tree"`/`treeitem`,
-  `aria-level`, `aria-expanded` (folders only), `aria-setsize`/`aria-posinset`,
-  `aria-selected` and `aria-activedescendant`, with the two local
-  `svelte-ignore` comments in `TreeNode.svelte` removed. Focus containment for
-  the dialogs, which was originally part of this task, is now T-19. See
-  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- **T-19 (P3) - focus containment in the dialogs.** Done: the eight dialogs
-  (help, settings, logs, both lyrics editors, both full-size image overlays and
-  the timestamp editor) are `role="dialog"` with `aria-modal`, a label and an
-  Escape close, and Tab/Shift+Tab wrap inside them instead of walking into the
-  page behind the overlay. `utils/focus.utils.js` holds the shared helpers. The
-  search box sits outside every dialog, so it needed no change.
-- **T-20 (P3) - LRCEditor rework.** Interface rework and quality-of-life
-  improvements to the synced-lyrics editor. Scope to be defined when the work
-  starts.
 - **T-21 (P3) - context menu keyboard access.** The tree's right-click menu is
   a `<ul>` of `<li onclick>` items: no `role="menu"`/`menuitem`, no roving
   focus, and no key that opens it (Shift+F10 / the context-menu key). Menu ARIA
@@ -116,6 +121,12 @@ Features and split into numbered tasks:
   focus, or a small roving-focus list) before writing it. The file row already
   advertises `aria-keyshortcuts="Shift+F10"` from T-18, so today it promises a
   key that does nothing.
+
+### Lyrics editor
+
+- **T-20 (P3) - LRCEditor rework.** Interface rework and quality-of-life
+  improvements to the synced-lyrics editor. Scope to be defined when the work
+  starts.
 
 ### Known issues and small fixes
 

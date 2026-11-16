@@ -48,19 +48,33 @@ function syncInert() {
   for (const element of inerted) element.inert = false;
   inerted.length = 0;
   if (!active) return;
-  // The app is mounted inside a wrapper, so a dialog is never a child of
-  // <body>: walking up from the panel and inerting its siblings at every level
-  // is what leaves exactly one path to the dialog reachable, with the page and
-  // any dialog underneath hidden.
-  for (let node = active; node.parentElement; node = node.parentElement) {
+  for (const element of hidingOutside(active)) {
+    element.inert = true;
+    inerted.push(element);
+  }
+}
+
+/**
+ * The elements to hide so that only the dialog's own subtree stays reachable:
+ * each ancestor's siblings, walking up from the panel.
+ *
+ * The app is mounted inside a wrapper, so a dialog is never a child of `<body>`;
+ * hiding `body`'s other children would hide the whole app along with the
+ * dialog. Hiding siblings instead leaves exactly one path to the dialog open,
+ * with the page and any dialog underneath it out of the tab order.
+ * @param {HTMLElement} dialog
+ * @returns {HTMLElement[]}
+ */
+function hidingOutside(dialog) {
+  /** @type {HTMLElement[]} */
+  const hidden = [];
+  for (let node = dialog; node.parentElement; node = node.parentElement) {
     for (const sibling of node.parentElement.children) {
       if (sibling === node) continue;
-      /** @type {HTMLElement} */
-      const element = /** @type {HTMLElement} */ (sibling);
-      element.inert = true;
-      inerted.push(element);
+      hidden.push(/** @type {HTMLElement} */ (sibling));
     }
   }
+  return hidden;
 }
 
 /**
@@ -78,6 +92,13 @@ export function openDialog(panel) {
   if (!panel || dialogStack.includes(panel)) return;
   dialogStack.push(panel);
   syncInert();
+  // The open usually runs in an effect, before the new dialog's DOM update is
+  // applied, and the new dialog is often a *sibling* of the one that opened it
+  // (the lyrics editor's text dialog is): the first pass sees the lower dialog
+  // on top and hides the new one. Re-running after the pending work lets the
+  // open's own effects and their DOM updates finish, so the first Tab and the
+  // window-level Tab check see the right state.
+  queueMicrotask(syncInert);
 }
 
 /**
@@ -325,12 +346,20 @@ export function dialogOpenEffect(panel, open, onClose) {
     // Tab and Escape are handled at window level so they work even while focus
     // is still outside the dialog (for example on the opener): the panel's own
     // `onkeydown` only fires for events that start inside it.
-    if (event.key === "Tab" && !event.defaultPrevented) {
-      const top = topDialog();
-      if (top && !top.contains(document.activeElement)) {
-        keepTabInDialogWith(event, top);
-        return;
+    if (event.key === "Tab") {
+      if (!event.defaultPrevented) {
+        const top = topDialog();
+        // The panel's own handler already wrapped at either end of its control
+        // list and marked the event handled.
+        if (top && !top.contains(document.activeElement)) {
+          keepTabInDialogWith(event, top);
+          return;
+        }
       }
+      // The move in the middle of the panel's control list is left to the
+      // browser, so the top-level entries have to be right by the time it runs.
+      syncInert();
+      return;
     }
     closeTopDialogOnEscape(event, element, onClose);
   };
