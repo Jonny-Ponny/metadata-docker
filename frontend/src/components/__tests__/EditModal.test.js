@@ -99,6 +99,42 @@ describe("EditModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("lets Tab reach the dialog stack so focus stays inside", async () => {
+    // The capture listener swallows every key but Escape, and Tab was caught
+    // by it too: the stack's Tab handler never ran, so this dialog had no
+    // containment and Tab walked out into the browser chrome.
+    render(EditModal, { props: { show: true, editingText: "lyrics" } });
+    /** @type {string[]} */
+    const reached = [];
+    const listener = (/** @type {KeyboardEvent} */ e) => reached.push(e.key);
+    // Bubble phase, like the dialog stack: a capture-phase stop would hide it.
+    window.addEventListener("keydown", listener);
+    try {
+      await fireEvent.keyDown(screen.getByRole("textbox"), { key: "Tab" });
+    } finally {
+      window.removeEventListener("keydown", listener);
+    }
+
+    expect(reached).toContain("Tab");
+  });
+
+  it("still stops app shortcuts", async () => {
+    render(EditModal, { props: { show: true, editingText: "lyrics" } });
+    /** @type {string[]} */
+    const reached = [];
+    const listener = (/** @type {KeyboardEvent} */ e) => reached.push(e.key);
+    window.addEventListener("keydown", listener);
+    try {
+      await fireEvent.keyDown(screen.getByRole("textbox"), { key: "F2" });
+      await fireEvent.keyDown(screen.getByRole("textbox"), { key: "Delete" });
+    } finally {
+      window.removeEventListener("keydown", listener);
+    }
+
+    expect(reached).not.toContain("F2");
+    expect(reached).not.toContain("Delete");
+  });
+
   it("stops app shortcuts while letting Escape through", async () => {
     // The dialog stops keys in the capture phase so F2/Delete do not fire on
     // the tree behind it, but Escape must still reach the window so the dialog

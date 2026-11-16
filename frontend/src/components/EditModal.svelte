@@ -47,17 +47,20 @@
   });
 
   // While the dialog is open the app-wide shortcuts (F2, Delete, the tree keys)
-  // must not act behind it. Escape is deliberately left alone: it has to reach
-  // this component's own close handler below, which runs in the bubble phase.
-  // Stopping every key here (as this used to) swallowed Escape too, so the
-  // dialog was the one modal that could not be closed with the keyboard.
+  // must not act behind it. Escape and Tab are deliberately left alone: the
+  // dialog stack handles both in the bubble phase, and stopping them here (as
+  // this used to) made Escape unable to close the dialog and left it with no
+  // Tab containment, so Tab walked into the browser chrome.
   $effect(() => {
     if (!show) return;
     /**
      * @param {KeyboardEvent} e
      */
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") return;
+      // Escape must reach the dialog stack (it closes this dialog); Tab must
+      // reach it too, or the dialog is left with no containment at all and the
+      // browser's own Tab walks out into the browser chrome.
+      if (e.key === "Escape" || e.key === "Tab") return;
       e.stopPropagation();
     };
     // Capture phase, so the app's window listeners (bubble phase) never run.
