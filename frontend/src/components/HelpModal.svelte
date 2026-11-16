@@ -94,7 +94,9 @@
       </div>
 
       <!-- Tab content -->
-      <div class="help-content">
+      <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
+             would land on this pane instead of its first control. -->
+      <div class="help-content" tabindex="-1">
         {#if activeTab === "basics"}
           <div class="help-section">
             <h3>File Browser</h3>

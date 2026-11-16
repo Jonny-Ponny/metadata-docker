@@ -295,7 +295,9 @@
           </svg>
         </button>
       </div>
-      <div class="modal-body">
+      <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
+             would land on this pane instead of its first control. -->
+      <div class="modal-body" tabindex="-1">
         <div class="timestamp-input-group">
           <!-- svelte-ignore a11y_autofocus -->
           <input

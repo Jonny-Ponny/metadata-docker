@@ -316,7 +316,11 @@
       </div>
 
       <!-- Content -->
-      <div class="settings-content">
+      <!-- tabindex="-1": Firefox puts scrollable regions in the tab order, so
+           Tab from the close button landed on this pane (showing the header
+           border) instead of the first setting. The explicit tabindex opts out;
+           arrow keys still scroll it once focus is on a control inside. -->
+      <div class="settings-content" tabindex="-1">
         <!-- General Settings -->
         <div class="settings-section">
           <h3>General</h3>

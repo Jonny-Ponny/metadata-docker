@@ -446,7 +446,9 @@
       </div>
 
       <!-- Log display -->
-      <div class="log-display">
+      <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
+             would land on this pane instead of its first control. -->
+      <div class="log-display" tabindex="-1">
         {#if loading && logs.length === 0}
           <div class="log-empty">
             <svg class="spinner" width="48" height="48" viewBox="0 0 24 24">

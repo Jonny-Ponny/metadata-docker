@@ -803,7 +803,9 @@
         <button class="close-btn" onclick={onClose}>✕</button>
       </div>
 
-      <div class="modal-body">
+      <!-- tabindex="-1": keep Firefox's scrollable-region tab stop out of the
+           dialog's order (see the settings pane for the same fix). -->
+      <div class="modal-body" tabindex="-1">
         <!-- Addon, query, limit -->
         <div class="form-group">
           <!-- svelte-ignore a11y_label_has_associated_control -->

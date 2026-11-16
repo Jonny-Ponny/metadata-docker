@@ -298,6 +298,16 @@ that also block app shortcuts (the lyrics and timestamp editors) stop those
 keys in the capture phase but let Escape through, since it has to reach that
 listener.
 
+Every scrollable pane inside a dialog carries `tabindex="-1"` (`.modal-body`,
+`.settings-content`, `.help-content`, `.log-display`,
+`.modal-scrollable-content`). Firefox adds scrollable regions to the tab order
+so they can be scrolled from the keyboard, which placed a focusable,
+non-control element between the close button and the first field: Tab appeared
+to stop on the dialog's own edge, while Shift+Tab — which never met it — looked
+fine. An explicit `tabindex` opts out, and the pane still scrolls with the
+arrow keys once focus is on a control inside it. A new dialog with a scrolling
+body needs the same attribute.
+
 ### Metadata editor keyboard handling
 
 The editor is a long list of text fields with per-field action icons, so the

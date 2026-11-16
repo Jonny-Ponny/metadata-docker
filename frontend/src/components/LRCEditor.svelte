@@ -1012,7 +1012,9 @@
       </div>
 
       <!-- Scrollable content area -->
-      <div class="modal-scrollable-content">
+      <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
+             would land on this pane instead of its first control. -->
+      <div class="modal-scrollable-content" tabindex="-1">
         <!-- Three-Column Layout - Connected columns with proper padding -->
         <div class="space-parts-wrapper">
           <div class="space-parts">
