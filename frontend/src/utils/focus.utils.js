@@ -19,6 +19,8 @@ const FOCUSABLE_SELECTOR = [
   "input",
   "select",
   "textarea",
+  // A <summary> is focusable and toggles its details, so it is a tab stop.
+  "summary",
   "[tabindex]",
   "[contenteditable='true']",
 ].join(",");
@@ -85,7 +87,8 @@ export function resetDialogStack() {
  *    let Tab escape: the helper thought a button further down was the last one;
  *  - negative tab stops are skipped on purpose: the tree icons and the editor's
  *    per-field buttons are pointer-only and must not join the Tab cycle;
- *  - hidden elements (`hidden`, or `display: none`) cannot take focus either.
+ *  - hidden elements (`hidden`, or `display: none`) cannot take focus either,
+ *    and content of a closed `<details>` is not rendered at all.
  * @param {HTMLElement} container
  * @returns {HTMLElement[]}
  */
@@ -99,10 +102,33 @@ export function focusableIn(container) {
         // option, plus a fieldset that disables its children.
         if (control.matches(":disabled")) return false;
         if (element.closest("[hidden]")) return false;
+        if (isInClosedDetails(element)) return false;
         return getComputedStyle(element).display !== "none";
       })
     )
   );
+}
+
+/**
+ * Whether an element is inside a collapsed `<details>`.
+ *
+ * Its content is not rendered, so none of it is tabbable; counting it made the
+ * dialog's idea of the last control disagree with what Tab does, and focus
+ * escaped the dialog. A `<summary>` is the collapsed element's own control and
+ * stays focusable.
+ * @param {Element} element
+ * @returns {boolean}
+ */
+function isInClosedDetails(element) {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    if (node instanceof HTMLDetailsElement && !node.open) {
+      const summary = node.querySelector(":scope > summary");
+      // The summary is the collapsed element's own control; everything else
+      // inside it is hidden.
+      return !summary || !summary.contains(element);
+    }
+  }
+  return false;
 }
 
 /**
@@ -258,4 +284,37 @@ function dialogFrom(event) {
   const current = /** @type {Element | null} */ (event.currentTarget);
   if (!current) return null;
   return /** @type {HTMLElement} */ (current);
+}
+
+/**
+ * Open a `<select>`'s dropdown from the keyboard.
+ *
+ * Browsers do not open a native select popup on Enter when the select sits in
+ * a `position: fixed` overlay, so every dropdown inside a dialog looked
+ * keyboard-inaccessible. `showPicker()` asks for the picker directly instead
+ * of relying on the default action, which works there. Browsers without it
+ * keep their own behaviour, so this is a fallback, never a replacement.
+ *
+ * Wire it as `onkeydown={(e) => openSelectOnEnter(e)}`.
+ * @param {KeyboardEvent} event
+ * @returns {boolean} whether the picker was requested
+ */
+export function openSelectOnEnter(event) {
+  if (event.key !== "Enter") return false;
+  const select = /** @type {Element | null} */ (event.currentTarget);
+  if (
+    !select ||
+    typeof (/** @type {any} */ (select).showPicker) !== "function"
+  ) {
+    return false;
+  }
+  event.preventDefault();
+  try {
+    /** @type {any} */ (select).showPicker();
+    return true;
+  } catch {
+    // `showPicker` throws when the select is disabled or hidden; the browser's
+    // own handling is then the better fallback.
+    return false;
+  }
 }

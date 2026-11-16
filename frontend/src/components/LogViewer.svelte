@@ -8,6 +8,7 @@
     closeTopDialogOnEscape,
     openDialog,
     closeDialog,
+    openSelectOnEnter,
   } from "../utils/index.js";
   import { SvelteURLSearchParams } from "svelte/reactivity";
 
@@ -311,6 +312,7 @@
             bind:value={linesToShow}
             onchange={handleFilterChange}
             class="log-select"
+            onkeydown={(event) => openSelectOnEnter(event)}
           >
             <option value={50}>50 lines</option>
             <option value={100}>100 lines</option>
@@ -322,6 +324,7 @@
             bind:value={levelFilter}
             onchange={handleFilterChange}
             class="log-select"
+            onkeydown={(event) => openSelectOnEnter(event)}
           >
             <option value="">All Levels</option>
             {#each logLevels as level (level)}

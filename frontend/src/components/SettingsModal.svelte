@@ -14,6 +14,7 @@
     keepFocusInDialog,
     keepTabInDialog,
     dialogOpenEffect,
+    openSelectOnEnter,
   } from "../utils/index.js";
 
   /**
@@ -624,6 +625,7 @@
               id="upload-conflict"
               class="setting-select"
               bind:value={localSettings.uploadDuplicates}
+              onkeydown={(event) => openSelectOnEnter(event)}
             >
               <option value="skip-identical"
                 >Skip identical, rename different</option

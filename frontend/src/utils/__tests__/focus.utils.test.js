@@ -9,6 +9,7 @@ import {
   keepFocusInDialog,
   keepTabInDialog,
   openDialog,
+  openSelectOnEnter,
   resetDialogStack,
 } from "../focus.utils.js";
 
@@ -238,6 +239,112 @@ describe("focus utils", () => {
       expect(event.defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(close);
       expect(panel.contains(document.activeElement)).toBe(true);
+    });
+  });
+
+  describe("openSelectOnEnter", () => {
+    /**
+     * @returns {{ select: HTMLSelectElement, showPicker: ReturnType<typeof vi.fn> }}
+     */
+    function selectWithPicker() {
+      document.body.innerHTML = "";
+      const select = document.createElement("select");
+      select.innerHTML = "<option>a</option>";
+      document.body.appendChild(select);
+      const showPicker = vi.fn();
+      // jsdom has no showPicker; a dialog select only ever has one when the
+      // browser supports it, which is what this stubs.
+      /** @type {any} */ (select).showPicker = showPicker;
+      return { select, showPicker };
+    }
+
+    /**
+     * @param {HTMLElement} target
+     * @param {string} key
+     */
+    function press(target, key) {
+      const event = new KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+      });
+      target.addEventListener("keydown", openSelectOnEnter, { once: true });
+      target.dispatchEvent(event);
+      return event;
+    }
+
+    it("opens the picker on Enter", () => {
+      // A native select popup does not open on Enter inside a fixed overlay,
+      // which left every dropdown in a dialog keyboard-inaccessible.
+      const { select, showPicker } = selectWithPicker();
+
+      const event = press(select, "Enter");
+
+      expect(showPicker).toHaveBeenCalledTimes(1);
+      // Preventing the default stops the browser's own (non-working) attempt.
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it("leaves other keys to the browser", () => {
+      const { select, showPicker } = selectWithPicker();
+
+      const event = press(select, "ArrowDown");
+
+      expect(showPicker).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it("falls back to the browser when showPicker is missing", () => {
+      document.body.innerHTML = "";
+      const select = document.createElement("select");
+      document.body.appendChild(select);
+
+      const event = press(select, "Enter");
+
+      // No picker to request: the event is left untouched.
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it("falls back when showPicker throws", () => {
+      const { select, showPicker } = selectWithPicker();
+      showPicker.mockImplementation(() => {
+        throw new Error("not allowed");
+      });
+
+      expect(() => press(select, "Enter")).not.toThrow();
+      expect(showPicker).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("focusableIn and closed details", () => {
+    it("skips controls inside a collapsed details", () => {
+      // The settings dialog is built from <details>; a collapsed section is
+      // not rendered, so none of its controls are tab stops.
+      document.body.innerHTML = "";
+      const panel = document.createElement("div");
+      panel.innerHTML = [
+        '<button id="before">before</button>',
+        '<details><summary id="summary">more</summary>',
+        '<input id="inside" /></details>',
+        '<button id="after">after</button>',
+      ].join("");
+      document.body.appendChild(panel);
+
+      const ids = focusableIn(panel).map((element) => element.id);
+
+      expect(ids).toEqual(["before", "summary", "after"]);
+    });
+
+    it("includes them once the details is open", () => {
+      document.body.innerHTML = "";
+      const panel = document.createElement("div");
+      panel.innerHTML =
+        '<details open><summary id="summary">more</summary><input id="inside" /></details>';
+      document.body.appendChild(panel);
+
+      const ids = focusableIn(panel).map((element) => element.id);
+
+      expect(ids).toEqual(["summary", "inside"]);
     });
   });
 

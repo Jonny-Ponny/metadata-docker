@@ -7,6 +7,7 @@
     isAudioFile,
     readApiError,
     dialogOpenEffect,
+    openSelectOnEnter,
     keepFocusInDialog,
     keepTabInDialog,
   } from "../utils/index.js";
@@ -807,7 +808,10 @@
         <div class="form-group">
           <!-- svelte-ignore a11y_label_has_associated_control -->
           <label>Add‑on</label>
-          <select bind:value={selectedAddonId}>
+          <select
+            bind:value={selectedAddonId}
+            onkeydown={(event) => openSelectOnEnter(event)}
+          >
             {#each addons as addon (addon.id)}
               <option value={addon.id}>{addon.name}</option>
             {/each}
@@ -980,6 +984,7 @@
                       </label>
                       <select
                         value={trackIndex ?? ""}
+                        onkeydown={(event) => openSelectOnEnter(event)}
                         onchange={(e) =>
                           updateFileTrack(
                             fileIndex,
@@ -1038,7 +1043,10 @@
             <div class="track-selector">
               <!-- svelte-ignore a11y_label_has_associated_control -->
               <label>Select track to apply:</label>
-              <select bind:value={selectedTrackIndex}>
+              <select
+                bind:value={selectedTrackIndex}
+                onkeydown={(event) => openSelectOnEnter(event)}
+              >
                 {#each fetchedTracks as track, idx (idx)}
                   <option value={idx}>
                     {getTrackNumber(track)
