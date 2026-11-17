@@ -5,7 +5,14 @@ import { contextMenu, renamingPath } from "../context.store.js";
 
 describe("context store", () => {
   beforeEach(() => {
-    contextMenu.set({ isOpen: false, path: null, x: 0, y: 0, type: null });
+    contextMenu.set({
+      isOpen: false,
+      path: null,
+      x: 0,
+      y: 0,
+      type: null,
+      mode: "pointer",
+    });
     renamingPath.set(null);
   });
 
@@ -16,6 +23,7 @@ describe("context store", () => {
   it("starts closed with no target", () => {
     expect(get(contextMenu)).toEqual({
       isOpen: false,
+      mode: "pointer",
       path: null,
       x: 0,
       y: 0,
@@ -24,13 +32,14 @@ describe("context store", () => {
     expect(get(renamingPath)).toBeNull();
   });
 
-  it("stores an open menu position and target", () => {
+  it("stores an open menu position, target and how it was opened", () => {
     contextMenu.set({
       isOpen: true,
       path: "folder/song.mp3",
       x: 120,
       y: 40,
       type: "file",
+      mode: "keyboard",
     });
 
     expect(get(contextMenu)).toEqual({
@@ -39,6 +48,7 @@ describe("context store", () => {
       x: 120,
       y: 40,
       type: "file",
+      mode: "keyboard",
     });
   });
 

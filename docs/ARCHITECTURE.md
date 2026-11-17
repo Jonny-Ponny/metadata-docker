@@ -329,6 +329,33 @@ fine. An explicit `tabindex` opts out, and the pane still scrolls with the
 arrow keys once focus is on a control inside it. A new dialog with a scrolling
 body needs the same attribute.
 
+### Context menu
+
+A row's menu lives in the `contextMenu` store (`stores/context.store.js`), which
+records the target path, the anchor point and how the menu was opened. Only the
+target row renders it, as a sibling of the row rather than inside it.
+
+The pointer path opens it at the cursor. The keyboard path — `Shift+F10` or the
+context-menu key, handled by the row itself and by `handleTreeNavigation` when
+the panel has focus — centres it on the row and moves focus to the first item.
+`aria-keyshortcuts="Shift+F10"` on every row now names a key that works;
+`aria-controls` points at the menu. The items are real controls
+(`role="menu"` / `role="menuitem"`, `tabindex="-1"`, roving focus), so Arrow
+up/down, Home/End, Enter and Space work; Escape closes and returns focus to the
+row. That focus return only happens for keyboard opens, since the pointer path
+never moved focus.
+
+Placement is `placeMenu` in `utils/contextMenu.utils.js`, which is pure and
+unit-tested: it opens in the pointer quadrant, flips to the other side when the
+menu would overflow, and — when the menu is taller than the window and fits on
+neither side — pins it to the top edge and caps its height so the list scrolls.
+The old code flipped up and then clamped to the top margin, which pushed a tall
+menu's bottom past the window edge.
+
+Delete is a `HoldButton` with `role="menuitem"`, so it keeps its hold-to-confirm
+behaviour: the same `createHold` timer runs for a pointer press and for Enter or
+Space held on the item, and releasing early cancels both.
+
 ### Metadata editor keyboard handling
 
 The editor is a long list of text fields with per-field action icons, so the

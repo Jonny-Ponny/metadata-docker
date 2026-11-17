@@ -136,7 +136,14 @@ describe("TreeNode", () => {
   beforeEach(() => {
     originalSettings = get(settings);
     resetTree();
-    contextMenu.set({ isOpen: false, path: null, x: 0, y: 0, type: null });
+    contextMenu.set({
+      isOpen: false,
+      path: null,
+      x: 0,
+      y: 0,
+      type: null,
+      mode: "pointer",
+    });
     renamingPath.set(null);
   });
 
@@ -146,7 +153,14 @@ describe("TreeNode", () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     toast.clear();
-    contextMenu.set({ isOpen: false, path: null, x: 0, y: 0, type: null });
+    contextMenu.set({
+      isOpen: false,
+      path: null,
+      x: 0,
+      y: 0,
+      type: null,
+      mode: "pointer",
+    });
     renamingPath.set(null);
   });
 
@@ -194,7 +208,7 @@ describe("TreeNode", () => {
 
     vi.useFakeTimers();
     try {
-      const deleteButton = screen.getByRole("button", { name: "Delete" });
+      const deleteButton = screen.getByRole("menuitem", { name: "Delete" });
 
       await fireEvent.mouseDown(deleteButton);
       await vi.advanceTimersByTimeAsync(600);
@@ -236,6 +250,146 @@ describe("TreeNode", () => {
 
     expect(screen.queryByText("Rename")).toBeNull();
     expect(get(contextMenu).isOpen).toBe(false);
+  });
+
+  it("opens the menu from the row with Shift+F10 and focuses the first item", async () => {
+    setup(audioItem);
+    const row = screen.getByRole("treeitem");
+
+    await fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    await tick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(get(contextMenu)).toMatchObject({
+      isOpen: true,
+      path: "folder/song.mp3",
+      mode: "keyboard",
+    });
+    expect(document.activeElement).toBe(
+      screen.getByRole("menuitem", { name: "Rename" }),
+    );
+    // The key is announced, and the row points at the menu it controls.
+    expect(row.getAttribute("aria-keyshortcuts")).toBe("Shift+F10");
+    expect(row.getAttribute("aria-controls")).toBe(
+      document.querySelector(".context-menu")?.id,
+    );
+  });
+
+  it("opens the menu with the context-menu key", async () => {
+    setup(audioItem);
+
+    await fireEvent.keyDown(screen.getByRole("treeitem"), {
+      key: "ContextMenu",
+    });
+
+    expect(get(contextMenu).isOpen).toBe(true);
+  });
+
+  it("leaves focus on the row when the menu is opened with the pointer", async () => {
+    // The mouse path must not start moving keyboard focus around.
+    setup(audioItem);
+    const row = screen.getByRole("treeitem");
+    row.focus();
+
+    await openMenu("song.mp3");
+
+    expect(get(contextMenu).mode).toBe("pointer");
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("moves between menu items with the arrow keys and wraps", async () => {
+    setup(audioItem);
+    await openMenu("song.mp3");
+    const menu = /** @type {HTMLElement} */ (
+      document.querySelector(".context-menu")
+    );
+    const items = [...menu.querySelectorAll("[role='menuitem']")];
+    expect(items.length).toBeGreaterThan(2);
+    /** @type {HTMLElement} */ (items[0]).focus();
+
+    await fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[1]);
+
+    await fireEvent.keyDown(menu, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(items[0]);
+
+    await fireEvent.keyDown(menu, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(items[items.length - 1]);
+
+    await fireEvent.keyDown(menu, { key: "Home" });
+    expect(document.activeElement).toBe(items[0]);
+
+    await fireEvent.keyDown(menu, { key: "End" });
+    expect(document.activeElement).toBe(items[items.length - 1]);
+  });
+
+  it("activates an item with Enter", async () => {
+    const { onCopy } = setup(audioItem);
+    await openMenu("song.mp3");
+    const copy = screen.getByRole("menuitem", { name: "Copy" });
+    copy.focus();
+
+    await fireEvent.keyDown(copy, { key: "Enter" });
+    await fireEvent.click(copy);
+
+    expect(onCopy).toHaveBeenCalledWith("folder/song.mp3");
+  });
+
+  it("closes on Escape and returns focus to the row", async () => {
+    setup(audioItem);
+    const row = screen.getByRole("treeitem");
+    row.focus();
+    await fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    await tick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const first = screen.getByRole("menuitem", { name: "Rename" });
+    expect(document.activeElement).toBe(first);
+
+    await fireEvent.keyDown(first, { key: "Escape" });
+
+    expect(screen.queryByText("Rename")).toBeNull();
+    expect(get(contextMenu).isOpen).toBe(false);
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("holds the delete item on Enter like the pointer holds it", async () => {
+    const { onDelete } = setup(audioItem);
+    settings.set({ ...get(settings), holdDeleteDuration: 500 });
+    await openMenu("song.mp3");
+    const del = screen.getByRole("menuitem", { name: "Delete" });
+    del.focus();
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(del, { key: "Enter" });
+      await vi.advanceTimersByTimeAsync(400);
+      expect(onDelete).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(150);
+      expect(onDelete).toHaveBeenCalledWith("folder/song.mp3");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels a delete hold when the key is released early", async () => {
+    const { onDelete } = setup(audioItem);
+    settings.set({ ...get(settings), holdDeleteDuration: 500 });
+    await openMenu("song.mp3");
+    const del = screen.getByRole("menuitem", { name: "Delete" });
+    del.focus();
+
+    vi.useFakeTimers();
+    try {
+      await fireEvent.keyDown(del, { key: "Enter" });
+      await vi.advanceTimersByTimeAsync(300);
+      await fireEvent.keyUp(del, { key: "Enter" });
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(onDelete).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("passes the copy action the item path", async () => {

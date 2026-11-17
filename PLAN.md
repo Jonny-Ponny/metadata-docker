@@ -105,22 +105,15 @@ image build. What remains is optional hardening and new features.
   puts a scrollable region in the tab order. Space stays the play/pause key
   everywhere except real text entry, including over the volume slider. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#dialogs).
+- **Context menu keyboard access (T-21).** Complete: `Shift+F10` and the
+  context-menu key open the cursor row's menu, centred on the row. The menu is a
+  `menu` of `menuitem`s with Arrow/Home/End movement, Enter/Space activation and
+  Escape returning focus to the row. The Delete item keeps its hold gesture,
+  now on the keyboard too. The menu flips above the pointer and is capped to the
+  window instead of running past the bottom edge. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#context-menu).
 
 ## Planned
-
-### Keyboard and accessibility (tree navigation)
-
-Started from the "more keyboard shortcuts and modal focus handling" item under
-Features and split into numbered tasks. T-16 to T-19 are done; the context menu
-follows as T-21.
-
-- **T-21 (P3) - context menu keyboard access.** The tree's right-click menu is
-  a `<ul>` of `<li onclick>` items: no `role="menu"`/`menuitem`, no roving
-  focus, and no key that opens it (Shift+F10 / the context-menu key). Menu ARIA
-  is easy to get wrong, so decide the shape (true `menu` role with managed
-  focus, or a small roving-focus list) before writing it. The file row already
-  advertises `aria-keyshortcuts="Shift+F10"` from T-18, so today it promises a
-  key that does nothing.
 
 ### Lyrics editor
 
@@ -157,8 +150,8 @@ No open items.
   file onto a selection.
 - **UX and performance** - smart-rename dry-run preview with a conflict
   strategy, addon reload from Settings, responsive/mobile layout, metadata
-  CSV/JSON export-import and library normalisation tools. The keyboard work is
-  done (T-16 to T-19); the context menu follows as T-21 above.
+  CSV/JSON export-import and library normalisation tools. The keyboard and
+  screen-reader work is done (T-16 to T-19, T-21).
 - **More audio formats** - extend `formats.py` and `tag_backends.py`.
 
 ### Housekeeping
