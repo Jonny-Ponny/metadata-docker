@@ -755,6 +755,32 @@ describe("App", () => {
     renamingPath.set(null);
   });
 
+  it("opens the row's menu with Shift+F10 and focuses the first item", async () => {
+    // Reported in Firefox: the menu opened but nothing was focused, so the
+    // arrows did nothing and Tab (which closes the menu) was the only way out.
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    const row = node(view, "loose.flac");
+    row.focus();
+
+    await fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    await tick();
+
+    expect(get(contextMenu)).toMatchObject({
+      isOpen: true,
+      mode: "keyboard",
+    });
+    const first = screen.getByRole("menuitem", { name: "Rename" });
+    expect(document.activeElement).toBe(first);
+
+    // The arrows work straight away, without another key or a timer.
+    const menu = /** @type {HTMLElement} */ (
+      document.querySelector(".context-menu")
+    );
+    await fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(document.activeElement).not.toBe(first);
+  });
+
   it("closes the context menu and keeps F2 working after a copy", async () => {
     // Copy was the one menu action that neither closed the menu nor kept the
     // item selected. The open menu made `isOverlayOpen()` true, so F2 was

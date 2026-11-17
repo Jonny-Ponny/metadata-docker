@@ -347,10 +347,18 @@ never moved focus.
 
 Placement is `placeMenu` in `utils/contextMenu.utils.js`, which is pure and
 unit-tested: it opens in the pointer quadrant, flips to the other side when the
-menu would overflow, and — when the menu is taller than the window and fits on
-neither side — pins it to the top edge and caps its height so the list scrolls.
-The old code flipped up and then clamped to the top margin, which pushed a tall
-menu's bottom past the window edge.
+menu would overflow, and — when the menu is taller than the free area and fits
+on neither side — pins it to the top edge and caps its height so the list
+scrolls. The old code flipped up and then clamped to the top margin, which
+pushed a tall menu's bottom past the window edge.
+
+The free area excludes the **player bar**, which is fixed to the bottom of the
+window with the same `z-index` as the menu, so a menu placed there is painted
+behind it. `positionMenu` measures the bar at open time (it is absent when the
+player is disabled) and passes its height as the viewport's `bottom` inset; an
+anchor that sits behind the bar gets the menu slid into the free area instead of
+flipped. A unit test sweeps every anchor and menu size and asserts the menu
+never overlaps the bar or leaves the window.
 
 Delete is a `HoldButton` with `role="menuitem"`, so it keeps its hold-to-confirm
 behaviour: the same `createHold` timer runs for a pointer press and for Enter or

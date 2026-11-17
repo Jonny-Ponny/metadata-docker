@@ -445,13 +445,28 @@
   /**
    * Focus the first item after a keyboard open. Pointer opens keep focus on the
    * row, so clicking a menu item does not steal the keyboard from the tree.
+   *
+   * An effect runs after the DOM update, so the menu is usually already there.
+   * A `setTimeout` was used before and lost the race in Firefox: the timer is
+   * cancelled whenever this effect re-runs (any `$contextMenu` change), which
+   * left an open menu with nothing focused. Retrying once after a microtask
+   * covers the case where the menu mounts a tick later.
    */
   $effect(() => {
     if (!$contextMenu.isOpen || $contextMenu.path !== item.path) return;
     if ($contextMenu.mode !== "keyboard") return;
-    // The menu is rendered by the update that follows this effect.
-    const timer = setTimeout(() => menuEntries()[0]?.focus(), 0);
-    return () => clearTimeout(timer);
+    const entry = menuEntries()[0];
+    if (entry) {
+      entry.focus();
+      return;
+    }
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) menuEntries()[0]?.focus();
+    });
+    return () => {
+      cancelled = true;
+    };
   });
   // Close menu when clicking outside or pressing Escape
   /**
@@ -586,7 +601,13 @@
     const placement = placeMenu(
       { x: anchorX, y: anchorY },
       { width: menuRef.offsetWidth, height: menuRef.offsetHeight },
-      { width: window.innerWidth, height: window.innerHeight },
+      {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        // The player bar is fixed to the bottom of the window with the same
+        // z-index as the menu, so a menu placed there is painted behind it.
+        bottom: playerBarHeight(),
+      },
     );
 
     menuStyle = {
@@ -596,6 +617,20 @@
         ? {}
         : { maxHeight: `${placement.maxHeight}px` }),
     };
+  }
+
+  /**
+   * Height of the player bar, which the menu must stay clear of. It is fixed to
+   * the bottom of the window, so measuring it is the only reliable way to know
+   * how much room it takes (it is hidden when the player is disabled).
+   * @returns {number}
+   */
+  function playerBarHeight() {
+    const player = document.querySelector(".player");
+    if (!(player instanceof HTMLElement)) return 0;
+    const box = player.getBoundingClientRect();
+    // Only a bar resting on the bottom edge is in the way.
+    return box.height && box.bottom >= window.innerHeight - 1 ? box.height : 0;
   }
 
   async function handleSmartRename() {
@@ -1419,8 +1454,9 @@
     padding: 4px 0;
     z-index: 1000;
     min-width: 120px;
-    /* `placeMenu` caps the height when the menu is taller than the window, so
-       the last item stays reachable instead of running off the edge. */
+    /* `placeMenu` caps the height when the menu would run past the window or
+       into the player bar, so the last item stays reachable. The CSS fallback
+       only covers the split second before the measurement lands. */
     max-height: calc(100vh - 16px);
     overflow-y: auto;
     overflow-x: hidden;
