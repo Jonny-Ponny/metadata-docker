@@ -393,6 +393,15 @@
       closeMenu();
       return;
     }
+    if (e.key === "Tab") {
+      // A menu is not a place to Tab through: leaving closes it and returns
+      // focus to the row, as a native menu does. Otherwise Tab walked out
+      // through every window control and into the browser chrome.
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu();
+      return;
+    }
     const entries = menuEntries();
     if (!entries.length) return;
     const current = entries.indexOf(
@@ -459,6 +468,15 @@
    * @param {KeyboardEvent} e
    */
   function handleKeyDown(e) {
+    if (e.key === "Tab") {
+      // Tab must not walk the window while a menu is open. The menu's own
+      // handler covers focus inside it; this covers the case where nothing in
+      // the menu holds focus yet (a pointer-opened menu leaves it on the row).
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu();
+      return;
+    }
     if (e.key !== "Escape") return;
     // Escape closes the menu whichever way it was opened. The menu's own
     // handler (inside it) stops the event first, so this only runs when focus
@@ -1405,6 +1423,8 @@
        the last item stays reachable instead of running off the edge. */
     max-height: calc(100vh - 16px);
     overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
     outline: none;
   }
 
@@ -1424,7 +1444,11 @@
   .context-menu li :global(> button),
   .context-menu li :global(> [role="menuitem"]) {
     display: block;
+    /* border-box, or the padding below is added to `width: 100%` and puts a
+       horizontal scrollbar at the bottom of the menu. */
+    box-sizing: border-box;
     width: 100%;
+    margin: 0;
     padding: 8px 16px;
     border: none;
     background: none;
@@ -1434,14 +1458,17 @@
     cursor: pointer;
   }
 
+  /* Pointer hover and keyboard focus share one highlight, so a menu opened
+     with Shift+F10 looks the same as one clicked open. */
   .context-menu li :global(> button:hover),
-  .context-menu li :global(> [role="menuitem"]:hover) {
+  .context-menu li :global(> [role="menuitem"]:hover),
+  .context-menu li :global(> button:focus),
+  .context-menu li :global(> [role="menuitem"]:focus) {
     background-color: #f0f0f0;
+    outline: none;
   }
 
-  /* Focus is the keyboard equivalent of hover. */
   .context-menu li :global(> :focus-visible) {
-    background-color: #f0f0f0;
     outline: 2px solid var(--color-primary);
     outline-offset: -2px;
   }
@@ -1464,10 +1491,15 @@
   }
 
   /* The delete item is nested deeper (HoldButton inside the row); keep the
-     hold fill inside the rounded menu edges. */
+     hold fill inside the rounded menu edges. The menuitem rule above already
+     pads the row, so the label must not pad it again. */
   .context-menu li :global(.hold-button.menu) {
     border-radius: 0;
     overflow: hidden;
+  }
+
+  .context-menu li :global(.hold-button.menu .menu-text) {
+    padding: 0;
   }
 
   .file .format.text-format {
@@ -1526,8 +1558,15 @@
     color: #e0e0e0;
   }
 
-  :global(body.dark) .context-menu li:hover {
+  :global(body.dark) .context-menu li :global(> button:hover),
+  :global(body.dark) .context-menu li :global(> [role="menuitem"]:hover),
+  :global(body.dark) .context-menu li :global(> button:focus),
+  :global(body.dark) .context-menu li :global(> [role="menuitem"]:focus) {
     background-color: #3d3d3d;
+  }
+
+  :global(body.dark) .context-menu li :global(> :focus-visible) {
+    outline-color: var(--color-primary-dark);
   }
 
   :global(body.dark) .rename-input {

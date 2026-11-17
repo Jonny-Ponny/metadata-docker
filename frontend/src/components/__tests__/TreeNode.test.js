@@ -392,6 +392,33 @@ describe("TreeNode", () => {
     }
   });
 
+  it("closes the menu on Tab instead of tabbing through the window", async () => {
+    setup(audioItem);
+    const row = screen.getByRole("treeitem");
+    row.focus();
+    await fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    await tick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const first = screen.getByRole("menuitem", { name: "Rename" });
+    expect(document.activeElement).toBe(first);
+
+    await fireEvent.keyDown(first, { key: "Tab" });
+
+    expect(get(contextMenu).isOpen).toBe(false);
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("closes the menu on Tab even when no item holds focus", async () => {
+    // A pointer-opened menu leaves focus on the row; Tab must not walk the
+    // window from there either.
+    setup(audioItem);
+    await openMenu("song.mp3");
+
+    await fireEvent.keyDown(screen.getByText("song.mp3"), { key: "Tab" });
+
+    expect(get(contextMenu).isOpen).toBe(false);
+  });
+
   it("passes the copy action the item path", async () => {
     const { onCopy } = setup(audioItem);
     await openMenu("song.mp3");
