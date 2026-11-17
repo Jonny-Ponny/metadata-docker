@@ -6,6 +6,7 @@
   import HoldButton from "./HoldButton.svelte";
   import MetadataFetcher from "./MetadataFetcher.svelte";
 
+  import { get } from "svelte/store";
   import {
     contextMenu,
     renamingPath,
@@ -25,6 +26,7 @@
     noteTreePointerClick,
     readApiError,
     treeRowId,
+    placeMenu,
   } from "../utils/index.js";
 
   // How long the pointer must rest on a folder before its deep totals are
@@ -222,7 +224,13 @@
   );
 
   let menuRef = $state(/** @type {HTMLDivElement | null} */ (null));
-  let menuStyle = $state({ left: "0px", top: "0px" });
+  let rowRef = $state(/** @type {HTMLDivElement | null} */ (null));
+  let menuStyle = $state(
+    /** @type {{ left: string, top: string, maxHeight?: string }} */ ({
+      left: "0px",
+      top: "0px",
+    }),
+  );
 
   function handleDirectoryClick() {
     selectFolder(item.path); // Select the folder
@@ -244,11 +252,13 @@
     onRowId?.(item.path, rowId);
   });
 
-  // Rows that cannot be entered keep their menu reachable from the keyboard.
-  // Folders, which Enter and the arrow keys can operate on, do not need it.
-  let rowMenuShortcut = $derived(
-    item.type === "directory" ? {} : { "aria-keyshortcuts": "Shift+F10" },
-  );
+  // Keys that open this row's menu. `Alt+Enter` is the reliable one: Firefox
+  // shows its own context menu for Shift+F10 and cannot be stopped, so the two
+  // standard keys are kept for screen readers and the Menu key, which do work.
+  const MENU_SHORTCUTS = "Alt+Enter Shift+F10";
+
+  // Every row has a menu, folders included.
+  let rowMenuShortcut = { "aria-keyshortcuts": MENU_SHORTCUTS };
 
   // Row id for the keyboard focus model. The app scrolls the row it moves the
   // cursor to by id, so the id must be unique even when the tree is rendered
@@ -293,32 +303,185 @@
     onRowKeys?.(path, event);
   }
 
+  /**
+   * The menu id, used by the row's `aria-controls`. The menu is rendered as a
+   * sibling of the row (so it is not inside the treeitem), so both sides need
+   * the same id.
+   */
+  const menuId = $derived(`context-menu-${rowId}`);
+
   // Context menu handlers
+
+  /**
+   * A row's menu. Items are real controls (see the markup), so the menu is
+   * reachable by keyboard: `Shift+F10` or the context-menu key opens it from
+   * the row, Arrow keys move between items, Enter activates and Escape closes.
+   */
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {"pointer" | "keyboard"} mode
+   */
+  function openMenuAt(x, y, mode) {
+    renamingPath.set(null); // close any ongoing rename
+    contextMenu.set({
+      isOpen: true,
+      path: item.path,
+      x,
+      y,
+      type: item.type,
+      mode,
+    });
+  }
+
   /**
    * @param {MouseEvent} e
    */
   function handleContextMenu(e) {
     e.preventDefault();
-    renamingPath.set(null); // close any ongoing rename
-    contextMenu.set({
-      // open this item's menu
-      isOpen: true,
-      path: item.path,
-      x: e.clientX,
-      y: e.clientY,
-      type: item.type,
-    });
+    openMenuAt(e.clientX, e.clientY, "pointer");
   }
 
+  /**
+   * The row's own keyboard open. Native `contextmenu` events from Shift+F10 and
+   * the context-menu key do not reach the row in every browser, so the key is
+   * handled here and routed up with the row's path like the navigation keys.
+   * Rows cannot be operated with the arrows alone once they are leaves, so a
+   * file row scrolls into view and takes focus before its menu opens.
+   * @param {string} path
+   * @param {KeyboardEvent} event
+   */
+  function openMenuFromKeyboard(path, event) {
+    const isMenuKey =
+      event.key === "ContextMenu" ||
+      (event.key === "F10" && event.shiftKey && !event.ctrlKey) ||
+      (event.key === "Enter" &&
+        event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey);
+    if (!isMenuKey || path !== item.path) return false;
+    event.preventDefault();
+    const row = rowRef;
+    const box = row?.getBoundingClientRect();
+    // Centre of the row, so the menu opens over the tree rather than at the
+    // edge of the window; `placeMenu` flips or caps it to fit.
+    openMenuAt(
+      box && box.width ? box.left + box.width / 2 : window.innerWidth / 2,
+      box && box.height ? box.top + box.height / 2 : window.innerHeight / 2,
+      "keyboard",
+    );
+    return true;
+  }
+
+  /**
+   * Give focus back to the row a keyboard-opened menu came from; the pointer
+   * path never moved focus, so nothing has to be undone there.
+   */
+  function closeMenu() {
+    const state = get(contextMenu);
+    contextMenu.update((c) => ({ ...c, isOpen: false }));
+    // Focus must come back to the row *before* the menu unmounts, or it falls
+    // to the page. A pointer-opened menu never moved focus, so there is
+    // nothing to restore.
+    if (state.mode === "keyboard" && state.path === item.path) rowRef?.focus();
+  }
+
+  /**
+   * Menu keys. The menu is a `menu`, so the arrow keys, Home/End and Tab are
+   * taken over; Escape closes it like it does elsewhere in the app.
+   * @param {KeyboardEvent} e
+   */
+  function handleMenuKeyDown(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu();
+      return;
+    }
+    if (e.key === "Tab") {
+      // A menu is not a place to Tab through: leaving closes it and returns
+      // focus to the row, as a native menu does. Otherwise Tab walked out
+      // through every window control and into the browser chrome.
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu();
+      return;
+    }
+    const entries = menuEntries();
+    if (!entries.length) return;
+    const current = entries.indexOf(
+      /** @type {HTMLElement} */ (document.activeElement),
+    );
+    /** @param {number} index */
+    const focusAt = (index) => {
+      e.preventDefault();
+      entries[index]?.focus();
+    };
+    switch (e.key) {
+      case "ArrowDown":
+        focusAt(current < 0 ? 0 : (current + 1) % entries.length);
+        return;
+      case "ArrowUp":
+        focusAt(current <= 0 ? entries.length - 1 : current - 1);
+        return;
+      case "Home":
+        focusAt(0);
+        return;
+      case "End":
+        focusAt(entries.length - 1);
+        return;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * The menu's items, in order. The Delete item is a hold button, so it is a
+   * `role="menuitem"` like the rest and keeps its hold gesture on Enter/Space.
+   * @returns {HTMLElement[]}
+   */
+  function menuEntries() {
+    if (!menuRef) return [];
+    return /** @type {HTMLElement[]} */ ([
+      ...menuRef.querySelectorAll("[role='menuitem']"),
+    ]);
+  }
+
+  /**
+   * Focus the first item after a keyboard open. Pointer opens keep focus on the
+   * row, so clicking a menu item does not steal the keyboard from the tree.
+   *
+   * An effect runs after the DOM update, so the menu is usually already there.
+   * A `setTimeout` was used before and lost the race in Firefox: the timer is
+   * cancelled whenever this effect re-runs (any `$contextMenu` change), which
+   * left an open menu with nothing focused. Retrying once after a microtask
+   * covers the case where the menu mounts a tick later.
+   */
+  $effect(() => {
+    if (!$contextMenu.isOpen || $contextMenu.path !== item.path) return;
+    if ($contextMenu.mode !== "keyboard") return;
+    const entry = menuEntries()[0];
+    if (entry) {
+      entry.focus();
+      return;
+    }
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) menuEntries()[0]?.focus();
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
   // Close menu when clicking outside or pressing Escape
   /**
    * @param {MouseEvent} e
    */
   function handleClickOutside(e) {
-    const menuId = `context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`;
-    const menuEl = document.getElementById(menuId);
+    const menuEl = menuRef;
     if (menuEl && e.target instanceof Node && !menuEl.contains(e.target)) {
-      contextMenu.update((c) => ({ ...c, isOpen: false }));
+      closeMenu();
     }
   }
 
@@ -326,8 +489,27 @@
    * @param {KeyboardEvent} e
    */
   function handleKeyDown(e) {
-    if (e.key === "Escape") {
-      contextMenu.update((c) => ({ ...c, isOpen: false }));
+    if (e.key === "Tab") {
+      // Tab must not walk the window while a menu is open. The menu's own
+      // handler covers focus inside it; this covers the case where nothing in
+      // the menu holds focus yet (a pointer-opened menu leaves it on the row).
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu();
+      return;
+    }
+    if (e.key !== "Escape") return;
+    // Escape closes the menu whichever way it was opened. The menu's own
+    // handler (inside it) stops the event first, so this only runs when focus
+    // is still on the row or on the page.
+    const target = e.target;
+    const inside =
+      target instanceof Node &&
+      !!menuRef?.contains(/** @type {Node} */ (target));
+    if (!inside) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu();
     }
   }
 
@@ -413,49 +595,48 @@
 
   // Function to position menu
   /**
-   * @param {number} clickX
-   * @param {number} clickY
+   * @param {number} anchorX
+   * @param {number} anchorY
    */
-  function positionMenu(clickX, clickY) {
+  function positionMenu(anchorX, anchorY) {
     if (!menuRef) return;
 
-    // Get viewport dimensions
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    // Get menu dimensions
-    const menuWidth = menuRef.offsetWidth;
-    const menuHeight = menuRef.offsetHeight;
-
-    // Calculate horizontal position (prevent going off right edge)
-    let left = clickX;
-    if (left + menuWidth > viewportWidth - 10) {
-      left = viewportWidth - menuWidth - 10;
-    }
-
-    // Calculate vertical position
-    let top = clickY;
-
-    // Check if menu would go below viewport
-    if (top + menuHeight > viewportHeight - 10) {
-      // Position above the click point
-      top = clickY - menuHeight;
-
-      // If that would go above viewport, position at top with small margin
-      if (top < 10) {
-        top = 10;
-      }
-    }
-
-    // Ensure menu doesn't go above viewport
-    if (top < 10) {
-      top = 10;
-    }
+    // Measure with any previous cap cleared, or a short menu opened after a
+    // tall one would report the old height.
+    menuRef.style.maxHeight = "";
+    const placement = placeMenu(
+      { x: anchorX, y: anchorY },
+      { width: menuRef.offsetWidth, height: menuRef.offsetHeight },
+      {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        // The player bar is fixed to the bottom of the window with the same
+        // z-index as the menu, so a menu placed there is painted behind it.
+        bottom: playerBarHeight(),
+      },
+    );
 
     menuStyle = {
-      left: left + "px",
-      top: top + "px",
+      left: `${placement.left}px`,
+      top: `${placement.top}px`,
+      ...(placement.maxHeight === undefined
+        ? {}
+        : { maxHeight: `${placement.maxHeight}px` }),
     };
+  }
+
+  /**
+   * Height of the player bar, which the menu must stay clear of. It is fixed to
+   * the bottom of the window, so measuring it is the only reliable way to know
+   * how much room it takes (it is hidden when the player is disabled).
+   * @returns {number}
+   */
+  function playerBarHeight() {
+    const player = document.querySelector(".player");
+    if (!(player instanceof HTMLElement)) return 0;
+    const box = player.getBoundingClientRect();
+    // Only a bar resting on the bottom edge is in the way.
+    return box.height && box.bottom >= window.innerHeight - 1 ? box.height : 0;
   }
 
   async function handleSmartRename() {
@@ -697,9 +878,14 @@
       aria-selected={item.path === selectedFolder}
       aria-posinset={rowPosition}
       aria-setsize={rowCount}
+      {...rowMenuShortcut}
+      aria-controls={menuId}
+      bind:this={rowRef}
       onkeydown={(event) => {
         // Leave the rename input's own keys alone.
         if ($renamingPath === item.path) return;
+        // Alt+Enter, Shift+F10 or the context-menu key opens this row's menu.
+        if (openMenuFromKeyboard(item.path, event)) return;
         handleRowKeydown(event);
         if (!event.defaultPrevented) routeKey(item.path, event);
       }}
@@ -828,35 +1014,83 @@
       {/if}
     {/if}
     {#if $contextMenu.isOpen && $contextMenu.path === item.path}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         bind:this={menuRef}
-        id={`context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`}
+        id={menuId}
         class="context-menu"
-        style="left: {menuStyle.left}; top: {menuStyle.top};"
+        role="menu"
+        aria-label="{item.name} actions"
+        tabindex="-1"
+        style="left: {menuStyle.left}; top: {menuStyle.top};{menuStyle.maxHeight
+          ? ` max-height: ${menuStyle.maxHeight}; overflow-y: auto;`
+          : ''}"
         onclick={(e) => e.stopPropagation()}
+        onkeydown={handleMenuKeyDown}
       >
-        <ul>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={startRename}>Rename</li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={handleSmartRename}>Smart Rename</li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={handleSmartRenameAllFiles}>Smart Rename All Audio</li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={() => openFetcher("album", item.path, true)}>
-            Fetch Album Metadata
+        <ul role="none">
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={startRename}>Rename</button
+            >
           </li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={handleCopy}>Copy</li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={handleDownload}>Download</li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={handleCreateFolder}>Create folder</li>
-          <li class="hold-delete-item">
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={handleSmartRename}>Smart Rename</button
+            >
+          </li>
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={handleSmartRenameAllFiles}>Smart Rename All Audio</button
+            >
+          </li>
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={() => openFetcher("album", item.path, true)}
+            >
+              Fetch Album Metadata
+            </button>
+          </li>
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={handleCopy}>Copy</button
+            >
+          </li>
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={handleDownload}>Download</button
+            >
+          </li>
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={handleCreateFolder}>Create folder</button
+            >
+          </li>
+          <li role="none">
             <HoldButton
               variant="menu"
+              role="menuitem"
+              class="delete-item"
               duration={holdDeleteDuration}
               onConfirm={handleDeleteWithHold}
               title="Hold to delete"
@@ -917,9 +1151,13 @@
       aria-posinset={rowPosition}
       aria-setsize={rowCount}
       {...rowMenuShortcut}
+      aria-controls={menuId}
+      bind:this={rowRef}
       onkeydown={(event) => {
         // Leave the rename input's own keys alone.
         if ($renamingPath === item.path) return;
+        // Shift+F10 / the context-menu key opens this row's menu.
+        if (openMenuFromKeyboard(item.path, event)) return;
         handleRowKeydown(event);
         if (!event.defaultPrevented) routeKey(item.path, event);
       }}
@@ -1005,45 +1243,80 @@
 
     <!-- Context menu -->
     {#if $contextMenu.isOpen && $contextMenu.path === item.path}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         bind:this={menuRef}
-        id={`context-menu-${item.path.replace(/[^a-zA-Z0-9]/g, "-")}`}
+        id={menuId}
         class="context-menu"
-        style="left: {menuStyle.left}; top: {menuStyle.top};"
+        role="menu"
+        aria-label="{filename} actions"
+        tabindex="-1"
+        style="left: {menuStyle.left}; top: {menuStyle.top};{menuStyle.maxHeight
+          ? ` max-height: ${menuStyle.maxHeight}; overflow-y: auto;`
+          : ''}"
         onclick={(e) => e.stopPropagation()}
+        onkeydown={handleMenuKeyDown}
       >
-        <ul>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={startRename}>Rename</li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <ul role="none">
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={startRename}>Rename</button
+            >
+          </li>
           {#if isAudio}
-            <li onclick={handleSmartRename}>Smart Rename</li>
-          {/if}
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          {#if isAudio}
-            <li onclick={() => openFetcher("song", item.path, false)}>
-              Fetch Song Metadata
+            <li role="none">
+              <button
+                type="button"
+                role="menuitem"
+                tabindex="-1"
+                onclick={handleSmartRename}>Smart Rename</button
+              >
+            </li>
+            <li role="none">
+              <button
+                type="button"
+                role="menuitem"
+                tabindex="-1"
+                onclick={() => openFetcher("song", item.path, false)}
+              >
+                Fetch Song Metadata
+              </button>
             </li>
           {/if}
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={handleCopy}>Copy</li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={handleDownload}>Download</li>
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <li onclick={handleCreateFolder}>Create folder</li>
-          <li class="hold-delete-item">
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={handleCopy}>Copy</button
+            >
+          </li>
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={handleDownload}>Download</button
+            >
+          </li>
+          <li role="none">
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onclick={handleCreateFolder}>Create folder</button
+            >
+          </li>
+          <li role="none">
             <HoldButton
               variant="menu"
+              role="menuitem"
+              class="delete-item"
               duration={holdDeleteDuration}
-              onConfirm={() => {
-                onDelete(item.path);
-                contextMenu.update((curr) => ({
-                  ...curr,
-                  isOpen: false,
-                }));
-              }}
+              onConfirm={handleDeleteWithHold}
+              title="Hold to delete"
             >
               Delete
             </HoldButton>
@@ -1187,6 +1460,14 @@
     padding: 4px 0;
     z-index: 1000;
     min-width: 120px;
+    /* `placeMenu` caps the height when the menu would run past the window or
+       into the player bar, so the last item stays reachable. The CSS fallback
+       only covers the split second before the measurement lands. */
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    outline: none;
   }
 
   .context-menu ul {
@@ -1196,13 +1477,42 @@
   }
 
   .context-menu li {
-    padding: 8px 16px;
-    cursor: pointer;
+    padding: 0;
     font-size: 14px;
   }
 
-  .context-menu li:hover {
+  /* Items are buttons so they can take focus; they look like the menu rows
+     they replaced. */
+  .context-menu li :global(> button),
+  .context-menu li :global(> [role="menuitem"]) {
+    display: block;
+    /* border-box, or the padding below is added to `width: 100%` and puts a
+       horizontal scrollbar at the bottom of the menu. */
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* Pointer hover and keyboard focus share one highlight, so a menu opened
+     with Shift+F10 looks the same as one clicked open. */
+  .context-menu li :global(> button:hover),
+  .context-menu li :global(> [role="menuitem"]:hover),
+  .context-menu li :global(> button:focus),
+  .context-menu li :global(> [role="menuitem"]:focus) {
     background-color: #f0f0f0;
+    outline: none;
+  }
+
+  .context-menu li :global(> :focus-visible) {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
   }
 
   .rename-input {
@@ -1222,7 +1532,15 @@
     color: var(--color-badge-image);
   }
 
-  .context-menu li.hold-delete-item {
+  /* The delete item is nested deeper (HoldButton inside the row); keep the
+     hold fill inside the rounded menu edges. The menuitem rule above already
+     pads the row, so the label must not pad it again. */
+  .context-menu li :global(.hold-button.menu) {
+    border-radius: 0;
+    overflow: hidden;
+  }
+
+  .context-menu li :global(.hold-button.menu .menu-text) {
     padding: 0;
   }
 
@@ -1282,8 +1600,15 @@
     color: #e0e0e0;
   }
 
-  :global(body.dark) .context-menu li:hover {
+  :global(body.dark) .context-menu li :global(> button:hover),
+  :global(body.dark) .context-menu li :global(> [role="menuitem"]:hover),
+  :global(body.dark) .context-menu li :global(> button:focus),
+  :global(body.dark) .context-menu li :global(> [role="menuitem"]:focus) {
     background-color: #3d3d3d;
+  }
+
+  :global(body.dark) .context-menu li :global(> :focus-visible) {
+    outline-color: var(--color-primary-dark);
   }
 
   :global(body.dark) .rename-input {

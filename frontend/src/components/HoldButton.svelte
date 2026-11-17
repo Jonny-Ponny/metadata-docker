@@ -1,5 +1,5 @@
 <script>
-  import { holdToConfirm } from "../utils/index.js";
+  import { holdToConfirm, createHold } from "../utils/index.js";
 
   /**
    * @typedef {Object} Props
@@ -12,6 +12,8 @@
    * @property {number} [tabindex] -1 keeps a pointer-only control out of the
    *   tab order (the metadata editor uses this; its keyboard shortcuts replace
    *   the icons)
+   * @property {string} [role] "button" unless the control sits in a menu, where
+   *   it is a "menuitem"
    * @property {import("svelte").Snippet} children
    */
 
@@ -24,6 +26,7 @@
     disabled = false,
     class: className = "",
     tabindex = 0,
+    role = "button",
     children,
   } = $props();
 
@@ -60,8 +63,47 @@
   function handleProgress(p) {
     progress = p;
   }
+
+  // The keyboard runs the same hold as the pointer, on the same timer, so both
+  // gestures feel identical. Releasing the key cancels, exactly like lifting
+  // the mouse. `keydown` repeats while a key is held, hence the isHolding
+  // guard in `start`.
+  const keyboardHold = createHold({
+    onConfirm: handleConfirm,
+    onStart: handleStart,
+    onCancel: handleCancel,
+    onProgress: handleProgress,
+  });
+  $effect(() => {
+    keyboardHold.update({ duration });
+  });
+
+  /**
+   * @param {KeyboardEvent} e
+   */
+  function handleKeyDown(e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    // Space is the player key elsewhere in the app; inside a focused control it
+    // belongs to that control.
+    e.preventDefault();
+    e.stopPropagation();
+    if (disabled) return;
+    keyboardHold.start(e);
+  }
+
+  /**
+   * @param {KeyboardEvent} e
+   */
+  function handleKeyUp(e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.stopPropagation();
+    keyboardHold.cancel(e);
+  }
 </script>
 
+<!-- The div is a button/menuitem by role, so the tabindex is fine; svelte-check
+     cannot see through the role prop. -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="hold-button {variant} {className}"
   class:holding={isHolding}
@@ -75,9 +117,11 @@
   }}
   bind:this={buttonRef}
   {title}
-  role="button"
+  {role}
   {tabindex}
   aria-disabled={disabled}
+  onkeydown={handleKeyDown}
+  onkeyup={handleKeyUp}
 >
   <!-- Progress indicator -->
   <div class="progress-indicator" style="--progress: {progress};">

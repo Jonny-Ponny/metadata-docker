@@ -755,6 +755,65 @@ describe("App", () => {
     renamingPath.set(null);
   });
 
+  it("opens the row's menu with Shift+F10 and focuses the first item", async () => {
+    // Reported in Firefox: the menu opened but nothing was focused, so the
+    // arrows did nothing and Tab (which closes the menu) was the only way out.
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    const row = node(view, "loose.flac");
+    row.focus();
+
+    await fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    await tick();
+
+    expect(get(contextMenu)).toMatchObject({
+      isOpen: true,
+      mode: "keyboard",
+    });
+    const first = screen.getByRole("menuitem", { name: "Rename" });
+    expect(document.activeElement).toBe(first);
+
+    // The arrows work straight away, without another key or a timer.
+    const menu = /** @type {HTMLElement} */ (
+      document.querySelector(".context-menu")
+    );
+    await fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(document.activeElement).not.toBe(first);
+  });
+
+  it("opens the row's menu with Alt+Enter", async () => {
+    // The reliable key: Firefox cannot be stopped from showing its own menu on
+    // Shift+F10, so Alt+Enter is the one documented as primary.
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    const row = node(view, "loose.flac");
+    row.focus();
+
+    await fireEvent.keyDown(row, { key: "Enter", altKey: true });
+    await tick();
+
+    expect(get(contextMenu)).toMatchObject({ isOpen: true, mode: "keyboard" });
+    expect(document.activeElement).toBe(
+      screen.getByRole("menuitem", { name: "Rename" }),
+    );
+  });
+
+  it("opens the cursor row's menu from the tree panel with Alt+Enter", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    // The tree element is the panel's focus stop when no row holds one; its
+    // keys are routed with the cursor row's path.
+    const tree = /** @type {HTMLElement} */ (
+      view.container.querySelector(".file-tree")
+    );
+    tree.focus();
+
+    await fireEvent.keyDown(tree, { key: "Enter", altKey: true });
+    await tick();
+
+    expect(get(contextMenu).isOpen).toBe(true);
+  });
+
   it("closes the context menu and keeps F2 working after a copy", async () => {
     // Copy was the one menu action that neither closed the menu nor kept the
     // item selected. The open menu made `isOverlayOpen()` true, so F2 was

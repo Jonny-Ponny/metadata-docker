@@ -45,7 +45,14 @@ describe("keyboard guards", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     renamingPath.set(null);
-    contextMenu.set({ isOpen: false, path: null, x: 0, y: 0, type: null });
+    contextMenu.set({
+      isOpen: false,
+      path: null,
+      x: 0,
+      y: 0,
+      type: null,
+      mode: "pointer",
+    });
     treeCursor.set(null);
     treeFocusMode.set("navigation");
   });

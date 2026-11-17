@@ -329,6 +329,47 @@ fine. An explicit `tabindex` opts out, and the pane still scrolls with the
 arrow keys once focus is on a control inside it. A new dialog with a scrolling
 body needs the same attribute.
 
+### Context menu
+
+A row's menu lives in the `contextMenu` store (`stores/context.store.js`), which
+records the target path, the anchor point and how the menu was opened. Only the
+target row renders it, as a sibling of the row rather than inside it.
+
+The pointer path opens it at the cursor. The keyboard path — `Alt+Enter`,
+`Shift+F10` or the context-menu key, handled by the row itself and by
+`handleTreeNavigation` when the panel has focus — centres it on the row and
+moves focus to the first item. `aria-keyshortcuts` on every row lists those
+keys and `aria-controls` points at the menu. `Alt+Enter` is the one to document
+as primary: Firefox opens its own context menu for `Shift+F10` and no handler
+can stop it (MDN: with Shift held, the native menu appears without a
+`contextmenu` event), and screen readers may not send the Menu key. Both
+standard keys are still accepted because they work for people whose
+environment sends them.
+The items are real controls
+(`role="menu"` / `role="menuitem"`, `tabindex="-1"`, roving focus), so Arrow
+up/down, Home/End, Enter and Space work; Escape closes and returns focus to the
+row. That focus return only happens for keyboard opens, since the pointer path
+never moved focus.
+
+Placement is `placeMenu` in `utils/contextMenu.utils.js`, which is pure and
+unit-tested: it opens in the pointer quadrant, flips to the other side when the
+menu would overflow, and — when the menu is taller than the free area and fits
+on neither side — pins it to the top edge and caps its height so the list
+scrolls. The old code flipped up and then clamped to the top margin, which
+pushed a tall menu's bottom past the window edge.
+
+The free area excludes the **player bar**, which is fixed to the bottom of the
+window with the same `z-index` as the menu, so a menu placed there is painted
+behind it. `positionMenu` measures the bar at open time (it is absent when the
+player is disabled) and passes its height as the viewport's `bottom` inset; an
+anchor that sits behind the bar gets the menu slid into the free area instead of
+flipped. A unit test sweeps every anchor and menu size and asserts the menu
+never overlaps the bar or leaves the window.
+
+Delete is a `HoldButton` with `role="menuitem"`, so it keeps its hold-to-confirm
+behaviour: the same `createHold` timer runs for a pointer press and for Enter or
+Space held on the item, and releasing early cancels both.
+
 ### Metadata editor keyboard handling
 
 The editor is a long list of text fields with per-field action icons, so the

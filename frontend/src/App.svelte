@@ -64,6 +64,7 @@
     isTypingTarget,
     isOverlayOpen,
     treeFocusMode,
+    contextMenu,
   } from "./utils/index.js";
 
   // Wait for the user to stop typing before asking the server, and ignore
@@ -437,7 +438,6 @@
   // DOM ids the rows report. They carry the search prefix while searching, so
   // `aria-activedescendant` can point at the cursor row in either view.
   let renderedRowIds = $state(/** @type {Record<string, string>} */ ({}));
-
   /**
    * @param {string} path
    * @param {string} id
@@ -1531,6 +1531,36 @@
     const index = rowIndexOf(visibleRows, path);
     if (index < 0) return;
     const row = visibleRows[index];
+
+    // Alt+Enter, Shift+F10 or the context-menu key. A row handles its own (it
+    // owns the anchor position); this catches the key on the panel itself,
+    // where no row is focused, and opens the cursor row's menu.
+    if (
+      e.key === "ContextMenu" ||
+      (e.key === "F10" && e.shiftKey && !e.ctrlKey) ||
+      (e.key === "Enter" && e.altKey && !e.ctrlKey && !e.metaKey)
+    ) {
+      if (e.target === e.currentTarget) {
+        e.preventDefault();
+        // The rendered ids carry the search prefix, so ask the rows rather
+        // than rebuilding the id here.
+        const rowId = renderedRowIds[row.path] ?? treeRowId(row.path);
+        const box = document.getElementById(rowId)?.getBoundingClientRect();
+        contextMenu.set({
+          isOpen: true,
+          path: row.path,
+          x:
+            box && box.width ? box.left + box.width / 2 : window.innerWidth / 2,
+          y:
+            box && box.height
+              ? box.top + box.height / 2
+              : window.innerHeight / 2,
+          type: row.type,
+          mode: "keyboard",
+        });
+      }
+      return;
+    }
 
     if (e.ctrlKey || e.metaKey) {
       // Rows forward their own Ctrl/Cmd+Enter (see TreeNode); the window-level
