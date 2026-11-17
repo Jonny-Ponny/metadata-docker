@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-21`, `B-47`. Next:
-  `T-22`, `B-48`.
+- IDs are permanent and never reused. Last used: `T-21`, `B-48`. Next:
+  `T-22`, `B-49`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 

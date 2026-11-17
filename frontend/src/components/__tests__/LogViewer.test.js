@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { get } from "svelte/store";
 
 import LogViewer from "../LogViewer.svelte";
 import { toast } from "../../stores/toast.store.js";
+import { resetDialogStack, topDialog } from "../../utils/focus.utils.js";
+import { isOverlayOpen } from "../../stores/keyboard.store.js";
 
 const entries = [
   { timestamp: "10:00:00", level: "INFO", message: "Server started" },
@@ -40,6 +42,10 @@ function urlOf(call) {
 }
 
 describe("LogViewer", () => {
+  beforeEach(() => {
+    resetDialogStack();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -203,6 +209,50 @@ describe("LogViewer", () => {
     await fireEvent.click(checkbox);
 
     expect(clearIntervalSpy).toHaveBeenCalled();
+  });
+
+  it("leaves the dialog stack when it closes", async () => {
+    // Reported after using the Help modal's Logs button: the viewer registered
+    // itself but could never unregister, because its cleanup read `panel` after
+    // the element had been unbound. The stale entry kept `isOverlayOpen()` true
+    // forever, so every shortcut stopped working and closing a later dialog
+    // could leave the page `inert`.
+    stubLogs();
+    const { rerender } = render(LogViewer, {
+      props: { isOpen: true, onClose: vi.fn() },
+    });
+    await screen.findByText("Server started");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(topDialog()?.getAttribute("aria-label")).toBe("Application logs");
+    expect(isOverlayOpen()).toBe(true);
+
+    await rerender({ isOpen: false, onClose: vi.fn() });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // A stale entry would make this dialog the "topmost" one forever, so every
+    // shortcut stayed off and the next Escape tried to close it again.
+    expect(topDialog()).toBeNull();
+    expect(isOverlayOpen()).toBe(false);
+    expect(document.querySelector("[inert]")).toBeNull();
+  });
+
+  it("returns focus to the control that opened it", async () => {
+    stubLogs();
+    const trigger = document.createElement("button");
+    trigger.textContent = "Open logs";
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const { rerender } = render(LogViewer, {
+      props: { isOpen: true, onClose: vi.fn() },
+    });
+    await screen.findByText("Server started");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await rerender({ isOpen: false, onClose: vi.fn() });
+
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
   });
 
   it("closes from Escape, the header button, the footer and the overlay", async () => {

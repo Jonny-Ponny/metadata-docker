@@ -331,6 +331,31 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/components/__tests__/SettingsModal.test.js` -
       `reports addon load failures without retrying in a loop`.
 
+- [x] **B-48 (P1) Closing the application logs left the app unresponsive.**
+      `LogViewer.svelte` managed the dialog stack itself: its effect called
+      `openDialog(panel)` and its cleanup called `closeDialog(panel)`. The
+      effect runs before `bind:this` populates `panel`, so every cleanup
+      unregistered `null` and the dialog stayed in the stack after it closed.
+      `isOverlayOpen()` then reported an overlay forever, so F2, Delete, the
+      tree keys and Space all stopped working, and a later dialog could close
+      against a stale top entry and leave the page `inert`. Opening the logs
+      from the Help modal's Logs button triggered it reliably, because that
+      button closes Help and opens the logs in one gesture. The stack also
+      never recovered: every later `syncInert()` walked up from a detached
+      panel. `isOverlayOpen()` separate class-name list had another gap - it
+      never recognised `.log-modal`, so shortcuts were live behind the log
+      viewer even while it was open.
+      **Fix:** `LogViewer` uses `dialogOpenEffect(panel, isOpen, onClose)` like
+      every other dialog, which captures the panel it registered, restores
+      focus to the opener and owns Escape; its custom window listener is gone.
+      `isOverlayOpen()` reads the dialog stack (the single source of truth)
+      instead of a class-name list.
+      **Tests:** `frontend/src/components/__tests__/LogViewer.test.js` -
+      `leaves the dialog stack when it closes` and `returns focus to the
+      control that opened it`; `frontend/src/stores/__tests__/keyboard.store.test.js`
+      - `treats an open dialog as an overlay, whatever it looks like` and
+      `ignores shortcuts while a dialog is open`.
+
 ## Frontend app shell
 
 - [x] **B-35 (P1) An empty library made the app reload `/api/files` forever.**
@@ -570,3 +595,4 @@ silently.
 | B-45 | `frontend/src/__tests__/App.test.js` - `renames a folder created in the root from the header button` |
 | B-46 | `frontend/src/__tests__/App.test.js` - `renames a file that was dragged into a folder` |
 | B-47 | `frontend/src/__tests__/App.test.js` - `closes the context menu and keeps F2 working after a copy` |
+| B-48 | `frontend/src/components/__tests__/LogViewer.test.js` - `leaves the dialog stack when it closes` |
