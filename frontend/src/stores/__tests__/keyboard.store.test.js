@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { contextMenu, renamingPath } from "../context.store.js";
+import { openDialog, resetDialogStack } from "../../utils/focus.utils.js";
 import {
   isInsideTree,
   isOverlayOpen,
@@ -59,6 +60,7 @@ describe("keyboard guards", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
+    resetDialogStack();
   });
 
   it("detects typing targets", () => {
@@ -94,12 +96,19 @@ describe("keyboard guards", () => {
     expect(isOverlayOpen()).toBe(true);
   });
 
-  it("treats a rendered modal as an open overlay", () => {
-    document.body.innerHTML = '<div class="modal-content"></div>';
+  it("treats an open dialog as an overlay, whatever it looks like", () => {
+    // The stack, not a class-name list: the old list missed the log viewer, so
+    // shortcuts kept working behind it.
+    expect(isOverlayOpen()).toBe(false);
+
+    const panel = document.createElement("div");
+    document.body.appendChild(panel);
+    openDialog(panel);
     expect(isOverlayOpen()).toBe(true);
 
-    document.body.innerHTML = '<div class="help-modal"></div>';
-    expect(isOverlayOpen()).toBe(true);
+    // Closing it again releases the keyboard.
+    resetDialogStack();
+    expect(isOverlayOpen()).toBe(false);
   });
 
   it("ignores shortcuts while typing", () => {
@@ -111,8 +120,10 @@ describe("keyboard guards", () => {
     expect(shouldIgnoreShortcut(event)).toBe(true);
   });
 
-  it("ignores shortcuts while a modal is open", () => {
-    document.body.innerHTML = '<div class="modal-content"></div>';
+  it("ignores shortcuts while a dialog is open", () => {
+    const panel = document.createElement("div");
+    document.body.appendChild(panel);
+    openDialog(panel);
     expect(shouldIgnoreShortcut(keydown())).toBe(true);
   });
 

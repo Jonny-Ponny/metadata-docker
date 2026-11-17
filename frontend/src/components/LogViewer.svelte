@@ -5,9 +5,7 @@
     getAuthHeaders,
     keepFocusInDialog,
     keepTabInDialog,
-    closeTopDialogOnEscape,
-    openDialog,
-    closeDialog,
+    dialogOpenEffect,
     openSelectOnEnter,
   } from "../utils/index.js";
   import { SvelteURLSearchParams } from "svelte/reactivity";
@@ -199,14 +197,6 @@
 
   // Event handlers
   /**
-   * @param {KeyboardEvent} e
-   */
-  function handleKeyDown(e) {
-    // Only the topmost dialog closes; the log view sits inside others.
-    closeTopDialogOnEscape(e, panel, onClose);
-  }
-
-  /**
    * @param {Event} e
    */
   function stopPropagation(e) {
@@ -239,7 +229,15 @@
     }
   }
 
-  // Handle modal open
+  // Handle modal open. The dialog stack is registered through the shared
+  // helper, which captures the panel it opened: this effect used to call
+  // `openDialog(panel)` itself and `closeDialog(panel)` in its cleanup, but the
+  // cleanup runs when the panel has already been unbound, so the dialog was
+  // never removed from the stack. A stale top dialog kept `isOverlayOpen()`
+  // true for the rest of the session, so every shortcut stopped working, and
+  // closing it could leave the page `inert` (T-22).
+  $effect(() => dialogOpenEffect(panel, isOpen, onClose));
+
   $effect(() => {
     if (isOpen) {
       // Initial fetch
@@ -253,10 +251,6 @@
           }
         }, 5000);
       }
-
-      // Add keyboard listener
-      openDialog(panel);
-      window.addEventListener("keydown", handleKeyDown);
     }
 
     return () => {
@@ -265,8 +259,6 @@
         clearInterval(intervalId);
         intervalId = null;
       }
-      window.removeEventListener("keydown", handleKeyDown);
-      closeDialog(panel);
     };
   });
 </script>

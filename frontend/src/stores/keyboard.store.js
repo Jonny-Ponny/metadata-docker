@@ -10,6 +10,7 @@
 import { get, writable } from "svelte/store";
 
 import { contextMenu, renamingPath } from "./context.store.js";
+import { topDialog } from "../utils/focus.utils.js";
 
 const TYPING_SELECTOR = "input, textarea, select, [contenteditable='true']";
 
@@ -30,17 +31,17 @@ export function isTypingTarget(target) {
 /**
  * Whether a modal or the context menu currently owns the keyboard.
  *
- * Modals render `.modal-content` / `.help-modal`; rename inputs and the
- * context menu are separate states that do not always focus an input.
+ * The dialog stack is the source of truth for modals: every dialog registers
+ * there through `dialogOpenEffect`, so a new one cannot be forgotten the way
+ * the old class list missed the log viewer. Rename inputs and the context menu
+ * are separate states that do not always focus an input.
  * @returns {boolean}
  */
 export function isOverlayOpen() {
   if (typeof document === "undefined") return false;
   if (get(renamingPath) !== null) return true;
   if (get(contextMenu).isOpen) return true;
-  return !!document.querySelector(
-    ".modal-content, .help-modal, .edit-modal, .image-viewer-overlay",
-  );
+  return topDialog() !== null;
 }
 
 /**

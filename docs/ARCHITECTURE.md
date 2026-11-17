@@ -319,6 +319,14 @@ Escape has to reach the close handler, and a capture-phase stop swallowed Tab
 before the stack's bubble-phase listener ran, leaving that dialog with no
 containment at all so Tab walked out into the browser chrome.
 
+**Every dialog must register through `dialogOpenEffect`.** Calling
+`openDialog`/`closeDialog` directly from an effect is what broke the log viewer
+(B-48): the effect runs before `bind:this` binds the panel, so the cleanup
+unregistered `null` and the dialog stayed on the stack after it closed. The
+helper captures the element it registered and owns Escape and focus return.
+`isOverlayOpen()` reads the stack for the same reason, rather than keeping a
+separate list of dialog class names.
+
 Every scrollable pane inside a dialog carries `tabindex="-1"` (`.modal-body`,
 `.settings-content`, `.help-content`, `.log-display`,
 `.modal-scrollable-content`). Firefox adds scrollable regions to the tab order
