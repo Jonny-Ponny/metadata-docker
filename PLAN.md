@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-18`, `B-47`. Next:
-  `T-19`, `B-48`.
+- IDs are permanent and never reused. Last used: `T-21`, `B-47`. Next:
+  `T-22`, `B-48`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -86,21 +86,47 @@ image build. What remains is optional hardening and new features.
   shapes are documented with JSDoc typedefs (tree nodes, metadata, upload
   batches, player API) instead of per-file opt-ins, and CI fails on a new type
   error.
+- **ARIA tree semantics (T-18).** Complete: the `.file-tree` list is
+  `role="tree"` with a label and `aria-activedescendant`; every row is
+  `role="treeitem"` with `aria-level`, `aria-selected`, `aria-posinset` and
+  `aria-setsize`, and folders also carry `aria-expanded`. Nested lists are
+  `role="group"` with `role="none"` wrappers, and the two local `svelte-ignore`
+  comments in `TreeNode.svelte` are gone. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#tree-keyboard-navigation).
+- **Focus containment in the dialogs (T-19).** Complete: every dialog is
+  `role="dialog"` with `aria-modal`, a label, `tabindex="-1"` and a close on
+  Escape; Tab and Shift+Tab wrap inside it and focus landing outside is pulled
+  back. Only the topmost dialog answers Escape, so a nested editor closes one
+  layer at a time, and closing returns focus to the opener. Everything outside
+  the topmost dialog is marked `inert` (re-evaluated on open, close and the first
+  keyboard press, since a dialog may render as a sibling of the one that opened
+  it), so the browser's own Tab cannot reach the page or a dialog underneath.
+  Every dialog scroll pane carries `tabindex="-1"`, because Firefox otherwise
+  puts a scrollable region in the tab order. Space stays the play/pause key
+  everywhere except real text entry, including over the volume slider. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#dialogs).
 
 ## Planned
 
 ### Keyboard and accessibility (tree navigation)
 
 Started from the "more keyboard shortcuts and modal focus handling" item under
-Features and split into three numbered tasks:
+Features and split into numbered tasks. T-16 to T-19 are done; the context menu
+follows as T-21.
 
-- **T-18 (P3) - ARIA tree semantics.** `role="tree"`/`treeitem`, `aria-level`,
-  `aria-expanded`, `aria-setsize`/`aria-posinset` and `aria-activedescendant`,
-  plus focus containment in the modals. Builds on T-16's flat row list; left
-  out of it to keep the keyboard change reviewable. The rows currently carry
-  `role="listitem"` and a roving tabindex, which the a11y linter accepts with
-  two local `svelte-ignore` comments in `TreeNode.svelte` that this task
-  removes.
+- **T-21 (P3) - context menu keyboard access.** The tree's right-click menu is
+  a `<ul>` of `<li onclick>` items: no `role="menu"`/`menuitem`, no roving
+  focus, and no key that opens it (Shift+F10 / the context-menu key). Menu ARIA
+  is easy to get wrong, so decide the shape (true `menu` role with managed
+  focus, or a small roving-focus list) before writing it. The file row already
+  advertises `aria-keyshortcuts="Shift+F10"` from T-18, so today it promises a
+  key that does nothing.
+
+### Lyrics editor
+
+- **T-20 (P3) - LRCEditor rework.** Interface rework and quality-of-life
+  improvements to the synced-lyrics editor. Scope to be defined when the work
+  starts.
 
 ### Known issues and small fixes
 
@@ -132,7 +158,7 @@ No open items.
 - **UX and performance** - smart-rename dry-run preview with a conflict
   strategy, addon reload from Settings, responsive/mobile layout, metadata
   CSV/JSON export-import and library normalisation tools. The keyboard work is
-  done (T-16, T-17); ARIA roles follow as T-18 above.
+  done (T-16 to T-19); the context menu follows as T-21 above.
 - **More audio formats** - extend `formats.py` and `tag_backends.py`.
 
 ### Housekeeping

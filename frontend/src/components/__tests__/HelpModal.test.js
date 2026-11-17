@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 
 import HelpModal from "../HelpModal.svelte";
+import { closeDialog, openDialog } from "../../utils/focus.utils.js";
 
 describe("HelpModal", () => {
   it("renders nothing while closed", () => {
@@ -130,5 +131,76 @@ describe("HelpModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(openLogs).toHaveBeenCalledTimes(1);
     window.removeEventListener("openLogs", openLogs);
+  });
+
+  describe("dialog semantics and focus", () => {
+    it("is announced as a modal dialog with a name", () => {
+      render(HelpModal, { props: { isOpen: true, onClose: vi.fn() } });
+
+      const dialog = screen.getByRole("dialog", {
+        name: "Help and information",
+      });
+
+      expect(dialog.getAttribute("aria-modal")).toBe("true");
+      expect(dialog.className).toContain("help-modal");
+    });
+
+    it("stays open on Escape while another dialog is on top", async () => {
+      // Dialogs are mounted while closed and nested (the lyrics editor opens
+      // its own edit dialog), so Escape must only close the topmost one.
+      const onClose = vi.fn();
+      render(HelpModal, { props: { isOpen: true, onClose } });
+      const dialog = screen.getByRole("dialog", {
+        name: "Help and information",
+      });
+      const inner = document.createElement("div");
+      document.body.appendChild(inner);
+      openDialog(inner);
+      try {
+        await fireEvent.keyDown(dialog, { key: "Escape" });
+        expect(onClose).not.toHaveBeenCalled();
+      } finally {
+        closeDialog(inner);
+        inner.remove();
+      }
+    });
+
+    it("gives focus back to the button that opened it", async () => {
+      // Closing used to drop focus, so the next Tab restarted from the top of
+      // the page instead of from the control the user came from.
+      const trigger = document.createElement("button");
+      trigger.textContent = "Help";
+      document.body.appendChild(trigger);
+      trigger.focus();
+      const view = render(HelpModal, {
+        props: { isOpen: true, onClose: vi.fn() },
+      });
+      const dialog = screen.getByRole("dialog", {
+        name: "Help and information",
+      });
+      /** @type {HTMLElement} */ (dialog.querySelector("button")).focus();
+
+      await view.rerender({ isOpen: false, onClose: vi.fn() });
+
+      expect(document.activeElement).toBe(trigger);
+      trigger.remove();
+    });
+
+    it("wraps Tab from the last control back to the first", async () => {
+      // Without the wrap, Tab leaves the dialog and drives the page behind it.
+      render(HelpModal, { props: { isOpen: true, onClose: vi.fn() } });
+      const dialog = screen.getByRole("dialog", {
+        name: "Help and information",
+      });
+      const stops = [...dialog.querySelectorAll("button, a[href]")].filter(
+        (element) => /** @type {HTMLElement} */ (element).tabIndex >= 0,
+      );
+      const last = /** @type {HTMLElement} */ (stops[stops.length - 1]);
+      last.focus();
+
+      await fireEvent.keyDown(last, { key: "Tab" });
+
+      expect(document.activeElement).toBe(stops[0]);
+    });
   });
 });

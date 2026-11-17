@@ -1529,27 +1529,38 @@ describe("App", () => {
     }
 
     /**
-     * Put the keyboard in the tree, as a click on its panel does.
+     * Put the keyboard in the tree, as a press on it does.
      */
     async function enterTree() {
-      const panel = /** @type {HTMLElement} */ (
-        view.container.querySelector(".file-tree-panel")
-      );
-      fireEvent.pointerDown(panel, { bubbles: true });
+      fireEvent.pointerDown(/** @type {HTMLElement} */ (treeElement()), {
+        bubbles: true,
+      });
       await tick();
     }
 
     /**
+     * The tree element itself: the ARIA tree, which owns the cursor and the
+     * keys pressed on it.
+     * @returns {Element}
+     */
+    function treeElement() {
+      const tree = view.container.querySelector(".file-tree");
+      if (!tree) throw new Error("the tree is not rendered");
+      return tree;
+    }
+
+    /**
      * Press a key on the tree. Keys act on the app's cursor row, so this
-     * presses on the panel exactly like a focused row would forward them.
+     * presses on the tree itself exactly like a focused row would forward them.
      * @param {string} key
      * @param {{ ctrlKey?: boolean }} [init]
      */
     async function pressKey(key, init = {}) {
-      const panel = /** @type {HTMLElement} */ (
-        view.container.querySelector(".file-tree-panel")
-      );
-      fireEvent.keyDown(panel, { key, bubbles: true, ...init });
+      fireEvent.keyDown(/** @type {HTMLElement} */ (treeElement()), {
+        key,
+        bubbles: true,
+        ...init,
+      });
       await tick();
     }
 
@@ -1741,6 +1752,74 @@ describe("App", () => {
       // Space belongs to the player, not the tree: it must not reopen it.
       await pressKey(" ");
       expect(screen.queryByText("inner.mp3")).toBeNull();
+    });
+
+    it("exposes the flat rows as an ARIA tree", async () => {
+      // Screen readers need the tree structure the keyboard model already has:
+      // a tree owning the cursor through aria-activedescendant, treeitem rows
+      // with their depth, and a leaf that reports no aria-expanded at all.
+      useTree(keyboardTree());
+      view = await renderAuthenticated();
+      await enterTree();
+
+      const tree = treeElement();
+      expect(tree.getAttribute("role")).toBe("tree");
+      const topLevel = visiblePaths();
+      expect(tree.getAttribute("aria-label")).toBe("Music library");
+
+      const albums = row("Albums");
+      expect(albums.getAttribute("role")).toBe("treeitem");
+      expect(albums.getAttribute("aria-level")).toBe("1");
+      expect(albums.getAttribute("aria-expanded")).toBe("false");
+      expect(albums.getAttribute("aria-setsize")).toBe(String(topLevel.length));
+      expect(albums.getAttribute("aria-posinset")).toBe(
+        String(topLevel.indexOf("Albums") + 1),
+      );
+
+      // A file cannot be expanded, so it must not claim to be collapsed.
+      const charlie = row("Charlie.flac");
+      expect(charlie.getAttribute("role")).toBe("treeitem");
+      expect(charlie.hasAttribute("aria-expanded")).toBe(false);
+      expect(charlie.getAttribute("aria-posinset")).toBe(
+        String(topLevel.indexOf("Charlie.flac") + 1),
+      );
+
+      // The active descendant is the row the keyboard is on, and that row is
+      // the tree's single Tab stop.
+      await pressKey("Home");
+      const first = topLevel[0];
+      expect(tree.getAttribute("aria-activedescendant")).toBe(row(first).id);
+      expect(row(first).getAttribute("tabindex")).toBe("0");
+      // Only the cursor row is in the Tab order.
+      expect([
+        ...view.container.querySelectorAll(".file-tree [tabindex='0']"),
+      ]).toEqual([tree.children[0]?.querySelector("[role='treeitem']")]);
+      await pressKey("ArrowDown");
+      expect(row(first).getAttribute("tabindex")).toBe("-1");
+      expect(row(topLevel[1]).getAttribute("tabindex")).toBe("0");
+
+      // Open a folder so the test has a nested row to inspect.
+      await pressKey("ArrowRight");
+      await tick();
+      expect(row("Albums").getAttribute("aria-expanded")).toBe("true");
+      const inner = row("Albums/inner.mp3");
+      expect(inner.getAttribute("aria-level")).toBe("2");
+      expect(inner.getAttribute("aria-posinset")).toBe("1");
+      expect(inner.getAttribute("aria-setsize")).toBe("1");
+
+      // The active descendant follows the cursor into the nested row; the
+      // treeitem itself is not a Tab stop. DOM focus stays on the row the
+      // user activated, so no top-level row can carry the stop either: the
+      // tree element becomes its own, which is why it is focusable.
+      await pressKey("ArrowRight");
+      expect(cursorPath()).toBe("Albums/inner.mp3");
+      expect(tree.getAttribute("aria-activedescendant")).toBe(inner.id);
+      expect(inner.getAttribute("tabindex")).toBe("-1");
+      expect(row("Albums").getAttribute("tabindex")).toBe("-1");
+      expect(
+        view.container.querySelector(".file-tree [tabindex='0']"),
+      ).toBeNull();
+      expect(tree.getAttribute("tabindex")).toBe("0");
     });
 
     it("does not open a collapsed folder with Right when it is empty", async () => {
@@ -2162,17 +2241,86 @@ describe("App", () => {
       );
     });
 
-    it("leaves Space to a focused button", async () => {
+    it("plays and pauses with Space on a focused button too", async () => {
+      // Space is the player key everywhere. Leaving it to the focused button
+      // meant that after a dialog closed, focus return put focus back on the
+      // opener and Space re-opened the dialog instead of playing.
       isAuthenticated.set(true);
-      await renderAuthenticated();
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
       const playSpy = vi
         .spyOn(HTMLMediaElement.prototype, "play")
         .mockResolvedValue(undefined);
+      const help = screen.getByRole("button", { name: "Help" });
+      help.focus();
 
-      fireEvent.keyDown(screen.getByRole("button", { name: "Help" }), {
-        key: " ",
-      });
+      fireEvent.keyDown(help, { key: " " });
+      await waitFor(() => expect(playSpy).toHaveBeenCalled());
+
+      fireEvent.keyDown(help, { key: " " });
+      await waitFor(() =>
+        expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled(),
+      );
+    });
+
+    it("plays on Space over a focused select", async () => {
+      // A <select> used to count as a typing field, so Space opened the
+      // dropdown instead of playing. Only controls that Space genuinely
+      // operates natively keep it.
+      isAuthenticated.set(true);
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+      const select = document.createElement("select");
+      select.innerHTML = "<option>a</option>";
+      document.body.appendChild(select);
+      select.focus();
+
+      fireEvent.keyDown(select, { key: " " });
+      await waitFor(() => expect(playSpy).toHaveBeenCalled());
+      select.remove();
+    });
+
+    it("plays on Space over the volume slider", async () => {
+      // The slider kept Space reserved but did nothing with it, so touching the
+      // volume made playback control stop working.
+      isAuthenticated.set(true);
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+      const slider = view.container.querySelector("input[type='range']");
+      expect(slider).toBeTruthy();
+      /** @type {HTMLElement} */ (slider).focus();
+
+      fireEvent.keyDown(/** @type {HTMLElement} */ (slider), { key: " " });
+      await waitFor(() => expect(playSpy).toHaveBeenCalled());
+    });
+
+    it("still types a space into a text field", async () => {
+      // Typing surfaces keep their own Space; only the player takes the key
+      // elsewhere.
+      isAuthenticated.set(true);
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+      const field = /** @type {HTMLInputElement} */ (
+        view.container.querySelector(".right-panel input[type='text']")
+      );
+      expect(field).toBeTruthy();
+
+      fireEvent.keyDown(field, { key: " " });
       await Promise.resolve();
+
       expect(playSpy).not.toHaveBeenCalled();
     });
   });
@@ -2653,6 +2801,41 @@ describe("App", () => {
     await fireEvent.change(input, { target: { files: [] } });
 
     expect(startDropMock).not.toHaveBeenCalled();
+  });
+
+  it("does not re-open a dialog when Space is pressed after closing it", async () => {
+    // Closing returns focus to the opener (T-19), so Space used to activate
+    // that button again. Space is the player key now, not an activator.
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    await fireEvent.click(node(view, "loose.flac"));
+    await screen.findByRole("heading", { name: "Metadata Editor" });
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockResolvedValue(undefined);
+
+    const help = screen.getByRole("button", { name: "Help" });
+    // A real click focuses the button first; `fireEvent.click` does not.
+    help.focus();
+    await fireEvent.click(help);
+    const dialog = await screen.findByRole("dialog", {
+      name: "Help and information",
+    });
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Help and information" }),
+      ).toBeNull(),
+    );
+    // Focus came back to the button...
+    expect(document.activeElement).toBe(help);
+
+    // ...but Space plays/pauses instead of activating it.
+    await fireEvent.keyDown(help, { key: " " });
+    await waitFor(() => expect(playSpy).toHaveBeenCalled());
+    expect(
+      screen.queryByRole("dialog", { name: "Help and information" }),
+    ).toBeNull();
   });
 
   it("opens the settings, help and log modals", async () => {

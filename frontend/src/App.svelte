@@ -434,6 +434,41 @@
     return treeRowId(path);
   }
 
+  // DOM ids the rows report. They carry the search prefix while searching, so
+  // `aria-activedescendant` can point at the cursor row in either view.
+  let renderedRowIds = $state(/** @type {Record<string, string>} */ ({}));
+
+  /**
+   * @param {string} path
+   * @param {string} id
+   */
+  function registerRowId(path, id) {
+    renderedRowIds[path] = id;
+  }
+
+  // The cursor row exists whenever the keyboard is in the tree; the id is only
+  // known after the row reports it, so the attribute is absent before that.
+  let activeRowId = $derived(
+    cursorRowPath ? (renderedRowIds[cursorRowPath] ?? null) : null,
+  );
+
+  // Which row currently holds the tree's Tab stop. DOM focus stays on the row
+  // the user activated, so a deep selection has to keep its stop even though
+  // the roving path (which prefers a top-level row) points elsewhere.
+  /** @type {Record<string, boolean>} */
+  let renderedTabStops = $state({});
+
+  /**
+   * @param {string} path
+   * @param {boolean} isTabStop
+   */
+  function registerTabStop(path, isTabStop) {
+    if (isTabStop) renderedTabStops[path] = true;
+    else delete renderedTabStops[path];
+  }
+
+  let treeHasRowTabStop = $derived(Object.keys(renderedTabStops).length > 0);
+
   /** Which tree page the keyboard is in, for PgUp/PgDn and the focus ring. */
   let treeIsKeyboardActive = $state(false);
 
@@ -1332,16 +1367,21 @@
    * @param {KeyboardEvent} e
    */
   function handleShortcutKeyDown(e) {
-    if (shouldIgnoreShortcut(e)) return;
-
-    // Space plays/pauses the current track wherever focus is, except on
-    // controls and links that use Space themselves. The tree no longer uses
-    // it: Space is the player key, Right/Left toggle folders.
-    if (e.key === " " && !isSpaceOwner(e.target)) {
+    // Space is the player key everywhere, so it is checked before the shared
+    // guard: that guard treats a <select> like a typing field, which would
+    // leave Space opening the dropdown instead of playing. Space is ignored
+    // only where it types a character or operates a control natively.
+    // `preventDefault` also stops the browser activating a focused button,
+    // which would make a keyboard user re-open the dialog they just closed;
+    // buttons are activated with Enter instead.
+    if (e.key === " ") {
+      if (spaceBelongsToControl(e.target) || isOverlayOpen()) return;
       e.preventDefault();
       if ($settings.enablePlayer) void playerComponent?.togglePlay();
       return;
     }
+
+    if (shouldIgnoreShortcut(e)) return;
 
     // Rename and delete act on the row the keyboard is on, which may differ
     // from the selection while the cursor is being moved.
@@ -1371,15 +1411,20 @@
   }
 
   /**
-   * Whether Space belongs to the target control (a button, link or summary)
-   * rather than the player.
+   * Whether Space types a character, so the player must leave it alone.
+   *
+   * Only text entry qualifies. A button or link is activated with Enter, and a
+   * select opens with Enter or the arrow keys, so Space stays the player key
+   * there. Sliders are excluded too: Space did nothing on a range input, so
+   * leaving it reserved only silenced playback after touching the volume
+   * (T-19).
    * @param {EventTarget | null} target
    * @returns {boolean}
    */
-  function isSpaceOwner(target) {
+  function spaceBelongsToControl(target) {
     if (!(target instanceof Element)) return false;
     return !!target.closest(
-      "button, a[href], summary, [role='button'], input[type='checkbox'], input[type='radio']",
+      "textarea, input[type='text'], input[type='search'], input[type='number'], input[type='email'], input[type='url'], input[type='password'], input:not([type]), [contenteditable='true'], [role='textbox']",
     );
   }
 
@@ -1727,10 +1772,10 @@
   /**
    * Turns the tree keys on when the tree itself is clicked, including empty
    * space below the rows.
-   * @param {PointerEvent} event
    */
-  function handleTreePanelPointerDown(event) {
-    if (!(event.target instanceof Element)) return;
+  function handleTreePanelPointerDown() {
+    // Any press in the tree means the keyboard now belongs to it (the focus
+    // ring shows on the panel); the next key resumes from the clicked row.
     setTreeKeyboardActive(true);
   }
 
@@ -2560,28 +2605,10 @@
           </div>
         </div>
 
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div
           class="panel-content file-tree-panel"
           class:tree-keyboard-active={treeIsKeyboardActive}
           bind:this={fileTreeContainer}
-          role="group"
-          aria-label="File tree"
-          tabindex="0"
-          onkeydown={(event) =>
-            keydownFromTree(
-              // A key on the panel itself (Tab focus, or a click on empty
-              // space) starts from the current row.
-              // The panel is not a row, so navigation starts from the row it
-              // contains: the cursor, else the selection, else the first row.
-              visibleRows[rowIndexOf(visibleRows, activeRowPath)]?.path ??
-                visibleRows[rowIndexOf(visibleRows, selectedRowPath)]?.path ??
-                visibleRows[0]?.path ??
-                "",
-              event,
-            )}
-          onpointerdown={handleTreePanelPointerDown}
         >
           {#if isLoading && treeData.length === 0}
             <div class="empty-state">
@@ -2645,12 +2672,33 @@
                   {/if}
                 </div>
               {:else}
-                <!-- Update TreeNode usage to pass folder path data attributes -->
-                <ul class="file-tree">
-                  {#each sortedTreeData as item (item.path)}
+                <!-- The tree is the panel's only focus stop: it owns the
+                     cursor, so `aria-activedescendant` and the roving row
+                     tabindex point a screen reader at the same row. -->
+                <ul
+                  class="file-tree"
+                  role="tree"
+                  aria-label={isSearching ? "Search results" : "Music library"}
+                  aria-activedescendant={activeRowId ?? undefined}
+                  tabindex={treeHasRowTabStop ? -1 : 0}
+                  onpointerdown={handleTreePanelPointerDown}
+                  onkeydown={(event) =>
+                    keydownFromTree(
+                      activeRowPath ??
+                        rovingRowPath ??
+                        visibleRows[0]?.path ??
+                        null,
+                      event,
+                    )}
+                >
+                  {#each sortedTreeData as item, index (item.path)}
                     <TreeNode
                       {item}
                       rowIdPrefix={isSearching ? "search-" : ""}
+                      onRowId={registerRowId}
+                      onTabStop={registerTabStop}
+                      rowCount={sortedTreeData.length}
+                      rowPosition={index + 1}
                       cursorPath={cursorRowPath}
                       rovingPath={rovingRowPath}
                       onRowKeys={handleTreeNavigation}

@@ -15,6 +15,9 @@
     debounce,
     toast,
     equalizeElementHeights,
+    keepFocusInDialog,
+    keepTabInDialog,
+    dialogOpenEffect,
   } from "../utils/index.js";
 
   // Import the old modals
@@ -65,6 +68,9 @@
 
   // For the old timestamp edit modal
   let showTimestampModal = $state(false);
+
+  // The dialog panel, so the shared helpers can read it from the event.
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
   let editingTimestampIndex = $state(-1);
   let editingTimestampValue = $state("");
 
@@ -722,13 +728,9 @@
    * @param {KeyboardEvent} e
    */
   function handleKeydown(e) {
-    // Escape closes the editor from anywhere, including a focused field, as in
-    // the other modals. It is checked before the typing guard below.
-    if (e.key === "Escape") {
-      e.preventDefault();
-      onClose();
-      return;
-    }
+    // Escape is handled by `dialogOpenEffect` above, so it closes the editor
+    // only when nothing was opened on top of it.
+    if (e.key === "Escape") return;
 
     // Ignore if focus is inside an input/textarea or content-editable
     const target = /** @type {HTMLElement} */ (e.target);
@@ -791,13 +793,16 @@
     window.dispatchEvent(event);
   }
 
+  // Escape closes the editor only while it is the topmost dialog; the other
+  // shortcuts are handled by `handleKeydown` below.
+  $effect(() => dialogOpenEffect(panel, isOpen, onClose));
+
   $effect(() => {
-    if (isOpen) {
-      document.addEventListener("keydown", handleKeydown);
-      return () => {
-        document.removeEventListener("keydown", handleKeydown);
-      };
-    }
+    if (!isOpen) return;
+    document.addEventListener("keydown", handleKeydown);
+    return () => {
+      document.removeEventListener("keydown", handleKeydown);
+    };
   });
 
   // Listen for player time updates - using the existing player events
@@ -831,7 +836,17 @@
     }}
   >
     <!-- Make the entire modal scrollable -->
-    <div class="lyrics-modal" onclick={stopPropagation}>
+    <div
+      class="lyrics-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Synced lyrics editor"
+      tabindex="-1"
+      bind:this={panel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={stopPropagation}
+    >
       <input
         class="hidden-file-input"
         type="file"
@@ -997,7 +1012,9 @@
       </div>
 
       <!-- Scrollable content area -->
-      <div class="modal-scrollable-content">
+      <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
+             would land on this pane instead of its first control. -->
+      <div class="modal-scrollable-content" tabindex="-1">
         <!-- Three-Column Layout - Connected columns with proper padding -->
         <div class="space-parts-wrapper">
           <div class="space-parts">

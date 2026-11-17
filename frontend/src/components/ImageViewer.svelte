@@ -2,6 +2,9 @@
 <script>
   import {
     formatImageDimensions,
+    keepFocusInDialog,
+    keepTabInDialog,
+    dialogOpenEffect,
     probeImageSize,
     toast,
   } from "../utils/index.js";
@@ -16,6 +19,7 @@
 
   let imageUrl = $state(/** @type {string | null} */ (null));
   let imageElement = $state(/** @type {HTMLImageElement | null} */ (null));
+  let fullImagePanel = $state(/** @type {HTMLDivElement | null} */ (null));
   let imageSize = $state(
     /** @type {{ width: number, height: number } | null} */ (null),
   );
@@ -111,6 +115,11 @@
   function closeFullImage() {
     showFullImage = false;
   }
+
+  // Escape closes the full-size preview, like every other dialog.
+  $effect(() =>
+    dialogOpenEffect(fullImagePanel, showFullImage, closeFullImage),
+  );
 </script>
 
 <div class="image-viewer">
@@ -209,8 +218,17 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div role="img" class="full-image-modal" onclick={closeFullImage}>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Full-size image"
+      tabindex="-1"
+      bind:this={fullImagePanel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={(e) => e.stopPropagation()}
+    >
       <button class="modal-close-btn" title="Close" onclick={closeFullImage}>
         <svg
           width="20"

@@ -1,5 +1,4 @@
 <script>
-  import { onMount } from "svelte";
   import {
     settings,
     saveSettings,
@@ -12,6 +11,10 @@
     DEFAULT_HOLD_DURATIONS,
     HOLD_DURATION_MIN,
     HOLD_DURATION_MAX,
+    keepFocusInDialog,
+    keepTabInDialog,
+    dialogOpenEffect,
+    openSelectOnEnter,
   } from "../utils/index.js";
 
   /**
@@ -42,6 +45,7 @@
 
   // Refs for input elements
   let folderInputRef = $state(/** @type {HTMLInputElement | null} */ (null));
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
   let fileInputRef = $state(/** @type {HTMLInputElement | null} */ (null));
 
   // Addon state
@@ -115,20 +119,8 @@
     return preview || "Folder Name";
   }
 
-  // Handle escape key to close
-  /**
-   * @param {KeyboardEvent} e
-   */
-  function handleKeyDown(e) {
-    if (e.key === "Escape" && isOpen) {
-      handleCancel(); // Use handleCancel instead of direct onClose
-    }
-  }
-
-  onMount(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  });
+  // Escape closes the settings, and only when nothing is open on top of them.
+  $effect(() => dialogOpenEffect(panel, isOpen, handleCancel));
 
   /**
    * @param {MouseEvent} e
@@ -297,7 +289,17 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="settings-modal-overlay" onclick={handleCancel}>
-    <div class="settings-modal" onclick={handleModalClick}>
+    <div
+      class="settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+      tabindex="-1"
+      bind:this={panel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={handleModalClick}
+    >
       <!-- Header -->
       <div class="settings-modal-header">
         <h2>Settings</h2>
@@ -314,7 +316,11 @@
       </div>
 
       <!-- Content -->
-      <div class="settings-content">
+      <!-- tabindex="-1": Firefox puts scrollable regions in the tab order, so
+           Tab from the close button landed on this pane (showing the header
+           border) instead of the first setting. The explicit tabindex opts out;
+           arrow keys still scroll it once focus is on a control inside. -->
+      <div class="settings-content" tabindex="-1">
         <!-- General Settings -->
         <div class="settings-section">
           <h3>General</h3>
@@ -623,6 +629,7 @@
               id="upload-conflict"
               class="setting-select"
               bind:value={localSettings.uploadDuplicates}
+              onkeydown={(event) => openSelectOnEnter(event)}
             >
               <option value="skip-identical"
                 >Skip identical, rename different</option

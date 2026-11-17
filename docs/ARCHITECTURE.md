@@ -218,9 +218,19 @@ rows after mouse use. Enter selects (file to the editor, folder toggles), Ctrl/C
 selects and moves focus into the right panel (rows forward it themselves).
 Ctrl/Cmd+Shift+E switches between the tree and the right panel from anywhere,
 including a metadata field, and is the way back to the tree without the mouse.
-Space is the global play/pause key (ignored on buttons, links and while typing);
-the tree itself uses Right/Left to expand and collapse. A roving tabindex keeps
-exactly one row in the Tab order; focus follows the cursor while the keyboard is
+Space is the global play/pause key: it plays and pauses wherever focus is, and
+is ignored only on typing surfaces (and while a dialog or the context menu owns
+the keyboard). It is deliberately _not_ handed back to a focused button or link,
+because closing a dialog returns focus to its opener (see [Dialogs](#dialogs))
+and Space would otherwise activate that button again; buttons are activated with
+Enter or a click, and a select opens with Enter. Space is therefore checked
+before the shared guard, which treats a `<select>` like a typing field;
+`spaceBelongsToControl` decides instead and keeps Space only where it types a
+character (text, search, number, email, url and password inputs, textareas,
+contenteditable, `role="textbox"`). A range input is excluded: Space did nothing
+on a slider, so reserving it only silenced playback after the volume was
+touched. The tree
+itself uses Right/Left to expand and collapse. A roving tabindex keeps exactly one row in the Tab order; focus follows the cursor while the keyboard is
 in the tree, which a `focusin` listener tracks (typing targets and open overlays
 keep the tree keys off). Rows forward their keys through `onRowKeys` with their
 own path, and the tree panel forwards keys pressed on it, so both start from a
@@ -234,8 +244,90 @@ that differ only in non-ASCII characters (see B-44 in
 [BUGFIXES.md](BUGFIXES.md)). The guards live in
 `stores/keyboard.store.js` (`shouldIgnoreShortcut`, `isTypingTarget`,
 `isOverlayOpen`); F2 and Delete read the same cursor, so they act on the row
-the keyboard is on. ARIA tree roles are tracked separately (T-18 in
-[PLAN.md](../PLAN.md)).
+the keyboard is on.
+
+The rows are exposed as an ARIA tree (T-18). The `.file-tree` `<ul>` carries
+`role="tree"`, a label ("Music library", or "Search results" while searching)
+and `aria-activedescendant`, pointing at the cursor row. Focus stays on the
+row itself, so the row's own `id` is what gets announced; the rows report it up
+through `onRowId`, because the search view renders the same rows with a
+`search-` prefix. Each row is `role="treeitem"` with `aria-level` from its
+depth, `aria-selected` from the selection, and `aria-posinset`/`aria-setsize`
+from its position among its siblings (folders and files are sorted separately,
+so the count is not simply the folder listing length). Only folders get
+`aria-expanded`, since a file cannot expand. Nested lists are `role="group"`
+and their `<li>` wrappers are `role="none"`, so the tree is flat to a screen
+reader as it is to the keyboard model.
+
+The tree element, not the panel, is the keyboard element: it handles `keydown`
+and the press that marks the tree as keyboard-active, and it is a Tab stop only
+when no row holds one. DOM focus stays on the activated row, so after moving
+into a folder no top-level row holds the stop (the roving path prefers one of
+those); the tree then keeps the keyboard reachable by focusing itself. The
+search box sits outside the tree rather than inside its `role="tree"`
+container, and the rows keep DOM focus, which is why the panel no longer needs
+a `role` or a tabindex of its own.
+
+### Dialogs
+
+Every dialog is an overlay plus a panel, and the panel carries the semantics:
+`role="dialog"`, `aria-modal="true"`, a label, and `tabindex="-1"` so the panel
+itself can hold focus when it has no controls. `utils/focus.utils.js` provides
+the two handlers they share: `keepTabInDialog` (Tab wraps from the last control
+to the first and Shift+Tab the other way, and focus that has escaped is pulled
+to the first control) and `keepFocusInDialog` (focus landing on `body` or on a
+control behind the overlay is sent back into the dialog). Both read the panel
+from `event.currentTarget`, so they are wired straight onto the panel's
+`onkeydown` / `onfocusin` and never need a selector — two dialogs that share a
+class name, or are mounted together, cannot capture each other's keys. The
+overlay click still closes a dialog; that is the pointer path and needs no
+help.
+
+Escape is owned by the **topmost** dialog. Dialogs are mounted while closed and
+nested (the synced lyrics editor opens its own text and timestamp dialogs), so a
+plain window listener in each one closed all of them on a single keypress.
+`dialogOpenEffect(panel, isOpen, onClose)` registers a dialog while it is open,
+closes it on Escape only when it is on top of the stack (stopping the event so
+the dialogs underneath and the app's own Escape handling never see it), and
+gives focus back to the element that opened it when it closes. Without that
+last part a keyboard user's next Tab restarted from the top of the page. Focus
+is captured synchronously, before a dialog auto-focuses its first field, so it
+is the trigger and not that field that gets restored. A nested dialog returns
+focus to the control inside its parent (closing the lyrics text editor puts
+focus back on the "Edit lyrics" button, not past it). Use
+it in every dialog: `let panel = $state(null)`, `bind:this={panel}` on the
+panel, and `$effect(() => dialogOpenEffect(panel, isOpen, onClose))`.
+
+`openDialog`/`closeDialog` also mark everything outside the topmost dialog
+`inert`. The elements are each ancestor's siblings, walking up from the panel,
+not `body`'s children: the app is mounted inside one wrapper, so a dialog is
+never a child of `<body>` and hiding `body`'s children would hide the dialog
+along with it. Only what this module marked is restored on close, so an `inert`
+set elsewhere survives. This is the mechanism that keeps the browser's Tab
+inside the dialog: `keepTabInDialogWith` only wraps at the ends of a dialog's
+control list and leaves moves in the middle to the browser, so after the last
+control the browser stepped into a dialog underneath (the text dialog renders
+as a sibling of the lyrics editor, not inside it) or out into the page.
+`openDialog` marks synchronously, then re-runs after a microtask, because the
+open usually happens in an effect before the new dialog's DOM update lands; the
+window-level Tab listener re-runs it too, so the state is right whenever the
+browser is about to move focus.
+
+Dialogs that also block app shortcuts (the lyrics text and timestamp editors)
+stop those keys in the capture phase but must let **Escape and Tab** through:
+Escape has to reach the close handler, and a capture-phase stop swallowed Tab
+before the stack's bubble-phase listener ran, leaving that dialog with no
+containment at all so Tab walked out into the browser chrome.
+
+Every scrollable pane inside a dialog carries `tabindex="-1"` (`.modal-body`,
+`.settings-content`, `.help-content`, `.log-display`,
+`.modal-scrollable-content`). Firefox adds scrollable regions to the tab order
+so they can be scrolled from the keyboard, which placed a focusable,
+non-control element between the close button and the first field: Tab appeared
+to stop on the dialog's own edge, while Shift+Tab — which never met it — looked
+fine. An explicit `tabindex` opts out, and the pane still scrolls with the
+arrow keys once focus is on a control inside it. A new dialog with a scrolling
+body needs the same attribute.
 
 ### Metadata editor keyboard handling
 

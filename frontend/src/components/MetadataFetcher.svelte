@@ -6,6 +6,10 @@
     getFieldDescription,
     isAudioFile,
     readApiError,
+    dialogOpenEffect,
+    openSelectOnEnter,
+    keepFocusInDialog,
+    keepTabInDialog,
   } from "../utils/index.js";
   import CoverPreview from "./CoverPreview.svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -52,7 +56,11 @@
   /** @type {Props} */
   let { isOpen, onClose, mode, targetPath, isFolder = false } = $props();
 
+  // Escape closes the fetcher and returns focus to whatever opened it.
+  $effect(() => dialogOpenEffect(panel, isOpen, onClose));
+
   // ---------- State ----------
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
   let addons = $state(/** @type {AddonInfo[]} */ ([]));
   let selectedAddonId = $state("");
   let query = $state("");
@@ -774,7 +782,17 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={onClose}>
-    <div class="modal-container" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="modal-container"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Fetch metadata"
+      tabindex="-1"
+      bind:this={panel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={(e) => e.stopPropagation()}
+    >
       <div class="modal-header">
         <h2>
           {#if mode === "song"}Fetch Song Metadata
@@ -785,12 +803,17 @@
         <button class="close-btn" onclick={onClose}>✕</button>
       </div>
 
-      <div class="modal-body">
+      <!-- tabindex="-1": keep Firefox's scrollable-region tab stop out of the
+           dialog's order (see the settings pane for the same fix). -->
+      <div class="modal-body" tabindex="-1">
         <!-- Addon, query, limit -->
         <div class="form-group">
           <!-- svelte-ignore a11y_label_has_associated_control -->
           <label>Add‑on</label>
-          <select bind:value={selectedAddonId}>
+          <select
+            bind:value={selectedAddonId}
+            onkeydown={(event) => openSelectOnEnter(event)}
+          >
             {#each addons as addon (addon.id)}
               <option value={addon.id}>{addon.name}</option>
             {/each}
@@ -833,7 +856,16 @@
               <div
                 class="result-item"
                 class:selected={selectedResultId === result.id}
+                role="button"
+                tabindex="0"
+                aria-pressed={selectedResultId === result.id}
                 onclick={() => selectResult(result.id)}
+                onkeydown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    selectResult(result.id);
+                  }
+                }}
               >
                 <div class="result-info">
                   {#if mode === "song"}
@@ -963,6 +995,7 @@
                       </label>
                       <select
                         value={trackIndex ?? ""}
+                        onkeydown={(event) => openSelectOnEnter(event)}
                         onchange={(e) =>
                           updateFileTrack(
                             fileIndex,
@@ -1021,7 +1054,10 @@
             <div class="track-selector">
               <!-- svelte-ignore a11y_label_has_associated_control -->
               <label>Select track to apply:</label>
-              <select bind:value={selectedTrackIndex}>
+              <select
+                bind:value={selectedTrackIndex}
+                onkeydown={(event) => openSelectOnEnter(event)}
+              >
                 {#each fetchedTracks as track, idx (idx)}
                   <option value={idx}>
                     {getTrackNumber(track)
@@ -1224,6 +1260,11 @@
     background: var(--color-primary-transparent);
     border-left: 3px solid var(--color-primary);
     border-radius: 3px;
+  }
+  /* Results are focusable rows, so the keyboard needs to see where it is. */
+  .result-item:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
   }
   .result-extra-info {
     margin-top: 2px;

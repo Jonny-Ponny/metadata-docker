@@ -160,6 +160,27 @@ describe("ImageViewer", () => {
     expect(container.querySelector(".full-image-modal")).toBeNull();
   });
 
+  it("closes the full-size view on Escape", async () => {
+    // The overlay had no Escape handling at all, so the preview could only be
+    // dismissed with the mouse.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse(200)));
+    const { container } = render(ImageViewer, { props: { filePath } });
+    await screen.findByRole("img", { name: "cover.jpg" });
+    await fireEvent.click(screen.getByTitle("View full size"));
+
+    // Escape from a control inside the preview, not from the document body.
+    const closeButton = /** @type {HTMLElement} */ (
+      document.querySelector(".modal-close-btn")
+    );
+    closeButton.focus();
+    await fireEvent.keyDown(closeButton, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("img", { name: "Full size cover art" }),
+    ).toBeNull();
+    expect(container.querySelector(".full-image-modal")).toBeNull();
+  });
+
   it("closes the full-size view on an overlay click", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse(200)));
     const { container } = render(ImageViewer, { props: { filePath } });

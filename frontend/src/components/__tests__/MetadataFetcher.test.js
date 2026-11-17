@@ -250,6 +250,28 @@ describe("MetadataFetcher", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("is a modal dialog that closes on Escape", async () => {
+    // The fetcher had no dialog semantics and no Escape handling, so it could
+    // only be dismissed with the mouse.
+    const onClose = vi.fn();
+    stubApi();
+    render(MetadataFetcher, {
+      props: {
+        isOpen: true,
+        onClose,
+        mode: "song",
+        targetPath: "folder/song.mp3",
+      },
+    });
+
+    const dialog = screen.getByRole("dialog", { name: "Fetch metadata" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("loads addons and prefills the song query", async () => {
     await renderSong();
 
@@ -344,6 +366,28 @@ describe("MetadataFetcher", () => {
 
     expect(await screen.findByText("Search Title")).toBeTruthy();
     expect(screen.getByText("MusicBrainz score 100")).toBeTruthy();
+  });
+
+  it("lets the keyboard select a search result", async () => {
+    // Results were <div onclick> with no tab stop, so they could only be
+    // chosen with the mouse.
+    await renderSong({ search: { success: true, results: searchResults } });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    const result = await screen.findByRole("button", {
+      name: /Search Title/,
+    });
+    expect(result.getAttribute("tabindex")).toBe("0");
+    expect(
+      /** @type {HTMLElement} */ (result).getAttribute("aria-pressed"),
+    ).toBe("false");
+
+    await fireEvent.keyDown(result, { key: "Enter" });
+
+    expect(
+      /** @type {HTMLElement} */ (result).getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("reports a failed search", async () => {

@@ -100,6 +100,51 @@ describe("LRCEditor", () => {
     expect(onClose).toHaveBeenCalledTimes(field ? 2 : 1);
   });
 
+  it("closes only the inner edit dialog on Escape", async () => {
+    // Opening "Edit lyrics" stacks a dialog over the editor. Both listen for
+    // Escape, so one keypress used to close the editor as well.
+    const onClose = vi.fn();
+    render(LRCEditor, { props: { ...baseProps, onClose } });
+
+    await fireEvent.click(screen.getByTitle("Edit lyrics"));
+    const inner = await screen.findByRole("dialog", {
+      name: "Edit unsynchronized lyrics",
+    });
+
+    await fireEvent.keyDown(inner, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Edit unsynchronized lyrics" }),
+    ).toBeNull();
+    // The editor itself is still open.
+    expect(onClose).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: "Synced lyrics editor" }),
+    ).toBeTruthy();
+  });
+
+  it("makes the editor inert while its text dialog is open", async () => {
+    // The text dialog renders as a sibling of the editor, not inside it, so
+    // without inert the browser's tab order walked out of the dialog and into
+    // the editor underneath.
+    render(LRCEditor, { props: { ...baseProps, onClose: vi.fn() } });
+    const editorOverlay = /** @type {HTMLElement} */ (
+      document.querySelector(".lyrics-modal-overlay")
+    );
+    expect(editorOverlay.inert).toBeFalsy();
+
+    await fireEvent.click(screen.getByTitle("Edit lyrics"));
+    await screen.findByRole("dialog", {
+      name: "Edit unsynchronized lyrics",
+    });
+
+    expect(editorOverlay.inert).toBe(true);
+    expect(
+      /** @type {HTMLElement} */ (document.querySelector(".modal-overlay"))
+        .inert,
+    ).toBeFalsy();
+  });
+
   it("lays out the timestamps, lyrics and synchronized columns", () => {
     render(LRCEditor, { props: baseProps });
 

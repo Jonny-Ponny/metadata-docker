@@ -1,6 +1,9 @@
 <!-- src/components/TimestampEditModal.svelte -->
 <script>
   import {
+    dialogOpenEffect,
+    keepFocusInDialog,
+    keepTabInDialog,
     parseTimestampToSeconds,
     secondsToTimestamp,
     validateTimestampFormat,
@@ -31,6 +34,7 @@
   // Svelte 5: Use $state() for local reactive state
   let editingTimestampValue = $state("");
   let timestampError = $state("");
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
 
   function handleClose() {
     onClose();
@@ -128,6 +132,10 @@
     })(),
   );
 
+  // Escape closes the dialog from anywhere in it, not only from the input, and
+  // only while it is the topmost dialog (it is opened from the lyrics editor).
+  $effect(() => dialogOpenEffect(panel, show, handleClose));
+
   // Initialize when shown
   $effect(() => {
     if (show) {
@@ -139,8 +147,10 @@
        * @param {KeyboardEvent} e
        */
       const handleKeyDown = (e) => {
-        // The dialog handles Enter and Escape in the timestamp input itself.
-        // Only swallow keys that would otherwise reach the app-wide shortcuts.
+        // Escape has to reach the dialog's own close handler, wherever it was
+        // pressed (the dialog stack listens on `window`). Every other key that
+        // would otherwise reach the app-wide shortcuts is swallowed.
+        if (e.key === "Escape") return;
         if (
           e.target instanceof Element &&
           e.target.closest(".timestamp-editor")
@@ -244,15 +254,13 @@
    * @param {KeyboardEvent} e
    */
   function handleTimestampKeydown(e) {
-    // Stop propagation to prevent App from handling Delete key
-    e.stopPropagation();
-
     if (e.key === "Enter") {
       e.preventDefault();
       handleSave();
-    } else if (e.key === "Escape") {
-      handleClose();
     }
+    // Typing keys stay out of the app shortcuts (Delete, F2). Escape is left
+    // alone so it reaches the dialog and closes it.
+    if (e.key !== "Escape") e.stopPropagation();
   }
 </script>
 
@@ -260,7 +268,17 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={handleClose}>
-    <div class="timestamp-editor" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="timestamp-editor"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit timestamp"
+      tabindex="-1"
+      bind:this={panel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={(e) => e.stopPropagation()}
+    >
       <div class="modal-header">
         <h3>Edit Timestamp for Line {lineIndex + 1}</h3>
         <button title="Close" class="modal-close" onclick={handleClose}>
@@ -277,7 +295,9 @@
           </svg>
         </button>
       </div>
-      <div class="modal-body">
+      <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
+             would land on this pane instead of its first control. -->
+      <div class="modal-body" tabindex="-1">
         <div class="timestamp-input-group">
           <!-- svelte-ignore a11y_autofocus -->
           <input

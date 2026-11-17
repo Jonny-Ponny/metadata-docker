@@ -1,5 +1,11 @@
 <!-- src/components/EditModal.svelte -->
 <script>
+  import {
+    dialogOpenEffect,
+    keepFocusInDialog,
+    keepTabInDialog,
+  } from "../utils/index.js";
+
   /**
    * @typedef {Object} Props
    * @property {boolean} [show]
@@ -19,6 +25,7 @@
   let textareaElement = $state(
     /** @type {HTMLTextAreaElement | null} */ (null),
   );
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
 
   function handleClose() {
     onClose();
@@ -39,31 +46,49 @@
     }
   });
 
-  // Add event listener to prevent keyboard events from bubbling
+  // While the dialog is open the app-wide shortcuts (F2, Delete, the tree keys)
+  // must not act behind it. Escape and Tab are deliberately left alone: the
+  // dialog stack handles both in the bubble phase, and stopping them here (as
+  // this used to) made Escape unable to close the dialog and left it with no
+  // Tab containment, so Tab walked into the browser chrome.
   $effect(() => {
-    if (show) {
-      /**
-       * @param {KeyboardEvent} e
-       */
-      const handleKeyDown = (e) => {
-        // Stop propagation for all keyboard events when modal is open
-        e.stopPropagation();
-      };
-
-      window.addEventListener("keydown", handleKeyDown, true); // Use capture phase
-
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown, true);
-      };
-    }
+    if (!show) return;
+    /**
+     * @param {KeyboardEvent} e
+     */
+    const handleKeyDown = (e) => {
+      // Escape must reach the dialog stack (it closes this dialog); Tab must
+      // reach it too, or the dialog is left with no containment at all and the
+      // browser's own Tab walks out into the browser chrome.
+      if (e.key === "Escape" || e.key === "Tab") return;
+      e.stopPropagation();
+    };
+    // Capture phase, so the app's window listeners (bubble phase) never run.
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   });
+
+  // Escape closes the dialog, like every other modal in the app, but only when
+  // it is the topmost one: it is opened from inside the lyrics editor, which
+  // has its own Escape handling, and both used to close on one keypress.
+  $effect(() => dialogOpenEffect(panel, show, onClose));
 </script>
 
 {#if show}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-overlay" onclick={handleClose}>
-    <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit unsynchronized lyrics"
+      tabindex="-1"
+      bind:this={panel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={(e) => e.stopPropagation()}
+    >
       <div class="modal-header">
         <h3>Edit Unsynchronized Lyrics</h3>
         <button title="Close" class="modal-close" onclick={handleClose}>
@@ -80,14 +105,15 @@
           </svg>
         </button>
       </div>
-      <div class="modal-body">
+      <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
+             would land on this pane instead of its first control. -->
+      <div class="modal-body" tabindex="-1">
         <textarea
           bind:this={textareaElement}
           bind:value={editingText}
           placeholder="Enter lyrics here. You can include timestamps like [00:00.00] at the beginning of lines..."
           class="edit-textarea"
-          rows="15"
-          onkeydown={(e) => e.stopPropagation()}></textarea>
+          rows="15"></textarea>
         <div class="modal-info">
           <p>Each line will create a timestamp entry</p>
           <p>You can add timestamps like [00:00.00] at line beginnings</p>

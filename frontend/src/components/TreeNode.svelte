@@ -69,6 +69,14 @@
    * @property {(path: string) => void} [onCursor] the row was clicked
    * @property {(path: string) => void} [onOpenInEditor] the row's own
    *   Ctrl/Cmd+Enter, so the event does not depend on window-level routing
+   * @property {(path: string, id: string) => void} [onRowId] this row's DOM id,
+   *   so the tree can point `aria-activedescendant` at the cursor
+   * @property {number} [rowCount] rows at this level, for `aria-setsize`
+   * @property {number} [rowPosition] 1-based position, for `aria-posinset`
+   * @property {boolean} [treeTabStop] whether this row may be the tree's single
+   *   Tab stop (top-level rows)
+   * @property {(path: string, isTabStop: boolean) => void} [onTabStop] reports
+   *   whether this row took the Tab stop, so the tree can fall back to itself
    */
 
   /** @type {Props} */
@@ -92,7 +100,21 @@
     onRowKeys,
     onCursor,
     onOpenInEditor,
+    onRowId,
+    rowCount: rowCountProp = undefined,
+    rowPosition: rowPositionProp = undefined,
+    treeTabStop = true,
+    onTabStop,
   } = $props();
+
+  /**
+   * Hand a child's id up to the tree that renders this one.
+   * @param {string} path
+   * @param {string} id
+   */
+  function registerRowId(path, id) {
+    onRowId?.(path, id);
+  }
 
   // Input state
   let inputRef = $state(/** @type {HTMLInputElement | null} */ (null));
@@ -211,13 +233,38 @@
     selectFile(item.path);
   }
 
+  // ARIA: the rows of this level are one group. `setsize`/`posinset` let a
+  // screen reader announce "3 of 12" without the list having to be walked.
+  let rowCount = $derived(rowCountProp ?? 1);
+  let rowPosition = $derived(rowPositionProp ?? 1);
+
+  // The active row is announced by the tree container through
+  // `aria-activedescendant`; it needs this row's id, which the prefix can change.
+  $effect(() => {
+    onRowId?.(item.path, rowId);
+  });
+
+  // Rows that cannot be entered keep their menu reachable from the keyboard.
+  // Folders, which Enter and the arrow keys can operate on, do not need it.
+  let rowMenuShortcut = $derived(
+    item.type === "directory" ? {} : { "aria-keyshortcuts": "Shift+F10" },
+  );
+
   // Row id for the keyboard focus model. The app scrolls the row it moves the
   // cursor to by id, so the id must be unique even when the tree is rendered
   // more than once (the search view and the normal tree can both be mounted).
   const rowId = $derived(treeRowId(item.path, rowIdPrefix));
 
   // Roving tabindex: one row is reachable with Tab, the rest only by arrow key.
-  const rowTabIndex = $derived(rovingPath === item.path ? 0 : -1);
+  // Only a top-level row may hold the tree's single Tab stop: focus stays on the
+  // row the user activated, so when that row is nested no row can take it and
+  // the tree element falls back to being its own stop.
+  const rowTabIndex = $derived(
+    treeTabStop && rovingPath === item.path ? 0 : -1,
+  );
+  $effect(() => {
+    onTabStop?.(item.path, rowTabIndex === 0);
+  });
 
   /** @param {MouseEvent} event */
   function notePointerClick(event) {
@@ -636,19 +683,20 @@
 </script>
 
 {#if item.type === "directory"}
-  <li>
-    <!-- A row is a keyboard focus stop by design (T-16); the ARIA tree roles
-         arrive in T-18. -->
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <li role="none">
     <div
-      role="listitem"
+      role="treeitem"
       id={rowId}
       class="directory"
       class:indented={level > 0}
       class:selected={item.path === selectedFolder}
       class:cursor={item.path === cursorPath}
       tabindex={rowTabIndex}
+      aria-level={level + 1}
+      aria-expanded={expanded.has(item.path)}
+      aria-selected={item.path === selectedFolder}
+      aria-posinset={rowPosition}
+      aria-setsize={rowCount}
       onkeydown={(event) => {
         // Leave the rename input's own keys alone.
         if ($renamingPath === item.path) return;
@@ -743,12 +791,12 @@
     </div>
     {#if expanded.has(item.path)}
       {#if needsLoad && !sortedChildren.length && item.has_children !== false}
-        <ul>
+        <ul role="group">
           <li class="tree-loading" style="--level: {level + 1}">Loading…</li>
         </ul>
       {:else if sortedChildren.length}
-        <ul>
-          {#each sortedChildren as child (child.path)}
+        <ul role="group">
+          {#each sortedChildren as child, index (child.path)}
             <Self
               item={child}
               {expanded}
@@ -769,6 +817,11 @@
               {onRowKeys}
               {onCursor}
               {onOpenInEditor}
+              onRowId={registerRowId}
+              rowCount={sortedChildren.length}
+              rowPosition={index + 1}
+              treeTabStop={false}
+              {onTabStop}
             />
           {/each}
         </ul>
@@ -850,19 +903,20 @@
     return fileExt.toUpperCase();
   })()}
 
-  <li>
-    <!-- A row is a keyboard focus stop by design (T-16); the ARIA tree roles
-         arrive in T-18. -->
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <li role="none">
     <div
-      role="listitem"
+      role="treeitem"
       id={rowId}
       class="file"
       class:indented={level > 0}
       class:selected={item.path === selectedFile}
       class:cursor={item.path === cursorPath}
       tabindex={rowTabIndex}
+      aria-level={level + 1}
+      aria-selected={item.path === selectedFile}
+      aria-posinset={rowPosition}
+      aria-setsize={rowCount}
+      {...rowMenuShortcut}
       onkeydown={(event) => {
         // Leave the rename input's own keys alone.
         if ($renamingPath === item.path) return;

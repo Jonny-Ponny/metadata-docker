@@ -1,6 +1,15 @@
 <!-- src/components/LogViewer.svelte -->
 <script>
-  import { toast, getAuthHeaders } from "../utils/index.js";
+  import {
+    toast,
+    getAuthHeaders,
+    keepFocusInDialog,
+    keepTabInDialog,
+    closeTopDialogOnEscape,
+    openDialog,
+    closeDialog,
+    openSelectOnEnter,
+  } from "../utils/index.js";
   import { SvelteURLSearchParams } from "svelte/reactivity";
 
   /**
@@ -24,6 +33,7 @@
   let logs = $state(/** @type {LogEntry[]} */ ([]));
   let loading = $state(false);
   let error = $state(/** @type {string | null} */ (null));
+  let panel = $state(/** @type {HTMLDivElement | null} */ (null));
   let linesToShow = $state(100);
   let levelFilter = $state("");
   let searchFilter = $state("");
@@ -192,11 +202,8 @@
    * @param {KeyboardEvent} e
    */
   function handleKeyDown(e) {
-    if (e.key === "Escape" && isOpen) {
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    }
+    // Only the topmost dialog closes; the log view sits inside others.
+    closeTopDialogOnEscape(e, panel, onClose);
   }
 
   /**
@@ -248,6 +255,7 @@
       }
 
       // Add keyboard listener
+      openDialog(panel);
       window.addEventListener("keydown", handleKeyDown);
     }
 
@@ -258,6 +266,7 @@
         intervalId = null;
       }
       window.removeEventListener("keydown", handleKeyDown);
+      closeDialog(panel);
     };
   });
 </script>
@@ -266,7 +275,17 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="log-modal-overlay" onclick={handleOverlayClick}>
-    <div class="log-modal" onclick={stopPropagation}>
+    <div
+      class="log-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Application logs"
+      tabindex="-1"
+      bind:this={panel}
+      onkeydown={keepTabInDialog}
+      onfocusin={keepFocusInDialog}
+      onclick={stopPropagation}
+    >
       <!-- Header -->
       <div class="log-modal-header">
         <h2>Application Logs</h2>
@@ -293,6 +312,7 @@
             bind:value={linesToShow}
             onchange={handleFilterChange}
             class="log-select"
+            onkeydown={(event) => openSelectOnEnter(event)}
           >
             <option value={50}>50 lines</option>
             <option value={100}>100 lines</option>
@@ -304,6 +324,7 @@
             bind:value={levelFilter}
             onchange={handleFilterChange}
             class="log-select"
+            onkeydown={(event) => openSelectOnEnter(event)}
           >
             <option value="">All Levels</option>
             {#each logLevels as level (level)}
@@ -425,7 +446,9 @@
       </div>
 
       <!-- Log display -->
-      <div class="log-display">
+      <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
+             would land on this pane instead of its first control. -->
+      <div class="log-display" tabindex="-1">
         {#if loading && logs.length === 0}
           <div class="log-empty">
             <svg class="spinner" width="48" height="48" viewBox="0 0 24 24">
