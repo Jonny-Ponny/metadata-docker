@@ -328,8 +328,9 @@
                 and the right panel (works from anywhere, including a metadata field)
               </li>
               <li>
-                <strong>Shift + F10</strong> (or the context-menu key) - open the
-                item's menu; move with the arrows, Enter activates, Escape closes
+                <strong>Alt + Enter</strong> - open the item's menu (also
+                <strong>Shift + F10</strong> or the context-menu key); move with the
+                arrows, Enter activates, Escape closes
               </li>
               <li>
                 <strong>Home / End</strong> - first / last visible item

@@ -268,11 +268,53 @@ describe("TreeNode", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("menuitem", { name: "Rename" }),
     );
-    // The key is announced, and the row points at the menu it controls.
-    expect(row.getAttribute("aria-keyshortcuts")).toBe("Shift+F10");
+    // Every working key is announced, and the row points at its menu.
+    expect(row.getAttribute("aria-keyshortcuts")).toBe("Alt+Enter Shift+F10");
     expect(row.getAttribute("aria-controls")).toBe(
       document.querySelector(".context-menu")?.id,
     );
+  });
+
+  it("opens the menu from a file row with Alt+Enter and focuses it", async () => {
+    // The key to reach for: Firefox shows its own menu for Shift+F10 and cannot
+    // be stopped, so Alt+Enter is the one that always opens ours.
+    setup(audioItem);
+    const row = screen.getByRole("treeitem");
+
+    await fireEvent.keyDown(row, { key: "Enter", altKey: true });
+    await tick();
+
+    expect(get(contextMenu)).toMatchObject({
+      isOpen: true,
+      path: "folder/song.mp3",
+      mode: "keyboard",
+    });
+    expect(document.activeElement).toBe(
+      screen.getByRole("menuitem", { name: "Rename" }),
+    );
+  });
+
+  it("opens the menu from a folder row with Alt+Enter", async () => {
+    // Folders used to have no menu shortcut at all; now every row does.
+    setup(folderItem);
+    const row = screen.getByRole("treeitem");
+
+    await fireEvent.keyDown(row, { key: "Enter", altKey: true });
+    await tick();
+
+    expect(get(contextMenu)).toMatchObject({
+      isOpen: true,
+      path: "folder",
+      mode: "keyboard",
+    });
+  });
+
+  it("does not treat a plain Enter as the menu key", async () => {
+    setup(audioItem);
+
+    await fireEvent.keyDown(screen.getByRole("treeitem"), { key: "Enter" });
+
+    expect(get(contextMenu).isOpen).toBe(false);
   });
 
   it("opens the menu with the context-menu key", async () => {

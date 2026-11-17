@@ -1532,12 +1532,13 @@
     if (index < 0) return;
     const row = visibleRows[index];
 
-    // Shift+F10 / the context-menu key. A row handles its own (it owns the
-    // anchor position); this catches the key on the panel itself, where no row
-    // is focused, and opens the cursor row's menu.
+    // Alt+Enter, Shift+F10 or the context-menu key. A row handles its own (it
+    // owns the anchor position); this catches the key on the panel itself,
+    // where no row is focused, and opens the cursor row's menu.
     if (
       e.key === "ContextMenu" ||
-      (e.key === "F10" && e.shiftKey && !e.ctrlKey)
+      (e.key === "F10" && e.shiftKey && !e.ctrlKey) ||
+      (e.key === "Enter" && e.altKey && !e.ctrlKey && !e.metaKey)
     ) {
       if (e.target === e.currentTarget) {
         e.preventDefault();

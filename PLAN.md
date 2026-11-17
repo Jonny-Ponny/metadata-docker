@@ -105,12 +105,14 @@ image build. What remains is optional hardening and new features.
   puts a scrollable region in the tab order. Space stays the play/pause key
   everywhere except real text entry, including over the volume slider. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#dialogs).
-- **Context menu keyboard access (T-21).** Complete: `Shift+F10` and the
-  context-menu key open the cursor row's menu, centred on the row. The menu is a
-  `menu` of `menuitem`s with Arrow/Home/End movement, Enter/Space activation and
-  Escape returning focus to the row. The Delete item keeps its hold gesture,
-  now on the keyboard too. The menu flips above the pointer and is capped to the
-  window instead of running past the bottom edge. Details:
+- **Context menu keyboard access (T-21).** Complete: `Alt+Enter` (plus
+  `Shift+F10` and the context-menu key) opens the row's menu, centred on the
+  row. `Alt+Enter` is the documented key because Firefox shows its own context
+  menu for `Shift+F10` without firing a cancellable event. The menu is a `menu`
+  of `menuitem`s with Arrow/Home/End movement, Enter/Space activation, Tab and
+  Escape closing it back to the row. The Delete item keeps its hold gesture,
+  now on the keyboard too. The menu flips above the pointer, is capped to the
+  window and stays clear of the player bar. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#context-menu).
 
 ## Planned

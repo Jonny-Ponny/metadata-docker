@@ -335,11 +335,17 @@ A row's menu lives in the `contextMenu` store (`stores/context.store.js`), which
 records the target path, the anchor point and how the menu was opened. Only the
 target row renders it, as a sibling of the row rather than inside it.
 
-The pointer path opens it at the cursor. The keyboard path — `Shift+F10` or the
-context-menu key, handled by the row itself and by `handleTreeNavigation` when
-the panel has focus — centres it on the row and moves focus to the first item.
-`aria-keyshortcuts="Shift+F10"` on every row now names a key that works;
-`aria-controls` points at the menu. The items are real controls
+The pointer path opens it at the cursor. The keyboard path — `Alt+Enter`,
+`Shift+F10` or the context-menu key, handled by the row itself and by
+`handleTreeNavigation` when the panel has focus — centres it on the row and
+moves focus to the first item. `aria-keyshortcuts` on every row lists those
+keys and `aria-controls` points at the menu. `Alt+Enter` is the one to document
+as primary: Firefox opens its own context menu for `Shift+F10` and no handler
+can stop it (MDN: with Shift held, the native menu appears without a
+`contextmenu` event), and screen readers may not send the Menu key. Both
+standard keys are still accepted because they work for people whose
+environment sends them.
+The items are real controls
 (`role="menu"` / `role="menuitem"`, `tabindex="-1"`, roving focus), so Arrow
 up/down, Home/End, Enter and Space work; Escape closes and returns focus to the
 row. That focus return only happens for keyboard opens, since the pointer path

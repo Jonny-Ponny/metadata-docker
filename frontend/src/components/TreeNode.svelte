@@ -252,11 +252,13 @@
     onRowId?.(item.path, rowId);
   });
 
-  // Rows that cannot be entered keep their menu reachable from the keyboard.
-  // Folders, which Enter and the arrow keys can operate on, do not need it.
-  let rowMenuShortcut = $derived(
-    item.type === "directory" ? {} : { "aria-keyshortcuts": "Shift+F10" },
-  );
+  // Keys that open this row's menu. `Alt+Enter` is the reliable one: Firefox
+  // shows its own context menu for Shift+F10 and cannot be stopped, so the two
+  // standard keys are kept for screen readers and the Menu key, which do work.
+  const MENU_SHORTCUTS = "Alt+Enter Shift+F10";
+
+  // Every row has a menu, folders included.
+  let rowMenuShortcut = { "aria-keyshortcuts": MENU_SHORTCUTS };
 
   // Row id for the keyboard focus model. The app scrolls the row it moves the
   // cursor to by id, so the id must be unique even when the tree is rendered
@@ -353,7 +355,11 @@
   function openMenuFromKeyboard(path, event) {
     const isMenuKey =
       event.key === "ContextMenu" ||
-      (event.key === "F10" && event.shiftKey && !event.ctrlKey);
+      (event.key === "F10" && event.shiftKey && !event.ctrlKey) ||
+      (event.key === "Enter" &&
+        event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey);
     if (!isMenuKey || path !== item.path) return false;
     event.preventDefault();
     const row = rowRef;
@@ -872,13 +878,13 @@
       aria-selected={item.path === selectedFolder}
       aria-posinset={rowPosition}
       aria-setsize={rowCount}
-      aria-keyshortcuts="Shift+F10"
+      {...rowMenuShortcut}
       aria-controls={menuId}
       bind:this={rowRef}
       onkeydown={(event) => {
         // Leave the rename input's own keys alone.
         if ($renamingPath === item.path) return;
-        // Shift+F10 / the context-menu key opens this row's menu.
+        // Alt+Enter, Shift+F10 or the context-menu key opens this row's menu.
         if (openMenuFromKeyboard(item.path, event)) return;
         handleRowKeydown(event);
         if (!event.defaultPrevented) routeKey(item.path, event);

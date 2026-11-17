@@ -781,6 +781,39 @@ describe("App", () => {
     expect(document.activeElement).not.toBe(first);
   });
 
+  it("opens the row's menu with Alt+Enter", async () => {
+    // The reliable key: Firefox cannot be stopped from showing its own menu on
+    // Shift+F10, so Alt+Enter is the one documented as primary.
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    const row = node(view, "loose.flac");
+    row.focus();
+
+    await fireEvent.keyDown(row, { key: "Enter", altKey: true });
+    await tick();
+
+    expect(get(contextMenu)).toMatchObject({ isOpen: true, mode: "keyboard" });
+    expect(document.activeElement).toBe(
+      screen.getByRole("menuitem", { name: "Rename" }),
+    );
+  });
+
+  it("opens the cursor row's menu from the tree panel with Alt+Enter", async () => {
+    isAuthenticated.set(true);
+    const view = await renderAuthenticated();
+    // The tree element is the panel's focus stop when no row holds one; its
+    // keys are routed with the cursor row's path.
+    const tree = /** @type {HTMLElement} */ (
+      view.container.querySelector(".file-tree")
+    );
+    tree.focus();
+
+    await fireEvent.keyDown(tree, { key: "Enter", altKey: true });
+    await tick();
+
+    expect(get(contextMenu).isOpen).toBe(true);
+  });
+
   it("closes the context menu and keeps F2 working after a copy", async () => {
     // Copy was the one menu action that neither closed the menu nor kept the
     // item selected. The open menu made `isOverlayOpen()` true, so F2 was
