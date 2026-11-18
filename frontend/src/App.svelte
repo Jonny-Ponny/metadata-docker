@@ -63,6 +63,7 @@
     isTypeAheadKey,
     isTypingTarget,
     isOverlayOpen,
+    topDialogTakesPlayerSpace,
     treeFocusMode,
     contextMenu,
   } from "./utils/index.js";
@@ -1370,12 +1371,19 @@
     // Space is the player key everywhere, so it is checked before the shared
     // guard: that guard treats a <select> like a typing field, which would
     // leave Space opening the dropdown instead of playing. Space is ignored
-    // only where it types a character or operates a control natively.
+    // only where it types a character, operates a control natively, or another
+    // dialog owns the keyboard. The lyrics editor opts back in because Space
+    // controls playback there instead of the focused button.
     // `preventDefault` also stops the browser activating a focused button,
     // which would make a keyboard user re-open the dialog they just closed;
     // buttons are activated with Enter instead.
     if (e.key === " ") {
-      if (spaceBelongsToControl(e.target) || isOverlayOpen()) return;
+      const overlayOpen = isOverlayOpen();
+      if (
+        spaceBelongsToControl(e.target) ||
+        (overlayOpen && !topDialogTakesPlayerSpace())
+      )
+        return;
       e.preventDefault();
       if ($settings.enablePlayer) void playerComponent?.togglePlay();
       return;
@@ -2847,7 +2855,12 @@
   </div>
 
   <!-- Player component -->
-  <div class="player-wrapper" class:blurred={isDragging}>
+  <!-- The lyrics editor keeps the player interactive. -->
+  <div
+    class="player-wrapper"
+    class:blurred={isDragging}
+    data-dialog-companion="true"
+  >
     <Player {audioFile} bind:this={playerComponent} />
   </div>
   <HelpModal

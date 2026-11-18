@@ -842,6 +842,7 @@
       aria-modal="true"
       aria-label="Synced lyrics editor"
       tabindex="-1"
+      data-player-space="true"
       bind:this={panel}
       onkeydown={keepTabInDialog}
       onfocusin={keepFocusInDialog}

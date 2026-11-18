@@ -313,6 +313,15 @@ open usually happens in an effect before the new dialog's DOM update lands; the
 window-level Tab listener re-runs it too, so the state is right whenever the
 browser is about to move focus.
 
+The player bar is app chrome, not page content, and the lyrics editor needs it
+to play and pause while the user taps along. It is marked
+`data-dialog-companion` and `hidingOutside()` skips those subtrees, so the bar
+stays clickable under every dialog (its own stacking keeps it above the
+overlay). The lyrics panel also carries `data-player-space`: Space is the
+player key there instead of activating the focused editor button.
+`topDialogTakesPlayerSpace()` reads that marker, so other dialogs (settings
+checkboxes, for example) keep their native Space handling.
+
 Dialogs that also block app shortcuts (the lyrics text and timestamp editors)
 stop those keys in the capture phase but must let **Escape and Tab** through:
 Escape has to reach the close handler, and a capture-phase stop swallowed Tab

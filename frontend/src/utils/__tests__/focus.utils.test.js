@@ -420,6 +420,24 @@ describe("focus utils", () => {
       expect(app.inert).toBeFalsy();
     });
 
+    it("keeps a dialog companion interactive", () => {
+      // The player bar is marked as a companion so the lyrics editor can use
+      // it without closing. Inerting it made the controls unclickable.
+      const { app, background, inner } = scene();
+      const player = document.createElement("div");
+      player.setAttribute("data-dialog-companion", "true");
+      player.innerHTML = "<button>play</button>";
+      app.appendChild(player);
+
+      openDialog(inner);
+
+      expect(background.inert).toBe(true);
+      expect(player.inert).toBeFalsy();
+
+      closeDialog(inner);
+      expect(player.inert).toBeFalsy();
+    });
+
     it("hides a lower dialog that is inserted as a sibling after the open", async () => {
       // A dialog registers before its own DOM update has landed, and it is
       // often a sibling of the one that opened it. The first pass therefore

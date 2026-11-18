@@ -71,10 +71,23 @@ function hidingOutside(dialog) {
   for (let node = dialog; node.parentElement; node = node.parentElement) {
     for (const sibling of node.parentElement.children) {
       if (sibling === node) continue;
+      // The player bar is app chrome, not page content: the lyrics editor
+      // needs it to play, pause and seek while the user taps along. A
+      // `data-dialog-companion` subtree stays interactive under every dialog.
+      if (isDialogCompanion(sibling)) continue;
       hidden.push(/** @type {HTMLElement} */ (sibling));
     }
   }
   return hidden;
+}
+
+/**
+ * Whether an element is a dialog companion, or lives inside one.
+ * @param {Element} element
+ * @returns {boolean}
+ */
+function isDialogCompanion(element) {
+  return !!element.closest("[data-dialog-companion]");
 }
 
 /**

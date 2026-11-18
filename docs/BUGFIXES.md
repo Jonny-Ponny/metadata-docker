@@ -528,6 +528,24 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** `frontend/src/components/__tests__/LRCEditor.test.js` - `keeps
       the current line in view when syncing with the c shortcut`.
 
+- [x] **B-49 (P2) The player was inert and Space dead while the lyrics editor was open.**
+      The dialog stack marks everything outside the open panel `inert`, which
+      includes the player bar. The bar was already raised above the editor's
+      overlay, but `inert` also blocks pointer events, so play, pause, seek and
+      volume did nothing. Space hit `isOverlayOpen()` in `App.svelte`, so it
+      neither played nor paused, and the browser's own Space action could
+      activate a focused editor button instead.
+      **Fix:** mark the player bar `data-dialog-companion` and skip companions
+      in `hidingOutside()`; mark the lyrics panel `data-player-space` and let
+      `topDialogTakesPlayerSpace()` exempt it from the overlay guard, so Space
+      controls playback there. Other dialogs keep their native Space handling
+      (settings checkboxes, for example).
+      **Tests:** `frontend/src/utils/__tests__/focus.utils.test.js` - `keeps a
+      dialog companion interactive`; `frontend/src/stores/__tests__/keyboard.store.test.js`
+      - `leaves Space to dialogs unless the top one opts in`;
+      `frontend/src/__tests__/App.test.js` - `keeps the player usable and Space
+      playing in the lyrics editor`.
+
 ## Player
 
 - [x] **B-39 (P2) A seek made before the track metadata loaded was dropped.**
@@ -596,3 +614,4 @@ silently.
 | B-46 | `frontend/src/__tests__/App.test.js` - `renames a file that was dragged into a folder` |
 | B-47 | `frontend/src/__tests__/App.test.js` - `closes the context menu and keeps F2 working after a copy` |
 | B-48 | `frontend/src/components/__tests__/LogViewer.test.js` - `leaves the dialog stack when it closes` |
+| B-49 | `frontend/src/__tests__/App.test.js` - `keeps the player usable and Space playing in the lyrics editor` |
