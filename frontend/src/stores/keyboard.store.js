@@ -45,6 +45,21 @@ export function isOverlayOpen() {
 }
 
 /**
+ * Whether the keyboard is owned by a dialog that wants Space for playback.
+ *
+ * The lyrics editor opts in with `data-player-space`, because Space must not
+ * activate its buttons while the user is syncing lines. Other dialogs (and the
+ * rename field or context menu) keep their native Space handling, so a
+ * checkbox can still be toggled there.
+ * @returns {boolean}
+ */
+export function topDialogTakesPlayerSpace() {
+  if (get(renamingPath) !== null) return false;
+  if (get(contextMenu).isOpen) return false;
+  return topDialog()?.hasAttribute("data-player-space") ?? false;
+}
+
+/**
  * Whether a keyboard shortcut should be ignored for this event.
  * @param {KeyboardEvent} event
  * @returns {boolean}

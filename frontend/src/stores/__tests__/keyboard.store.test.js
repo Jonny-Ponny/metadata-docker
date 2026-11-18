@@ -8,6 +8,7 @@ import {
   isTypeAheadKey,
   isTypingTarget,
   shouldIgnoreShortcut,
+  topDialogTakesPlayerSpace,
   treeCursor,
   treeFocusMode,
 } from "../keyboard.store.js";
@@ -109,6 +110,26 @@ describe("keyboard guards", () => {
     // Closing it again releases the keyboard.
     resetDialogStack();
     expect(isOverlayOpen()).toBe(false);
+  });
+
+  it("leaves Space to dialogs unless the top one opts in", () => {
+    expect(topDialogTakesPlayerSpace()).toBe(false);
+
+    const panel = document.createElement("div");
+    document.body.appendChild(panel);
+    openDialog(panel);
+    expect(topDialogTakesPlayerSpace()).toBe(false);
+
+    // The lyrics editor marks itself, because Space is playback there.
+    panel.setAttribute("data-player-space", "true");
+    expect(topDialogTakesPlayerSpace()).toBe(true);
+
+    // A rename or the context menu still owns the keyboard over it.
+    renamingPath.set("a.mp3");
+    expect(topDialogTakesPlayerSpace()).toBe(false);
+    renamingPath.set(null);
+    contextMenu.update((state) => ({ ...state, isOpen: true }));
+    expect(topDialogTakesPlayerSpace()).toBe(false);
   });
 
   it("ignores shortcuts while typing", () => {

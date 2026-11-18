@@ -2362,6 +2362,55 @@ describe("App", () => {
       await waitFor(() => expect(playSpy).toHaveBeenCalled());
     });
 
+    it("keeps the player usable and Space playing in the lyrics editor", async () => {
+      // The lyrics editor marks the player as a dialog companion, so its
+      // controls stay out of the inert page. Space belongs to playback there,
+      // not to the focused button (which would e.g. insert a timestamp).
+      isAuthenticated.set(true);
+      const view = await renderAuthenticated();
+      await fireEvent.click(node(view, "loose.flac"));
+      await screen.findByRole("heading", { name: "Metadata Editor" });
+      const playSpy = vi
+        .spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+
+      await fireEvent.click(
+        screen.getByRole("button", { name: "Edit synced lyrics" }),
+      );
+      const dialog = await screen.findByRole("dialog", {
+        name: "Synced lyrics editor",
+      });
+      const player = /** @type {HTMLElement} */ (
+        view.container.querySelector(".player-wrapper")
+      );
+      expect(player.getAttribute("data-dialog-companion")).toBe("true");
+      expect(player.inert).toBeFalsy();
+
+      // A click on a player control does not reach the dialog overlay.
+      await fireEvent.click(
+        /** @type {HTMLElement} */ (view.container.querySelector(".play-btn")),
+      );
+      await waitFor(() => expect(playSpy).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByTitle("Pause")).toBeTruthy());
+      expect(
+        screen.getByRole("dialog", { name: "Synced lyrics editor" }),
+      ).toBeTruthy();
+
+      // Space inside the dialog is the player key, not an activator for the
+      // focused editor button, and the dialog stays open.
+      const clear = screen.getByTitle("Clear all timestamps");
+      clear.focus();
+      await fireEvent.keyDown(clear, { key: " " });
+      await waitFor(() =>
+        expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled(),
+      );
+      expect(
+        screen.getByRole("dialog", { name: "Synced lyrics editor" }),
+      ).toBeTruthy();
+      expect(screen.getAllByText("[00:01.00]").length).toBeGreaterThan(0);
+      expect(dialog.isConnected).toBe(true);
+    });
+
     it("still types a space into a text field", async () => {
       // Typing surfaces keep their own Space; only the player takes the key
       // elsewhere.
