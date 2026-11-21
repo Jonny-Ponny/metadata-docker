@@ -278,7 +278,7 @@ to the first and Shift+Tab the other way, and focus that has escaped is pulled
 to the first control) and `keepFocusInDialog` (focus landing on `body` or on a
 control behind the overlay is sent back into the dialog). Both read the panel
 from `event.currentTarget`, so they are wired straight onto the panel's
-`onkeydown` / `onfocusin` and never need a selector — two dialogs that share a
+`onkeydown` / `onfocusin` and never need a selector - two dialogs that share a
 class name, or are mounted together, cannot capture each other's keys. The
 overlay click still closes a dialog; that is the pointer path and needs no
 help.
@@ -341,7 +341,7 @@ Every scrollable pane inside a dialog carries `tabindex="-1"` (`.modal-body`,
 `.modal-scrollable-content`). Firefox adds scrollable regions to the tab order
 so they can be scrolled from the keyboard, which placed a focusable,
 non-control element between the close button and the first field: Tab appeared
-to stop on the dialog's own edge, while Shift+Tab — which never met it — looked
+to stop on the dialog's own edge, while Shift+Tab - which never met it - looked
 fine. An explicit `tabindex` opts out, and the pane still scrolls with the
 arrow keys once focus is on a control inside it. A new dialog with a scrolling
 body needs the same attribute.
@@ -352,9 +352,9 @@ A row's menu lives in the `contextMenu` store (`stores/context.store.js`), which
 records the target path, the anchor point and how the menu was opened. Only the
 target row renders it, as a sibling of the row rather than inside it.
 
-The pointer path opens it at the cursor. The keyboard path — `Alt+Enter`,
+The pointer path opens it at the cursor. The keyboard path - `Alt+Enter`,
 `Shift+F10` or the context-menu key, handled by the row itself and by
-`handleTreeNavigation` when the panel has focus — centres it on the row and
+`handleTreeNavigation` when the panel has focus - centres it on the row and
 moves focus to the first item. `aria-keyshortcuts` on every row lists those
 keys and `aria-controls` points at the menu. `Alt+Enter` is the one to document
 as primary: Firefox opens its own context menu for `Shift+F10` and no handler
@@ -370,8 +370,8 @@ never moved focus.
 
 Placement is `placeMenu` in `utils/contextMenu.utils.js`, which is pure and
 unit-tested: it opens in the pointer quadrant, flips to the other side when the
-menu would overflow, and — when the menu is taller than the free area and fits
-on neither side — pins it to the top edge and caps its height so the list
+menu would overflow, and - when the menu is taller than the free area and fits
+on neither side - pins it to the top edge and caps its height so the list
 scrolls. The old code flipped up and then clamped to the top margin, which
 pushed a tall menu's bottom past the window edge.
 

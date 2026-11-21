@@ -37,6 +37,51 @@ Start it with `docker compose up -d` (or `docker-compose up -d` on Compose V1)
 and open <http://localhost:8888>. The port is bound to `127.0.0.1` on purpose;
 see [Exposure](#exposure) before changing that.
 
+### Podman
+
+The same compose file works with `podman-compose`; the image needs no changes.
+
+Rootful Podman is a drop-in replacement and behaves like Docker:
+
+```bash
+sudo podman-compose up -d
+```
+
+For rootless Podman, `userns_mode: keep-id` alone is not enough: Podman also
+runs the container as your host UID, so the entrypoint cannot create
+`/app/.local` and the container restart-loops. Start the entrypoint as namespace
+root and stop podman-compose from placing the container in a pod (Podman ignores
+`--userns` for containers in a pod):
+
+```yaml
+services:
+  app:
+    userns_mode: keep-id
+    user: "0:0"
+
+x-podman:
+  in_pod: false
+```
+
+Set `PUID`/`PGID` in the compose file to your host `id -u`/`id -g`; the default
+`1000` matches most single-user systems. If SELinux is enforcing, append `:Z` to
+each volume (`./logs:/logs:Z`); use `:z` instead when the folder is shared with
+another container, and skip relabelling for NFS/CIFS mounts. Use an absolute
+music path: under `sudo`, `~` expands to `/root`.
+
+The usual commands work unchanged:
+
+```bash
+podman-compose up -d
+podman-compose logs -f
+podman-compose down
+```
+
+`restart: unless-stopped` only survives a reboot when Podman's restart service
+is enabled: run `systemctl --user enable --now podman-restart.service` and
+`loginctl enable-linger "$USER"` for rootless, or enable the system unit for
+rootful.
+
 ## Environment variables
 
 | Variable | Description | Default |
