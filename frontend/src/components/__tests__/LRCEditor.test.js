@@ -456,6 +456,31 @@ describe("LRCEditor", () => {
     ).not.toContain("playing");
   });
 
+  it("moves the active line past an untimed line", async () => {
+    render(LRCEditor, {
+      props: {
+        isOpen: true,
+        initialLyrics: "[00:10.00]first\n\n[00:20.00]next",
+      },
+    });
+
+    window.dispatchEvent(
+      new CustomEvent("player-time-update", { detail: { time: 25 } }),
+    );
+    await tick();
+
+    // The blank line is stored as a placeholder. It must not pin the
+    // highlight to the line before it.
+    expect(
+      /** @type {HTMLElement} */ (document.getElementById("modal-line-1"))
+        .className,
+    ).not.toContain("playing");
+    expect(
+      /** @type {HTMLElement} */ (document.getElementById("modal-line-2"))
+        .className,
+    ).toContain("playing");
+  });
+
   it("synchronizes the next line from the current playback time", async () => {
     stopTime = answerWithTime(7);
     render(LRCEditor, {

@@ -7,6 +7,55 @@ import {
 
 export const TIMESTAMP_PLACEHOLDER = "[--:--.--]";
 
+/**
+ * Whether a timestamp entry is a real, parseable timestamp.
+ *
+ * Blank lines and untimed lines are stored as a placeholder so the lyrics and
+ * timestamps arrays stay aligned; those entries must be skipped by anything
+ * that reasons about playback timing.
+ * @param {string | null | undefined} timestamp
+ * @returns {boolean}
+ */
+export function isRealTimestamp(timestamp) {
+  return (
+    typeof timestamp === "string" &&
+    timestamp !== "" &&
+    timestamp !== TIMESTAMP_PLACEHOLDER
+  );
+}
+
+/**
+ * Find the lyric line that should be highlighted at a playback position.
+ *
+ * This is the last timed line at or before `currentTime`, ignoring untimed
+ * lines. Untimed lines sit between timed ones (a blank line in the middle of
+ * an LRC file, for example), so the next timed line cannot be assumed to be
+ * the immediate neighbour; taking the placeholder as the end of the previous
+ * line's interval used to pin the highlight to that line forever.
+ *
+ * @param {string[]} timestamps - Timestamp strings (may contain placeholders)
+ * @param {number} currentTime - Playback position in seconds
+ * @returns {number} Index of the active line, or -1 before the first timestamp
+ */
+export function findActiveLine(timestamps, currentTime) {
+  let activeLine = -1;
+  let activeSeconds = Number.NEGATIVE_INFINITY;
+
+  for (let i = 0; i < timestamps.length; i++) {
+    if (!isRealTimestamp(timestamps[i])) continue;
+
+    const seconds = parseTimestampToSeconds(timestamps[i]);
+    // `>=` keeps the last line when several lines share a timestamp, which is
+    // how LRC repeats a chorus line at several times.
+    if (seconds <= currentTime && seconds >= activeSeconds) {
+      activeLine = i;
+      activeSeconds = seconds;
+    }
+  }
+
+  return activeLine;
+}
+
 // Standard LRC metadata tags. Any other bracketed line is treated as lyrics.
 const ID_TAG_KEYS = new Set([
   "ti",

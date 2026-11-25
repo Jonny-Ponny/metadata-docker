@@ -11,6 +11,7 @@
     shiftTimestamps,
     buildLrc,
     downloadTextFile,
+    findActiveLine,
     TIMESTAMP_PLACEHOLDER,
     debounce,
     toast,
@@ -178,30 +179,7 @@
       return;
     }
 
-    let activeLineIndex = -1;
-
-    for (let i = 0; i < timestamps.length; i++) {
-      const timestamp = timestamps[i];
-      if (timestamp === "[--:--.--]") continue;
-      const timestampSeconds = parseTimestampToSeconds(timestamp);
-
-      if (i === timestamps.length - 1) {
-        if (currentTime >= timestampSeconds) activeLineIndex = i;
-      } else {
-        const nextTimestamp = timestamps[i + 1];
-        let nextTimestampSeconds = Number.MAX_VALUE;
-        if (nextTimestamp !== "[--:--.--]") {
-          nextTimestampSeconds = parseTimestampToSeconds(nextTimestamp);
-        }
-        if (
-          currentTime >= timestampSeconds &&
-          currentTime < nextTimestampSeconds
-        ) {
-          activeLineIndex = i;
-          break;
-        }
-      }
-    }
+    const activeLineIndex = findActiveLine(timestamps, currentTime);
 
     if (activeLineIndex !== currentActiveLine) {
       currentActiveLine = activeLineIndex;

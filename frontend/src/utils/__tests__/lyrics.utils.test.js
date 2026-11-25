@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   TIMESTAMP_PLACEHOLDER,
   buildLrc,
+  findActiveLine,
+  isRealTimestamp,
   parseLrc,
   processEditedLyrics,
   shiftTimestamps,
@@ -199,6 +201,58 @@ describe("shiftTimestamps", () => {
 
     expect(result.ok).toBe(true);
     expect(result.timestamps).toEqual(["[00:00.00]"]);
+  });
+});
+
+describe("findActiveLine", () => {
+  const timestamps = [
+    TIMESTAMP_PLACEHOLDER,
+    "[00:10.00]",
+    TIMESTAMP_PLACEHOLDER,
+    "[00:20.00]",
+    TIMESTAMP_PLACEHOLDER,
+  ];
+
+  it("returns -1 before the first timed line", () => {
+    expect(findActiveLine(timestamps, 0)).toBe(-1);
+    expect(findActiveLine([], 5)).toBe(-1);
+    expect(findActiveLine([TIMESTAMP_PLACEHOLDER], 5)).toBe(-1);
+  });
+
+  it("keeps the line across a placeholder that follows it", () => {
+    expect(findActiveLine(timestamps, 10)).toBe(1);
+    expect(findActiveLine(timestamps, 19.99)).toBe(1);
+  });
+
+  it("moves past a placeholder to the next timed line", () => {
+    // The bug: the placeholder neighbour was treated as "no upper bound", so
+    // the highlight never reached line 3 once the blank line had passed.
+    expect(findActiveLine(timestamps, 20)).toBe(3);
+    expect(findActiveLine(timestamps, 25)).toBe(3);
+    expect(findActiveLine(timestamps, 1000)).toBe(3);
+  });
+
+  it("ignores a trailing placeholder after the last timed line", () => {
+    expect(findActiveLine(["[00:01.00]", TIMESTAMP_PLACEHOLDER], 5)).toBe(0);
+  });
+
+  it("keeps the last line when timestamps repeat", () => {
+    expect(
+      findActiveLine(["[00:10.00]", "[00:10.00]", "[00:20.00]"], 10),
+    ).toBe(1);
+  });
+});
+
+describe("isRealTimestamp", () => {
+  it("rejects empty values and the placeholder", () => {
+    expect(isRealTimestamp(TIMESTAMP_PLACEHOLDER)).toBe(false);
+    expect(isRealTimestamp("")).toBe(false);
+    expect(isRealTimestamp(null)).toBe(false);
+    expect(isRealTimestamp(undefined)).toBe(false);
+  });
+
+  it("accepts a timestamp", () => {
+    expect(isRealTimestamp("[00:01.00]")).toBe(true);
   });
 });
 
