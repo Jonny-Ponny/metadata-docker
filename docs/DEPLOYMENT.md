@@ -238,8 +238,9 @@ and caches the result for `CACHE_TTL_SECONDS`. The first check is lazy, so an
 offline install starts immediately. Set `DISABLE_VERSION_CHECK=true` to turn it
 off; the Help footer then only shows the current version and commit.
 
-`latest` moves with every push to `main`, while digests do not. To pin what you
-run, reference the digest:
+`edge` moves with every push to `main`, `latest` moves only when a final
+release tag is pushed, and digests never move. To pin what you run, reference
+the digest:
 
 ```bash
 docker buildx imagetools inspect ghcr.io/jonny-ponny/metadata-docker:latest

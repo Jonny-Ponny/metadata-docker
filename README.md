@@ -182,8 +182,9 @@ path/SSRF protections and hardening options are in [SECURITY.md](SECURITY.md).
 Release model (commit -> CI checks -> build -> attestation -> release): every push
 to `main` and every `v*` tag runs the pytest and Vitest suites first. Only a
 passing commit is built into a multi-arch image, signed with a build-provenance
-attestation and published to GHCR; a failing suite publishes nothing. `latest`
-follows `main`, while `vX.Y.Z` tags produce versioned image tags. Run
+attestation and published to GHCR; a failing suite publishes nothing. `edge`
+follows `main`, `latest` moves only when a final `vX.Y.Z` tag is pushed, and
+pre-release tags such as `vX.Y.Z-rc.1` publish only their own image tag. Run
 `gh attestation verify`
 (see [SECURITY.md](SECURITY.md#image-trust-and-verification)) to confirm an
 image was built by this repository's workflow from the expected commit.

@@ -477,8 +477,10 @@ on `v*` tags. It calls `tests.yml` as a `test` job and `build-and-push` declares
 `needs: test`, so a failed, cancelled or timed-out suite publishes no image. A
 passing build produces `linux/amd64`, `linux/arm64` and `linux/arm/v7` images,
 embeds SBOM and provenance, and attests the multi-arch digest with Sigstore via
-the workflow's OIDC identity. `latest` follows the default branch; `vX.Y.Z`
-tags produce `X.Y.Z`, `X.Y` and `X` image tags.
+the workflow's OIDC identity. `edge` follows the default branch, `latest` moves
+only when a final `vX.Y.Z` tag is pushed, and `vX.Y.Z` tags produce `X.Y.Z` and
+`X.Y` image tags. Pre-release tags such as `vX.Y.Z-rc.1` produce only their own
+`X.Y.Z-rc.1` tag and never move `latest`.
 
 The frontend is built once per build in a stage pinned to `$BUILDPLATFORM`, so
 the bundle is not recompiled under QEMU for each target. The bundle is
