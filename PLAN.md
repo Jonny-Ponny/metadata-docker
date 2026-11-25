@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-21`, `B-49`. Next:
-  `T-22`, `B-50`.
+- IDs are permanent and never reused. Last used: `T-21`, `B-50`. Next:
+  `T-22`, `B-51`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -119,9 +119,13 @@ image build. What remains is optional hardening and new features.
 
 ### Lyrics editor
 
-- **T-20 (P3) - LRCEditor rework.** Interface rework and quality-of-life
-  improvements to the synced-lyrics editor. Scope to be defined when the work
-  starts.
+- **T-20 (P3) - LRCEditor rework.** In progress on
+  `feature/lrc-editor-rework`. Done so far: the redundant synchronized column
+  is gone (timestamps on the left, lyrics centred in one column), the active
+  line follows playback past blank lines (B-50), and the selection shift and
+  line insert/delete helpers exist. Remaining: line selection, inline text
+  editing, selection-scoped and per-line offset shifting, footer add/delete,
+  and keyboard row navigation afterwards.
 
 ### Known issues and small fixes
 

@@ -546,6 +546,20 @@ continue` (and keep the directory-level `PermissionError` handling).
       `frontend/src/__tests__/App.test.js` - `keeps the player usable and Space
       playing in the lyrics editor`.
 
+- [x] **B-50 (P2) The highlight stopped on the line before an empty lyric line.**
+      Blank lines are stored as `[--:--.--]` placeholders, and
+      `updateActiveLine()` took the *next array entry* as the end of the current
+      line's interval. When that entry was a placeholder it used
+      `Number.MAX_VALUE` and stopped looking, so a file like
+      `[00:10.00] first` / blank / `[00:20.00] next` kept line 1 active for the
+      rest of the song and the highlight never reached the lines below it.
+      **Fix:** a pure `findActiveLine()` in `utils/lyrics.utils.js` returns the
+      last timed line at or before the playback position, skipping untimed
+      lines; the component uses it instead of walking the raw array.
+      **Test:** `frontend/src/utils/__tests__/lyrics.utils.test.js` - `moves
+      past a placeholder to the next timed line`; `frontend/src/components/__tests__/LRCEditor.test.js`
+      - `moves the active line past an untimed line`.
+
 ## Player
 
 - [x] **B-39 (P2) A seek made before the track metadata loaded was dropped.**
@@ -615,3 +629,4 @@ silently.
 | B-47 | `frontend/src/__tests__/App.test.js` - `closes the context menu and keeps F2 working after a copy` |
 | B-48 | `frontend/src/components/__tests__/LogViewer.test.js` - `leaves the dialog stack when it closes` |
 | B-49 | `frontend/src/__tests__/App.test.js` - `keeps the player usable and Space playing in the lyrics editor` |
+| B-50 | `frontend/src/utils/__tests__/lyrics.utils.test.js` - `moves past a placeholder to the next timed line`   |
