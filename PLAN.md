@@ -120,12 +120,14 @@ image build. What remains is optional hardening and new features.
 ### Lyrics editor
 
 - **T-20 (P3) - LRCEditor rework.** In progress on
-  `feature/lrc-editor-rework`. Done so far: the redundant synchronized column
-  is gone (timestamps on the left, lyrics centred in one column), the active
-  line follows playback past blank lines (B-50), and the selection shift and
-  line insert/delete helpers exist. Remaining: line selection, inline text
-  editing, selection-scoped and per-line offset shifting, footer add/delete,
-  and keyboard row navigation afterwards.
+  `feature/lrc-editor-rework`. Done: one centred lyrics column beside the
+  timestamps (the redundant synchronized column is gone, and with it the row
+  height equalisation), the active line following playback past blank lines
+  (B-50), line selection (click, Shift+click, Ctrl/Cmd+click), in-place line
+  editing (double click or Enter), shifting the selection or a single line from
+  the footer and its row, and adding/deleting selected lines. Remaining:
+  keyboard row navigation (arrow keys over the lines) once this is tested in a
+  real library.
 
 ### Known issues and small fixes
 

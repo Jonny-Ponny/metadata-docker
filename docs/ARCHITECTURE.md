@@ -402,6 +402,47 @@ gestures run on `createHold()` from `utils/hold2confirm.utils.js`, which owns
 the timing and progress; `holdToConfirm` is the pointer action on top of it.
 Releasing the key cancels, so a folder-wide change needs a deliberate hold.
 
+### Lyrics editor
+
+`LRCEditor.svelte` shows one row per lyric line: the timestamp in a narrow
+gutter on the left, the text centred in the column that takes the remaining
+width. Both cells are children of the same grid row (`grid-template-columns:
+subgrid`), so they can never drift apart and nothing needs to be re-measured
+after a line wraps; the resize-observer height equalisation the three-column
+layout needed is gone.
+
+Two states live on a row and they are deliberately separate. The **active**
+line is where playback is (`findActiveLine` in `utils/lyrics.utils.js`, which
+returns the last timed line at or before the current time and skips untimed
+lines; a gap made by a blank line used to pin the highlight, B-50). The
+**selection** is where edits go: plain click selects one line, Shift+click a
+range from the anchor, Ctrl/Cmd+click toggles one. Clicking a timed line also
+jumps playback to it, which is why the row's click handler seeks itself
+instead of relying on event delegation (selecting re-renders the row under the
+pointer).
+
+Editing actions all act on the selection:
+
+- **In place** - double-click a line (or Enter on the focused line) swaps its
+  text for a single-line input; Enter or blur commits, Escape cancels and is
+  stopped so the editor underneath stays open.
+- **Footer shift** - the −/+ buttons move every timestamp, or only the
+  selection when the `Selected (n)` scope is active. `shiftTimestampSelection`
+  moves exactly those lines and refuses a move that would cross the nearest
+  timed line on either side, including a neighbour that moves with the
+  selection.
+- **Per-row −/+** - the same amount applied to one line, leaving the selection
+  alone.
+- **+ Line / Delete** - `insertLyricLine`/`deleteLyricLines` keep the lyrics
+  and the timestamp array aligned; the new line starts untimed and opens for
+  typing, and deleting everything leaves one empty line.
+
+Bulk operations (import, the whole-lyrics modal, clearing, shifting) call
+`refreshAfterBulkEdit()`, which also clears the selection because the indices
+only mean something for the text they were picked on. Line indices are the
+`{#each}` keys, so a reordered line rebuilds its row rather than reusing the
+wrong DOM.
+
 ## Tests
 
 The suite runs against a temporary music library and log directory created by
