@@ -262,17 +262,19 @@
               </li>
               <li>
                 <strong>Select a line</strong> - Click its lyrics. Shift+click selects
-                a range, Ctrl/Cmd+click adds or removes one line. The selected lines
-                are where the editing buttons act.
+                a range, Ctrl/Cmd+click adds or removes one line. Clicking lyrics
+                never moves playback; only the selected lines are where the editing
+                buttons act.
               </li>
               <li>
-                <strong>Edit a line</strong> - Double-click it, or press Enter with
-                it focused. Enter or clicking elsewhere saves, Escape cancels.
+                <strong>Edit a line</strong> - Double-click it, or press Enter while
+                one line is selected. Enter or clicking elsewhere saves, Escape cancels.
               </li>
               <li>
                 <strong>Shift −/+</strong> - Move the timestamps by the amount
                 in seconds: every line, or only the selected lines when
-                <strong>Selected</strong> is active
+                <strong>Selected</strong> is active. The selection is kept, so the
+                buttons can be pressed again
               </li>
               <li>
                 <strong>Row −/+</strong> - Move a single line's timestamp earlier

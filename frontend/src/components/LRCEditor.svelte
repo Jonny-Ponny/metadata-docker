@@ -250,27 +250,23 @@
 
   // ========== IN-PLACE LINE EDITING ==========
   /**
-   * A lyric line clicked with the pointer: select it, and jump playback to it
-   * when it is timed.
-   * @param {number} index
-   * @param {MouseEvent} e
-   */
-  function handleLyricClick(index, e) {
-    selectLine(index, e);
-    handleLineClick(index);
-  }
-
-  /**
-   * Lines from the keyboard: select the line, and start editing it when the
-   * key was Enter/F2.
-   * @param {number} index
+   * Enter/F2 inside the lyrics starts editing the selected line, exactly as
+   * double-clicking it does. It acts on the selection, not on the line
+   * playback is on, and does nothing while several lines are selected or
+   * while a text field already has the keyboard.
    * @param {KeyboardEvent} e
    */
-  function handleLineKeydown(index, e) {
+  function handleLyricsKeydown(e) {
     if (e.key !== "Enter" && e.key !== "F2") return;
-    // The line's own jump button would otherwise fire on Enter as well.
+    if (inlineEditIndex !== -1) return;
+    if (e.target instanceof Element && e.target.closest("input, textarea")) {
+      return;
+    }
+    if (selectedLines.size !== 1) return;
+
+    const [index] = sortedSelection();
+    if (index === undefined) return;
     e.preventDefault();
-    selectLine(index, e);
     startInlineEdit(index);
   }
 
@@ -562,10 +558,13 @@
   }
 
   // ========== BULK TIMESTAMP TOOLS ==========
-  function refreshAfterBulkEdit({ resetActive = true } = {}) {
+  function refreshAfterBulkEdit({
+    resetActive = true,
+    keepSelection = false,
+  } = {}) {
     updateSynchronizedLyricsText();
     // Line indices only mean something for the text they were picked on.
-    clearSelection();
+    if (!keepSelection) clearSelection();
 
     if (resetActive) {
       currentActiveLine = -1;
@@ -611,7 +610,10 @@
     }
 
     timestamps = result.timestamps;
-    refreshAfterBulkEdit({ resetActive: false });
+    // One shift is rarely the right amount, so the lines stay selected and
+    // the buttons can be pressed again; the line count did not change, so the
+    // selected indices are still valid.
+    refreshAfterBulkEdit({ resetActive: false, keepSelection: true });
 
     const label = `${delta > 0 ? "+" : ""}${delta.toFixed(2)}s`;
     toast.success(
@@ -1124,7 +1126,13 @@
              because they are cells of the same grid row, so the columns never
              need to be re-measured or re-equalised. -->
         <div class="lyric-table-wrapper">
-          <div class="lyric-table" role="table" aria-label="Lyrics">
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <div
+            class="lyric-table"
+            role="table"
+            aria-label="Lyrics"
+            onkeydown={handleLyricsKeydown}
+          >
             <div class="lyric-table-header" role="row">
               <div class="column-header timestamp-header" role="columnheader">
                 Timestamps
@@ -1139,8 +1147,10 @@
                 class="lyric-row {index === currentActiveLine ? 'playing' : ''}
                   {rowClassOf(index)}"
                 role="row"
+                tabindex="-1"
                 data-line-index={index}
                 aria-selected={selectedLines.has(index)}
+                onclick={(e) => selectLine(index, e)}
               >
                 <div class="timestamp-cell" role="cell">
                   <button
@@ -1161,7 +1171,10 @@
                     <button
                       class="row-action"
                       type="button"
-                      onclick={() => nudgeLine(index, -1)}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        nudgeLine(index, -1);
+                      }}
                       title="Shift this line earlier"
                       aria-label="Shift line {index + 1} earlier"
                     >
@@ -1170,7 +1183,10 @@
                     <button
                       class="row-action"
                       type="button"
-                      onclick={() => nudgeLine(index, 1)}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        nudgeLine(index, 1);
+                      }}
                       title="Shift this line later"
                       aria-label="Shift line {index + 1} later"
                     >
@@ -1179,7 +1195,10 @@
                     <button
                       class="row-action timestamp-edit-btn"
                       type="button"
-                      onclick={() => openTimestampEditor(index)}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        openTimestampEditor(index);
+                      }}
                       title="Edit timestamp"
                       aria-label="Edit timestamp for line {index + 1}"
                     >
@@ -1222,30 +1241,18 @@
                       }}
                       onblur={commitInlineEdit}
                     />
-                  {:else if isTimed(index)}
-                    <button
-                      class="lyric-jump"
-                      type="button"
-                      onclick={(e) => handleLyricClick(index, e)}
-                      ondblclick={() => startInlineEdit(index)}
-                      onkeydown={(e) => handleLineKeydown(index, e)}
-                      title="Click to select, double-click or Enter to edit"
-                    >
-                      {#if line === ""}<span class="empty-line-placeholder"
-                          >empty line</span
-                        >{:else}{line}{/if}
-                    </button>
                   {:else}
-                    <!-- Untimed lines have nothing to seek to, so they are not
-                         a jump button; the row itself selects and edits. -->
+                    <!-- Clicking the text only selects (the jump lives on the
+                         timestamp), so a range can be picked without playback
+                         moving. -->
                     <div
                       class="lyric-plain"
                       role="button"
                       tabindex="0"
-                      onclick={(e) => handleLyricClick(index, e)}
+                      onclick={(e) => selectLine(index, e)}
                       ondblclick={() => startInlineEdit(index)}
-                      onkeydown={(e) => handleLineKeydown(index, e)}
-                      title="Click to select, double-click or Enter to edit"
+                      onkeydown={() => (selectionAnchor = index)}
+                      title="Click to select, double-click to edit"
                     >
                       {#if line === ""}<span class="empty-line-placeholder"
                           >empty line</span
@@ -1532,10 +1539,10 @@
   }
 
   .timestamp-cell {
+    position: relative;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 4px;
+    justify-content: center;
     padding: 0 8px;
     border-right: 2px solid #ddd;
     border-bottom: 1px solid #eee;
@@ -1553,7 +1560,7 @@
     padding: 0;
     font: inherit;
     color: #666;
-    text-align: right;
+    text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1583,24 +1590,6 @@
     min-height: 44px;
     box-sizing: border-box;
     transition: background-color 0.2s;
-  }
-
-  .lyric-jump {
-    display: block;
-    width: 100%;
-    padding: 10px 16px;
-    background: none;
-    border: none;
-    font: inherit;
-    color: inherit;
-    text-align: center;
-    cursor: pointer;
-  }
-
-  .lyric-jump:hover,
-  .lyric-plain:hover {
-    text-decoration: underline;
-    text-decoration-color: #bbb;
   }
 
   .lyric-plain {
@@ -1649,6 +1638,12 @@
     background-color: var(--color-lrc-playing-transparent);
   }
 
+  /* The same left-edge marker as a selected line, in the playing colour, so
+     the playing line stays identifiable while several lines are selected. */
+  .lyric-row.playing .timestamp-cell {
+    box-shadow: inset 3px 0 0 var(--color-primary);
+  }
+
   /* Selected lines are where edits go; the active line keeps its own colour. */
   .lyric-row.selected .lyric-cell,
   .lyric-row.selected .timestamp-cell {
@@ -1659,17 +1654,28 @@
     box-shadow: inset 3px 0 0 var(--color-primary);
   }
 
+  /* Floats over the cell's right edge on hover so a hovered line never
+     reflows (which would drop the pointer's leave event). */
   .line-actions {
+    position: absolute;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     align-items: center;
     gap: 2px;
+    padding-left: 4px;
+    background-color: #f5f5f5;
+    border-radius: 3px;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.2s;
   }
 
   .lyric-row:hover .line-actions,
   .line-actions:focus-within {
     opacity: 1;
+    pointer-events: auto;
   }
 
   .row-action {
@@ -2108,6 +2114,14 @@
 
   :global(body.dark) .lyric-row.playing .timestamp-jump {
     color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .lyric-row.playing .timestamp-cell {
+    box-shadow: inset 3px 0 0 var(--color-primary-dark);
+  }
+
+  :global(body.dark) .line-actions {
+    background-color: #3d3d3d;
   }
 
   :global(body.dark) .lyric-row.selected .lyric-cell,

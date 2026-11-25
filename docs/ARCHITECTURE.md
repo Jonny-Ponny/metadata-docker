@@ -415,31 +415,39 @@ Two states live on a row and they are deliberately separate. The **active**
 line is where playback is (`findActiveLine` in `utils/lyrics.utils.js`, which
 returns the last timed line at or before the current time and skips untimed
 lines; a gap made by a blank line used to pin the highlight, B-50). The
-**selection** is where edits go: plain click selects one line, Shift+click a
-range from the anchor, Ctrl/Cmd+click toggles one. Clicking a timed line also
-jumps playback to it, which is why the row's click handler seeks itself
-instead of relying on event delegation (selecting re-renders the row under the
-pointer).
+**selection** is where edits go: plain click on the lyrics selects one line,
+Shift+click a range from the anchor, Ctrl/Cmd+click toggles one. Clicking the
+lyrics never moves playback, so a range can be picked while listening; only the
+timestamp cell seeks. Both states are marked on their own cell (the playing line
+gets the left-edge marker in the timestamp column, the selection in the lyrics
+column and its timestamp) so the playing line stays visible inside a multi-line
+selection.
 
 Editing actions all act on the selection:
 
-- **In place** - double-click a line (or Enter on the focused line) swaps its
-  text for a single-line input; Enter or blur commits, Escape cancels and is
-  stopped so the editor underneath stays open.
+- **In place** - double-click a line swaps its text for a single-line input;
+  Enter or blur commits, Escape cancels and is stopped so the editor underneath
+  stays open. Enter/F2 inside the lyrics does the same for the selected line
+  (`handleLyricsKeydown` on the table), which is why it acts on the selection
+  rather than on keyboard focus: selecting re-renders the row under a mouse
+  click, so the focused element can be replaced by the click that selected it.
+  With several lines selected Enter does nothing.
 - **Footer shift** - the −/+ buttons move every timestamp, or only the
   selection when the `Selected (n)` scope is active. `shiftTimestampSelection`
   moves exactly those lines and refuses a move that would cross the nearest
   timed line on either side, including a neighbour that moves with the
-  selection.
+  selection. The selection survives a shift, so one capture is rarely the
+  right amount and the buttons can be pressed repeatedly.
 - **Per-row −/+** - the same amount applied to one line, leaving the selection
   alone.
 - **+ Line / Delete** - `insertLyricLine`/`deleteLyricLines` keep the lyrics
   and the timestamp array aligned; the new line starts untimed and opens for
   typing, and deleting everything leaves one empty line.
 
-Bulk operations (import, the whole-lyrics modal, clearing, shifting) call
+Bulk operations (import, the whole-lyrics modal, clearing) call
 `refreshAfterBulkEdit()`, which also clears the selection because the indices
-only mean something for the text they were picked on. Line indices are the
+only mean something for the text they were picked on; shifts pass
+`keepSelection` because they do not change the line count. Line indices are the
 `{#each}` keys, so a reordered line rebuilds its row rather than reusing the
 wrong DOM.
 
