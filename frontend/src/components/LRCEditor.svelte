@@ -1,7 +1,6 @@
 <!-- src/components/LRCEditor.svelte -->
 <script>
-  import { onMount, tick } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
+  import { onMount } from "svelte";
   import {
     parseTimestampToSeconds,
     secondsToTimestamp,
@@ -12,10 +11,9 @@
     buildLrc,
     downloadTextFile,
     findActiveLine,
+    isRealTimestamp,
     TIMESTAMP_PLACEHOLDER,
-    debounce,
     toast,
-    equalizeElementHeights,
     keepFocusInDialog,
     keepTabInDialog,
     dialogOpenEffect,
@@ -82,12 +80,6 @@
   // Track if we've initialized
   let hasInitialized = $state(false);
 
-  // Track line heights for equalization
-  /** @type {SvelteMap<number, number>} */
-  let lineHeights = new SvelteMap();
-  /** @type {SvelteMap<string, ResizeObserver>} */
-  let resizeObservers = new SvelteMap();
-
   // ========== INITIALIZATION ==========
   function initializeFromLyrics() {
     let newUSLT = "";
@@ -109,10 +101,11 @@
 
     // Ensure timestamps array matches number of lines
     const lineCount = newUSLT.split("\n").length;
-    if (newTimestamps.length < lineCount) {
-      while (newTimestamps.length < lineCount) {
-        newTimestamps.push("[--:--.--]");
-      }
+    if (newTimestamps.length > lineCount) {
+      newTimestamps = newTimestamps.slice(0, lineCount);
+    }
+    while (newTimestamps.length < lineCount) {
+      newTimestamps.push(TIMESTAMP_PLACEHOLDER);
     }
 
     // Only update if different
@@ -131,26 +124,43 @@
     if (isOpen && !hasInitialized) {
       initializeFromLyrics();
       hasInitialized = true;
-
-      // Setup height equalization after DOM update
-      tick().then(() => {
-        requestAnimationFrame(() => {
-          equalizeAllLineHeights();
-          setupResizeObservers();
-        });
-      });
     }
 
     // Reset when modal closes
     if (!isOpen) {
       hasInitialized = false;
-      cleanupResizeObservers();
     }
   });
 
   // ========== FUNCTIONS ==========
+  /** The lyric lines, split once instead of once per render pass. */
+  const lines = $derived(USLT.split("\n"));
+
+  /**
+   * @param {number} index
+   * @returns {boolean}
+   */
+  function isTimed(index) {
+    return isRealTimestamp(timestamps[index]);
+  }
+
+  /**
+   * Trim the timestamp list back to the current line count. Bulk operations
+   * (import, clearing, shifting) keep every entry, so placeholders can pile up
+   * when the text is shortened; the extra entries would shift a line index and
+   * the highlight would point at the wrong row.
+   */
+  function alignTimestamps() {
+    const lineCount = lines.length;
+    if (timestamps.length > lineCount) {
+      timestamps = timestamps.slice(0, lineCount);
+    }
+    while (timestamps.length < lineCount) {
+      timestamps.push(TIMESTAMP_PLACEHOLDER);
+    }
+  }
+
   function updateSynchronizedLyricsText() {
-    const lines = USLT.split("\n");
     // Untimed lines are written as plain text so the result is valid LRC
     synchronizedLyricsText = buildLrc(lines, timestamps);
   }
@@ -159,9 +169,8 @@
    * @param {number} lineIndex
    */
   function handleLineClick(lineIndex) {
-    const timestamp = timestamps[lineIndex];
-    if (timestamp === "[--:--.--]") return;
-    const targetTime = parseTimestampToSeconds(timestamp);
+    if (!isTimed(lineIndex)) return;
+    const targetTime = parseTimestampToSeconds(timestamps[lineIndex]);
 
     // Dispatch event for player to seek
     const event = new CustomEvent("lyrics-seek", {
@@ -201,114 +210,14 @@
   }
 
   /**
-   * Keep a line in view while its timestamp is applied. The reset/re-apply
-   * cycle in equalizeAllLineHeights() shifts the scroll position by a line
-   * unless a scroll is already running, so start one first and equalise while
-   * it is in flight.
+   * Keep a line in view while its timestamp is applied, so the line the user
+   * is syncing does not drift off-centre between captures.
    * @param {Element | null} line
    */
-  function scrollToLineAndEqualize(line) {
+  function scrollToLine(line) {
     if (line) {
       line.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-
-    requestAnimationFrame(() => {
-      // Temporarily disable transitions during height equalization
-      const style = document.createElement("style");
-      style.id = "temp-no-transition";
-      style.textContent = `
-                        .lyric-line {
-                            transition: none !important;
-                        }
-                    `;
-      document.head.appendChild(style);
-
-      // Force a small delay to let scroll start
-      setTimeout(() => {
-        equalizeAllLineHeights();
-
-        // Remove the temp style after equalization
-        setTimeout(() => {
-          const tempStyle = document.getElementById("temp-no-transition");
-          if (tempStyle) tempStyle.remove();
-        }, 100);
-      }, 10);
-    });
-  }
-
-  // ========== HEIGHT EQUALISATION ==========
-  function cleanupResizeObservers() {
-    resizeObservers.forEach((observer) => observer.disconnect());
-    resizeObservers.clear();
-    lineHeights.clear();
-  }
-
-  function setupResizeObservers() {
-    const lines = USLT.split("\n");
-    if (lines.length === 0) return;
-
-    const debouncedEqualizeLineHeight = debounce(
-      (/** @type {number} */ lineIndex) => {
-        equalizeLineHeight(lineIndex);
-      },
-      50,
-    );
-
-    for (let i = 0; i < lines.length; i++) {
-      const timestampLine = document.getElementById(`modal-timestamp-${i}`);
-      const lyricLine = document.getElementById(`modal-line-${i}`);
-      const syncedLine = document.getElementById(`modal-synced-${i}`);
-
-      [timestampLine, lyricLine, syncedLine].forEach((line, colIndex) => {
-        if (line) {
-          const observer = new ResizeObserver(() => {
-            debouncedEqualizeLineHeight(i);
-          });
-          observer.observe(line);
-          resizeObservers.set(`${i}-${colIndex}`, observer);
-        }
-      });
-    }
-  }
-
-  /**
-   * @param {number} lineIndex
-   */
-  function equalizeLineHeight(lineIndex) {
-    const lines = [
-      document.getElementById(`modal-timestamp-${lineIndex}`),
-      document.getElementById(`modal-line-${lineIndex}`),
-      document.getElementById(`modal-synced-${lineIndex}`),
-    ].filter((line) => line !== null);
-    const maxHeight = equalizeElementHeights(lines);
-    if (maxHeight > 0) {
-      const storedHeight = lineHeights.get(lineIndex) || 0;
-      if (Math.abs(maxHeight - storedHeight) > 1) {
-        lineHeights.set(lineIndex, maxHeight);
-      }
-    }
-  }
-
-  function equalizeAllLineHeights() {
-    const lines = USLT.split("\n");
-    if (lines.length === 0) return;
-
-    for (let i = 0; i < lines.length; i++) {
-      const linesToReset = [
-        document.getElementById(`modal-timestamp-${i}`),
-        document.getElementById(`modal-line-${i}`),
-        document.getElementById(`modal-synced-${i}`),
-      ].filter((line) => line !== null);
-
-      linesToReset.forEach((line) => {
-        line.style.minHeight = "";
-        line.style.height = "";
-      });
-    }
-
-    requestAnimationFrame(() => {
-      for (let i = 0; i < lines.length; i++) equalizeLineHeight(i);
-    });
   }
 
   // ========== TIMESTAMP EDITING USING OLD MODAL ==========
@@ -364,11 +273,6 @@
     closeTimestampModal();
 
     if (currentActiveLine === index) updateActiveLine(0);
-
-    // Re-equalize heights after timestamp change
-    requestAnimationFrame(() => {
-      equalizeAllLineHeights();
-    });
   }
 
   // ========== EDIT MODAL FUNCTIONS ==========
@@ -387,26 +291,12 @@
       const result = processEditedLyrics(editingText);
       USLT = result.text;
       timestamps = result.timestamps;
-
-      const lineCount = USLT.split("\n").length;
-      if (timestamps.length < lineCount) {
-        while (timestamps.length < lineCount) {
-          timestamps.push("[--:--.--]");
-        }
-      }
+      alignTimestamps();
 
       updateSynchronizedLyricsText();
       currentActiveLine = -1;
     }
     closeEditModal();
-
-    // Re-equalize heights after edit
-    cleanupResizeObservers();
-    await tick();
-    requestAnimationFrame(() => {
-      equalizeAllLineHeights();
-      setupResizeObservers();
-    });
   }
 
   // Insert current time to next line
@@ -416,8 +306,9 @@
     const event = new CustomEvent("get-current-time", {
       detail: {
         callback: (/** @type {number} */ time) => {
-          const lines = USLT.split("\n");
-          if (lines.length === 0) return;
+          alignTimestamps();
+          const lineCount = lines.length;
+          if (lineCount === 0) return;
 
           let targetIndex;
           if (currentActiveLine === -1) {
@@ -425,7 +316,7 @@
           } else {
             targetIndex = currentActiveLine + 1;
           }
-          if (targetIndex >= lines.length) return;
+          if (targetIndex >= lineCount) return;
 
           // Store the target element for scrolling
           const targetElement = document.querySelector(
@@ -439,12 +330,12 @@
               timestamps.push("[--:--.--]");
           }
 
-          // Update text but don't trigger re-equalize yet
+          // Update the synchronized LRC text and move the highlight with it
           updateSynchronizedLyricsText();
           currentActiveLine = targetIndex;
 
           // Keep the new line in view while the heights re-equalise
-          scrollToLineAndEqualize(targetElement);
+          scrollToLine(targetElement);
         },
       },
     });
@@ -453,7 +344,7 @@
 
   // Copy synchronized lyrics
   async function copySynchronizedLyrics() {
-    const textToCopy = buildLrc(USLT.split("\n"), timestamps);
+    const textToCopy = buildLrc(lines, timestamps);
 
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -484,9 +375,7 @@
   function handleSave() {
     // At least one real timestamp means this is LRC content. Untimed lines
     // are written as plain lines by updateSynchronizedLyricsText().
-    const hasTimestamps = timestamps.some(
-      (ts) => ts && ts !== TIMESTAMP_PLACEHOLDER,
-    );
+    const hasTimestamps = timestamps.some(isRealTimestamp);
 
     onSave({
       lyrics: USLT,
@@ -512,15 +401,10 @@
     updateSynchronizedLyricsText();
     currentActiveLine = -1;
     toast.success("All timestamps cleared");
-
-    // Re-equalize heights
-    requestAnimationFrame(() => {
-      equalizeAllLineHeights();
-    });
   }
 
   // ========== BULK TIMESTAMP TOOLS ==========
-  async function refreshAfterBulkEdit({ resetActive = true } = {}) {
+  function refreshAfterBulkEdit({ resetActive = true } = {}) {
     updateSynchronizedLyricsText();
 
     if (resetActive) {
@@ -528,13 +412,6 @@
     } else {
       updateActiveLine(currentPlaybackTime);
     }
-
-    cleanupResizeObservers();
-    await tick();
-    requestAnimationFrame(() => {
-      equalizeAllLineHeights();
-      setupResizeObservers();
-    });
   }
 
   /**
@@ -619,13 +496,9 @@
 
       USLT = parsed.text;
       timestamps = parsed.timestamps;
+      alignTimestamps();
 
-      const lineCount = USLT.split("\n").length;
-      while (timestamps.length < lineCount) {
-        timestamps.push(TIMESTAMP_PLACEHOLDER);
-      }
-
-      await refreshAfterBulkEdit();
+      refreshAfterBulkEdit();
       toast.success(`Imported lyrics from ${file.name}`);
 
       if (parsed.hasOffset) {
@@ -660,7 +533,7 @@
       return;
     }
 
-    const content = buildLrc(USLT.split("\n"), timestamps, {
+    const content = buildLrc(lines, timestamps, {
       title: trackInfo?.title,
       artist: trackInfo?.artist,
       album: trackInfo?.album,
@@ -755,16 +628,11 @@
           }
 
           const newTimestamp = secondsToTimestamp(time);
+          alignTimestamps();
           timestamps[targetIndex] = newTimestamp;
 
-          // Ensure timestamps length matches lines
-          const lines = USLT.split("\n");
-          while (timestamps.length < lines.length) {
-            timestamps.push("[--:--.--]");
-          }
-
           updateSynchronizedLyricsText();
-          scrollToLineAndEqualize(targetElement);
+          scrollToLine(targetElement);
         },
       },
     });
@@ -994,149 +862,86 @@
       <!-- tabindex="-1": Firefox adds scrollable regions to the tab order, so Tab
              would land on this pane instead of its first control. -->
       <div class="modal-scrollable-content" tabindex="-1">
-        <!-- Three-Column Layout - Connected columns with proper padding -->
-        <div class="space-parts-wrapper">
-          <div class="space-parts">
-            <!-- Timestamps Column -->
-            <div class="space-part left-part">
-              <div class="column-header">
-                <div class="header-content">
-                  <h3>Timestamps</h3>
-                </div>
+        <!-- One row per lyric line: its timestamp and its text stay aligned
+             because they are cells of the same grid row, so the columns never
+             need to be re-measured or re-equalised. -->
+        <div class="lyric-table-wrapper">
+          <div class="lyric-table" role="table" aria-label="Lyrics">
+            <div class="lyric-table-header" role="row">
+              <div class="column-header timestamp-header" role="columnheader">
+                Timestamps
               </div>
-              <div class="column-content">
-                {#each USLT.split("\n") as _line, index (index)}
-                  <div
-                    class="lyric-line timestamp-line {index ===
-                    currentActiveLine
-                      ? 'playing'
-                      : ''}"
+              <div class="column-header lyrics-header" role="columnheader">
+                Lyrics
+              </div>
+            </div>
+
+            {#each lines as line, index (index)}
+              <div
+                class="lyric-row {index === currentActiveLine ? 'playing' : ''}"
+                role="row"
+                data-line-index={index}
+              >
+                <div class="timestamp-cell" role="cell">
+                  <button
+                    class="timestamp-jump"
                     id="modal-timestamp-{index}"
-                    data-line-index={index}
                     onclick={() => handleLineClick(index)}
-                    style="cursor: {timestamps[index] &&
-                    timestamps[index] !== '[--:--.--]'
-                      ? 'pointer'
-                      : 'default'}"
-                    title={timestamps[index] &&
-                    timestamps[index] !== "[--:--.--]"
-                      ? "Click to jump to " + timestamps[index]
+                    disabled={!isTimed(index)}
+                    title={isTimed(index)
+                      ? `Jump to ${timestamps[index]}`
                       : "No timestamp available"}
                   >
-                    <div class="timestamp-container">
-                      <span class="timestamp-value">
-                        {timestamps[index] || "[--:--.--]"}
-                      </span>
-                      <button
-                        class="timestamp-edit-btn"
-                        onclick={(e) => {
-                          e.stopPropagation(); // Prevent seeking when clicking edit button
-                          openTimestampEditor(index);
-                        }}
-                        title="Edit timestamp"
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path
-                            d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                          />
-                          <path
-                            d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                {:else}
-                  <div class="empty-state">No timestamps loaded</div>
-                {/each}
-              </div>
-            </div>
-
-            <!-- Unsynchronized Lyrics Column -->
-            <div class="space-part middle-part">
-              <div class="column-header">
-                <div class="header-content">
-                  <h3>Unsynchronized lyrics</h3>
+                    <span class="timestamp-value">
+                      {timestamps[index] || TIMESTAMP_PLACEHOLDER}
+                    </span>
+                  </button>
+                  <button
+                    class="timestamp-edit-btn"
+                    onclick={() => openTimestampEditor(index)}
+                    title="Edit timestamp"
+                    aria-label="Edit timestamp for line {index + 1}"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                      />
+                      <path
+                        d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                      />
+                    </svg>
+                  </button>
                 </div>
-              </div>
-              <div class="column-content">
-                {#each USLT.split("\n") as line, index (index)}
-                  <div
-                    class="lyric-line {index === currentActiveLine
-                      ? 'playing'
-                      : ''}"
-                    id="modal-line-{index}"
-                    data-line-index={index}
-                    onclick={() => handleLineClick(index)}
-                    style="cursor: {timestamps[index] &&
-                    timestamps[index] !== '[--:--.--]'
-                      ? 'pointer'
-                      : 'default'}"
-                    title={timestamps[index] &&
-                    timestamps[index] !== "[--:--.--]"
-                      ? "Click to jump to " + timestamps[index]
-                      : "No timestamp available"}
-                  >
-                    {#if line === ""}
-                      <span class="empty-line-placeholder">&nbsp;</span>
-                    {:else}
-                      {line}
-                    {/if}
-                  </div>
-                {:else}
-                  <div class="empty-state">No lyrics loaded</div>
-                {/each}
-              </div>
-            </div>
-
-            <!-- Synchronized Lyrics Column -->
-            <div class="space-part right-part">
-              <div class="column-header">
-                <div class="header-content">
-                  <h3>Synchronized lyrics</h3>
-                </div>
-              </div>
-              <div class="column-content">
-                {#each USLT.split("\n") as line, index (index)}
-                  <div
-                    class="lyric-line synced-line {index === currentActiveLine
-                      ? 'playing'
-                      : ''}"
-                    id="modal-synced-{index}"
-                    data-line-index={index}
-                    onclick={() => handleLineClick(index)}
-                    style="cursor: {timestamps[index] &&
-                    timestamps[index] !== '[--:--.--]'
-                      ? 'pointer'
-                      : 'default'}"
-                    title={timestamps[index] &&
-                    timestamps[index] !== "[--:--.--]"
-                      ? "Click to jump to " + timestamps[index]
-                      : "No timestamp available"}
-                  >
-                    {#if timestamps[index] && timestamps[index] !== "[--:--.--]"}
-                      {timestamps[index]}
+                <div class="lyric-cell" id="modal-line-{index}" role="cell">
+                  <!-- Untimed lines have nothing to seek to, so they stay plain
+                       text; a timed line is a button like its timestamp. -->
+                  {#if isTimed(index)}
+                    <button
+                      class="lyric-jump"
+                      onclick={() => handleLineClick(index)}
+                      title="Jump to {timestamps[index]}"
+                    >
                       {#if line === ""}<span class="empty-line-placeholder"
-                          >&nbsp;</span
+                          >empty line</span
                         >{:else}{line}{/if}
-                    {:else}
-                      [--:--.--] {#if line === ""}<span
-                          class="empty-line-placeholder">&nbsp;</span
-                        >{:else}{line}{/if}
-                    {/if}
-                  </div>
-                {:else}
-                  <div class="empty-state">No synchronized lyrics loaded</div>
-                {/each}
+                    </button>
+                  {:else if line === ""}
+                    <span class="empty-line-placeholder">empty line</span>
+                  {:else}
+                    {line}
+                  {/if}
+                </div>
               </div>
-            </div>
+            {:else}
+              <div class="empty-state">No lyrics loaded</div>
+            {/each}
           </div>
         </div>
       </div>
@@ -1316,14 +1121,16 @@
     padding: 20px 0;
   }
 
-  /* Wrapper to add padding around the columns */
-  .space-parts-wrapper {
+  /* Wrapper to add padding around the table */
+  .lyric-table-wrapper {
     padding: 0 20px;
   }
 
-  /* Three columns layout - connected */
-  .space-parts {
-    display: flex;
+  /* Two columns: the timestamp gutter and the lyrics. The lyric column takes
+     all the width left over, so the text sits in the middle of the screen. */
+  .lyric-table {
+    display: grid;
+    grid-template-columns: minmax(150px, 18%) 1fr;
     width: 100%;
     border: 2px solid #ddd;
     border-radius: 4px;
@@ -1331,130 +1138,132 @@
     background-color: white;
   }
 
-  .space-part {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .left-part {
-    width: 30%;
-    min-width: 30%;
-    border-right: 2px solid #ddd;
-    background-color: #f8f9fa;
-  }
-
-  .middle-part {
-    width: 40%;
-    min-width: 40%;
-    border-right: 2px solid #ddd;
-    background-color: #ffffff;
-  }
-
-  .right-part {
-    width: 30%;
-    min-width: 30%;
-    background-color: #f8f9fa;
+  .lyric-table-header,
+  .lyric-row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
   }
 
   .column-header {
     padding: 15px;
     border-bottom: 2px solid #ddd;
     background-color: #f0f0f0;
-    flex-shrink: 0;
     height: 60px;
     display: flex;
     align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    line-height: 1.2;
+    box-sizing: border-box;
   }
 
-  .header-content {
+  .lyric-table-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .timestamp-header {
+    border-right: 2px solid #ddd;
+  }
+
+  .timestamp-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 0 8px;
+    border-right: 2px solid #ddd;
+    border-bottom: 1px solid #eee;
+    background-color: #f8f9fa;
+    font-family: monospace;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .timestamp-jump {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: #666;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  .timestamp-jump:hover:not(:disabled) {
+    color: var(--color-primary);
+    text-decoration: underline;
+  }
+
+  .timestamp-jump:disabled {
+    cursor: default;
+    color: #999;
+  }
+
+  .lyric-cell {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    height: 100%;
-    gap: 8px;
-    position: relative;
-  }
-
-  .column-header h3 {
-    margin: 0;
-    color: #333;
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1.2;
-  }
-
-  .column-content {
-    flex: 1;
-    overflow: visible; /* Allow content to determine height */
-    padding: 0;
-  }
-
-  /* Lyric line styles */
-  .lyric-line {
-    padding: 10px 12px;
-    margin: 0;
     border-bottom: 1px solid #eee;
-    cursor: pointer;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
     font-size: 14px;
     line-height: 1.4;
-    transition: background-color 0.2s;
-    box-sizing: border-box;
+    text-align: center;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+    transition: background-color 0.2s;
   }
 
-  .lyric-line:hover {
+  .lyric-jump {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    font: inherit;
+    color: inherit;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .lyric-jump:hover {
+    text-decoration: underline;
+    text-decoration-color: #bbb;
+  }
+
+  .lyric-row:hover .lyric-cell,
+  .lyric-row:hover .timestamp-cell {
     background-color: #f5f5f5;
   }
 
-  .lyric-line.playing {
-    color: var(--color-primary) !important;
-    font-weight: 600 !important;
-    background-color: var(--color-lrc-playing-transparent) !important;
+  .lyric-row.playing .lyric-cell {
+    color: var(--color-primary);
+    font-weight: 600;
+    background-color: var(--color-lrc-playing-transparent);
   }
 
-  .timestamp-line {
-    font-family: monospace;
-    color: #666;
-    justify-content: center;
-    text-align: center;
-    background-color: #f8f9fa;
+  .lyric-row.playing .timestamp-cell,
+  .lyric-row.playing .timestamp-jump {
+    color: var(--color-primary);
+    font-weight: 600;
   }
 
-  .timestamp-line.playing {
-    color: var(--color-primary) !important;
-    font-weight: 600 !important;
-    background-color: var(--color-lrc-playing-transparent) !important;
-  }
-
-  .synced-line {
-    font-family: monospace, sans-serif;
-    background-color: #f8f9fa;
-  }
-
-  .synced-line.playing {
-    color: var(--color-primary) !important;
-    font-weight: 600 !important;
-    background-color: var(--color-lrc-playing-transparent) !important;
-  }
-
-  .timestamp-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    gap: 8px;
+  .lyric-row.playing .timestamp-cell {
+    background-color: var(--color-lrc-playing-transparent);
   }
 
   .timestamp-value {
-    flex: 1;
-    text-align: center;
+    display: block;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1477,7 +1286,8 @@
     flex-shrink: 0;
   }
 
-  .lyric-line:hover .timestamp-edit-btn {
+  .lyric-row:hover .timestamp-edit-btn,
+  .timestamp-edit-btn:focus-visible {
     opacity: 1;
   }
 
@@ -1745,52 +1555,47 @@
     background-color: var(--color-primary-transparent-dark);
   }
 
-  :global(body.dark) .space-parts {
+  :global(body.dark) .lyric-table {
     border-color: #444;
-  }
-
-  :global(body.dark) .left-part,
-  :global(body.dark) .right-part {
-    background-color: #2d2d2d;
-  }
-
-  :global(body.dark) .middle-part {
     background-color: #1e1e1e;
-  }
-
-  :global(body.dark) .left-part {
-    border-right: 2px solid var(--color-primary-dark) !important;
-  }
-
-  :global(body.dark) .middle-part {
-    border-right: 2px solid var(--color-primary-dark) !important;
   }
 
   :global(body.dark) .column-header {
     background-color: #3d3d3d;
     border-bottom-color: #444;
-  }
-
-  :global(body.dark) .column-header h3 {
     color: #e0e0e0;
   }
 
-  :global(body.dark) .lyric-line {
+  :global(body.dark) .timestamp-header {
+    border-right-color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .timestamp-cell {
+    background-color: #2d2d2d;
+    border-right-color: var(--color-primary-dark);
+    border-bottom-color: #444;
+  }
+
+  :global(body.dark) .timestamp-jump {
+    color: #b0b0b0;
+  }
+
+  :global(body.dark) .timestamp-jump:disabled {
+    color: #808080;
+  }
+
+  :global(body.dark) .lyric-cell {
     border-bottom-color: #444;
     color: #e0e0e0;
   }
 
-  :global(body.dark) .lyric-line:hover {
+  :global(body.dark) .lyric-row:hover .lyric-cell,
+  :global(body.dark) .lyric-row:hover .timestamp-cell {
     background-color: #3d3d3d;
   }
 
-  :global(body.dark) .timestamp-line {
-    background-color: #2d2d2d;
-    color: #b0b0b0;
-  }
-
-  :global(body.dark) .synced-line {
-    background-color: #2d2d2d;
+  :global(body.dark) .lyric-row.playing .timestamp-jump {
+    color: var(--color-primary-dark);
   }
 
   :global(body.dark) .timestamp-edit-btn {

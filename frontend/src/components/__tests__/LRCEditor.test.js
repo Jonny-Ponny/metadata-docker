@@ -37,6 +37,18 @@ function lyricFile(text, name = "import.lrc") {
 }
 
 /**
+ * The class list of the row that renders a lyric line, which carries the
+ * playing and selected state for the timestamp cell and the text together.
+ * @param {number} index
+ */
+function rowClass(index) {
+  return (
+    document.getElementById(`modal-line-${index}`)?.closest(".lyric-row")
+      ?.className ?? ""
+  );
+}
+
+/**
  * @param {HTMLElement} input
  * @param {File} file
  */
@@ -145,16 +157,18 @@ describe("LRCEditor", () => {
     ).toBeFalsy();
   });
 
-  it("lays out the timestamps, lyrics and synchronized columns", () => {
+  it("lays out a timestamp column beside the lyrics", () => {
     render(LRCEditor, { props: baseProps });
 
     expect(screen.getByText("Synced Lyrics Editor")).toBeTruthy();
     expect(screen.getByText("Timestamps")).toBeTruthy();
-    expect(screen.getByText("Unsynchronized lyrics")).toBeTruthy();
-    expect(screen.getByText("Synchronized lyrics")).toBeTruthy();
-    expect(screen.getAllByText("[00:05.00]").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("first line").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("second line").length).toBeGreaterThan(0);
+    expect(screen.getByText("Lyrics")).toBeTruthy();
+    // Each line is one row with its timestamp and text, so the timestamp is
+    // shown once per line instead of in a separate synchronized column.
+    expect(screen.queryByText("Synchronized lyrics")).toBeNull();
+    expect(screen.getAllByText("[00:05.00]")).toHaveLength(1);
+    expect(screen.getAllByText("first line")).toHaveLength(1);
+    expect(screen.getAllByText("second line")).toHaveLength(1);
   });
 
   it("parses timestamps out of the initial lyrics text", () => {
@@ -169,6 +183,12 @@ describe("LRCEditor", () => {
     expect(screen.getAllByText("plain line").length).toBeGreaterThan(0);
     expect(screen.getAllByText("[00:01.00]").length).toBeGreaterThan(0);
     expect(screen.getAllByText("[--:--.--]").length).toBeGreaterThan(0);
+    // The untimed line cannot be jumped to.
+    expect(
+      /** @type {HTMLButtonElement} */ (
+        document.getElementById("modal-timestamp-1")
+      ).disabled,
+    ).toBe(true);
   });
 
   it("saves synchronized lyrics with their timestamps", async () => {
@@ -208,13 +228,21 @@ describe("LRCEditor", () => {
     const seek = vi.fn();
     window.addEventListener("lyrics-seek", seek);
 
-    const line = /** @type {HTMLElement} */ (
+    // The timestamp cell and the lyric text both jump to the line's time.
+    const timestamp = /** @type {HTMLElement} */ (
+      document.getElementById("modal-timestamp-1")
+    );
+    await fireEvent.click(timestamp);
+
+    const cell = /** @type {HTMLElement} */ (
       document.getElementById("modal-line-1")
     );
-    await fireEvent.click(line);
+    const lyric = /** @type {HTMLElement} */ (cell.querySelector("button"));
+    await fireEvent.click(lyric);
 
+    expect(seek.mock.calls).toHaveLength(2);
     const event = /** @type {CustomEvent<{ time: number }>} */ (
-      seek.mock.calls[0][0]
+      seek.mock.calls[1][0]
     );
     expect(event.detail.time).toBe(10);
     window.removeEventListener("lyrics-seek", seek);
@@ -446,14 +474,8 @@ describe("LRCEditor", () => {
     );
     await tick();
 
-    expect(
-      /** @type {HTMLElement} */ (document.getElementById("modal-line-0"))
-        .className,
-    ).toContain("playing");
-    expect(
-      /** @type {HTMLElement} */ (document.getElementById("modal-line-1"))
-        .className,
-    ).not.toContain("playing");
+    expect(rowClass(0)).toContain("playing");
+    expect(rowClass(1)).not.toContain("playing");
   });
 
   it("moves the active line past an untimed line", async () => {
@@ -471,14 +493,8 @@ describe("LRCEditor", () => {
 
     // The blank line is stored as a placeholder. It must not pin the
     // highlight to the line before it.
-    expect(
-      /** @type {HTMLElement} */ (document.getElementById("modal-line-1"))
-        .className,
-    ).not.toContain("playing");
-    expect(
-      /** @type {HTMLElement} */ (document.getElementById("modal-line-2"))
-        .className,
-    ).toContain("playing");
+    expect(rowClass(1)).not.toContain("playing");
+    expect(rowClass(2)).toContain("playing");
   });
 
   it("synchronizes the next line from the current playback time", async () => {
@@ -546,7 +562,7 @@ describe("LRCEditor", () => {
     );
     expect(scrollIntoView).toHaveBeenCalled();
     expect(scrollIntoView.mock.contexts.at(-1)).toBe(
-      document.getElementById("modal-timestamp-0"),
+      document.getElementById("modal-line-0")?.closest(".lyric-row"),
     );
   });
 
