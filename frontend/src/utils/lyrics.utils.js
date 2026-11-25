@@ -300,52 +300,57 @@ export function shiftTimestampSelection(timestamps, offsetSeconds, indices) {
   const toCentiseconds = (/** @type {string} */ value) =>
     Math.round(parseTimestampToSeconds(value) * 100);
 
-  // The closest unmoved timed line on each side of the selection bounds it.
-  const nearestUnselected = (
+  // The closest timed line on each side of the selection bounds it, whether
+  // or not it is selected: a whole selection moves rigidly, so its outermost
+  // timestamp must not cross its neighbour even when that neighbour moves too.
+  // A line that is left in place bounds it with its current time; a selected
+  // neighbour with where it is going.
+  const nearestTimed = (
     /** @type {number} */ from,
     /** @type {1 | -1} */ step,
   ) => {
     for (let i = from + step; i >= 0 && i < timestamps.length; i += step) {
       if (!isRealTimestamp(timestamps[i])) continue;
-      return selected.has(i) ? null : toCentiseconds(timestamps[i]);
+      return toCentiseconds(timestamps[i]) + (selected.has(i) ? delta : 0);
     }
     return null;
   };
 
-  for (const index of movable) {
-    const moved = toCentiseconds(timestamps[index]) + delta;
+  const first = movable[0];
+  const last = movable[movable.length - 1];
+  const moved = (/** @type {number} */ index) =>
+    toCentiseconds(timestamps[index]) + delta;
 
-    if (moved < 0) {
-      const maxEarlier = (toCentiseconds(timestamps[index]) / 100).toFixed(2);
-      return {
-        ok: false,
-        timestamps: [...timestamps],
-        count: movable.length,
-        error: `Cannot shift line ${index + 1} earlier than 00:00.00 (max -${maxEarlier}s)`,
-      };
-    }
+  if (moved(first) < 0) {
+    const maxEarlier = (toCentiseconds(timestamps[first]) / 100).toFixed(2);
+    return {
+      ok: false,
+      timestamps: [...timestamps],
+      count: movable.length,
+      error: `Cannot shift line ${first + 1} earlier than 00:00.00 (max -${maxEarlier}s)`,
+    };
+  }
 
-    const previous = nearestUnselected(index, -1);
-    if (previous !== null && moved < previous) {
-      const label = secondsToTimestamp(previous / 100);
-      return {
-        ok: false,
-        timestamps: [...timestamps],
-        count: movable.length,
-        error: `Line ${index + 1} would move before ${label} on the line above`,
-      };
-    }
+  const previous = nearestTimed(first, -1);
+  if (previous !== null && moved(first) < previous) {
+    const label = secondsToTimestamp(previous / 100);
+    return {
+      ok: false,
+      timestamps: [...timestamps],
+      count: movable.length,
+      error: `Line ${first + 1} would move before ${label} on the line above`,
+    };
+  }
 
-    const next = nearestUnselected(index, 1);
-    if (next !== null && moved > next) {
-      const label = secondsToTimestamp(next / 100);
-      return {
-        ok: false,
-        timestamps: [...timestamps],
-        count: movable.length,
-        error: `Line ${index + 1} would move after ${label} on the line below`,
-      };
-    }
+  const next = nearestTimed(last, 1);
+  if (next !== null && moved(last) > next) {
+    const label = secondsToTimestamp(next / 100);
+    return {
+      ok: false,
+      timestamps: [...timestamps],
+      count: movable.length,
+      error: `Line ${last + 1} would move after ${label} on the line below`,
+    };
   }
 
   const shifted = [...timestamps];

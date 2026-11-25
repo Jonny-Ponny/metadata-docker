@@ -228,21 +228,30 @@ describe("LRCEditor", () => {
     const seek = vi.fn();
     window.addEventListener("lyrics-seek", seek);
 
-    // The timestamp cell and the lyric text both jump to the line's time.
     const timestamp = /** @type {HTMLElement} */ (
       document.getElementById("modal-timestamp-1")
     );
     await fireEvent.click(timestamp);
 
-    const cell = /** @type {HTMLElement} */ (
-      document.getElementById("modal-line-1")
-    );
-    const lyric = /** @type {HTMLElement} */ (cell.querySelector("button"));
-    await fireEvent.click(lyric);
-
-    expect(seek.mock.calls).toHaveLength(2);
     const event = /** @type {CustomEvent<{ time: number }>} */ (
-      seek.mock.calls[1][0]
+      seek.mock.calls[0][0]
+    );
+    expect(event.detail.time).toBe(10);
+    window.removeEventListener("lyrics-seek", seek);
+  });
+
+  it("seeks the player from the lyric text too", async () => {
+    render(LRCEditor, { props: baseProps });
+    const seek = vi.fn();
+    window.addEventListener("lyrics-seek", seek);
+
+    const jump = /** @type {HTMLElement} */ (
+      document.querySelector("#modal-line-1 .lyric-jump")
+    );
+    await fireEvent.click(jump);
+
+    const event = /** @type {CustomEvent<{ time: number }>} */ (
+      seek.mock.calls[0][0]
     );
     expect(event.detail.time).toBe(10);
     window.removeEventListener("lyrics-seek", seek);

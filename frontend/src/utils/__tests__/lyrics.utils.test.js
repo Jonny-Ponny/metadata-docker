@@ -310,13 +310,32 @@ describe("shiftTimestampSelection", () => {
   });
 
   it("bounds the selection by the nearest unmoved line, not the neighbour", () => {
-    // Timestamps 0, 3 and 4 are fixed, so line 1 may move anywhere before
-    // [00:40.00] (the untimed line between them is skipped), and line 3
-    // anywhere after [00:20.00] and before [00:50.00].
+    // Line 1 may move anywhere before [00:40.00] (the untimed line between
+    // is skipped), and line 3 anywhere after [00:20.00] and before
+    // [00:50.00].
     expect(shiftTimestampSelection(timestamps, 20, [1]).ok).toBe(true);
     expect(shiftTimestampSelection(timestamps, 20.01, [1]).ok).toBe(false);
     expect(shiftTimestampSelection(timestamps, 10, [3]).ok).toBe(true);
     expect(shiftTimestampSelection(timestamps, 10.01, [3]).ok).toBe(false);
+  });
+
+  it("lets a selection move onto its neighbour, like everywhere else", () => {
+    const timestamps = ["[00:10.00]", "[00:20.00]", "[00:30.00]"];
+
+    expect(shiftTimestampSelection(timestamps, 10, [1]).ok).toBe(true);
+    expect(shiftTimestampSelection(timestamps, 10.01, [1]).ok).toBe(false);
+  });
+
+  it("also checks a moved selection against its neighbours", () => {
+    // Both lines move, but line 2 still cannot cross the line below.
+    const timestamps = ["[00:10.00]", "[00:20.00]", "[00:30.00]"];
+    const result = shiftTimestampSelection(timestamps, 10.01, [0, 1]);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe(
+      "Line 2 would move after [00:30.00] on the line below",
+    );
+    expect(shiftTimestampSelection(timestamps, 10, [0, 1]).ok).toBe(true);
   });
 
   it("rejects moving before the start of the song", () => {
