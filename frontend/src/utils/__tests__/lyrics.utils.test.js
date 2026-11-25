@@ -237,9 +237,9 @@ describe("findActiveLine", () => {
   });
 
   it("keeps the last line when timestamps repeat", () => {
-    expect(
-      findActiveLine(["[00:10.00]", "[00:10.00]", "[00:20.00]"], 10),
-    ).toBe(1);
+    expect(findActiveLine(["[00:10.00]", "[00:10.00]", "[00:20.00]"], 10)).toBe(
+      1,
+    );
   });
 });
 
