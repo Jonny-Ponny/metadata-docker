@@ -252,6 +252,187 @@ export function shiftTimestamps(timestamps, offsetSeconds) {
 }
 
 /**
+ * Shift only the timestamps at the given line indices.
+ *
+ * Used for editing one part of a song (a second verse that is off by a second)
+ * or a single line, while the rest of the file keeps its timing. The moved
+ * timestamps must stay after the nearest unmoved timestamp before them and
+ * before the nearest unmoved timestamp after them, otherwise the LRC would no
+ * longer read top to bottom in time order.
+ *
+ * Works in centiseconds like `shiftTimestamps` so repeated shifts do not
+ * accumulate floating point drift.
+ *
+ * @param {string[]} timestamps - Timestamp strings (may contain placeholders)
+ * @param {number} offsetSeconds - Offset to apply, negative shifts earlier
+ * @param {Set<number> | number[]} indices - Line indices allowed to move
+ * @returns {{
+ *   ok: boolean,
+ *   timestamps: string[],
+ *   count: number,
+ *   error: string
+ * }}
+ */
+export function shiftTimestampSelection(timestamps, offsetSeconds, indices) {
+  const offset = Number(offsetSeconds);
+  if (!Number.isFinite(offset)) {
+    return {
+      ok: false,
+      timestamps: [...timestamps],
+      count: 0,
+      error: "Invalid shift amount",
+    };
+  }
+
+  const selected =
+    indices instanceof Set ? indices : new Set(indices.map(Number));
+  const delta = Math.round(offset * 100);
+
+  const movable = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    if (selected.has(i) && isRealTimestamp(timestamps[i])) movable.push(i);
+  }
+
+  if (movable.length === 0 || delta === 0) {
+    return { ok: true, timestamps: [...timestamps], count: 0, error: "" };
+  }
+
+  const toCentiseconds = (/** @type {string} */ value) =>
+    Math.round(parseTimestampToSeconds(value) * 100);
+
+  // The closest unmoved timed line on each side of the selection bounds it.
+  const nearestUnselected = (
+    /** @type {number} */ from,
+    /** @type {1 | -1} */ step,
+  ) => {
+    for (let i = from + step; i >= 0 && i < timestamps.length; i += step) {
+      if (!isRealTimestamp(timestamps[i])) continue;
+      return selected.has(i) ? null : toCentiseconds(timestamps[i]);
+    }
+    return null;
+  };
+
+  for (const index of movable) {
+    const moved = toCentiseconds(timestamps[index]) + delta;
+
+    if (moved < 0) {
+      const maxEarlier = (toCentiseconds(timestamps[index]) / 100).toFixed(2);
+      return {
+        ok: false,
+        timestamps: [...timestamps],
+        count: movable.length,
+        error: `Cannot shift line ${index + 1} earlier than 00:00.00 (max -${maxEarlier}s)`,
+      };
+    }
+
+    const previous = nearestUnselected(index, -1);
+    if (previous !== null && moved < previous) {
+      const label = secondsToTimestamp(previous / 100);
+      return {
+        ok: false,
+        timestamps: [...timestamps],
+        count: movable.length,
+        error: `Line ${index + 1} would move before ${label} on the line above`,
+      };
+    }
+
+    const next = nearestUnselected(index, 1);
+    if (next !== null && moved > next) {
+      const label = secondsToTimestamp(next / 100);
+      return {
+        ok: false,
+        timestamps: [...timestamps],
+        count: movable.length,
+        error: `Line ${index + 1} would move after ${label} on the line below`,
+      };
+    }
+  }
+
+  const shifted = [...timestamps];
+  for (const index of movable) {
+    shifted[index] = secondsToTimestamp(
+      (toCentiseconds(timestamps[index]) + delta) / 100,
+    );
+  }
+
+  return { ok: true, timestamps: shifted, count: movable.length, error: "" };
+}
+
+/**
+ * Insert an empty, untimed line into the lyrics.
+ *
+ * `afterIndex` is the line it goes below; -1 puts it at the very top. The
+ * timestamp for the new line is a placeholder, so it stays untimed until the
+ * user captures or types one.
+ *
+ * @param {string} text - Lyrics as stored (lines joined by "\n")
+ * @param {string[]} timestamps - Timestamps matching the lines
+ * @param {number} afterIndex - Index of the line above the new one
+ * @returns {{ text: string, timestamps: string[], index: number }}
+ */
+export function insertLyricLine(text, timestamps, afterIndex) {
+  const lines = String(text ?? "").split("\n");
+  const at = Math.min(Math.max(afterIndex + 1, 0), lines.length);
+  lines.splice(at, 0, "");
+
+  const nextTimestamps = [...timestamps];
+  nextTimestamps.splice(at, 0, TIMESTAMP_PLACEHOLDER);
+
+  return {
+    text: lines.join("\n"),
+    timestamps: nextTimestamps,
+    index: at,
+  };
+}
+
+/**
+ * Remove lines and their timestamps.
+ *
+ * The lyrics are never emptied: deleting everything leaves a single empty
+ * line, which is what an editor opens with for a file that has no lyrics.
+ *
+ * @param {string} text - Lyrics as stored (lines joined by "\n")
+ * @param {string[]} timestamps - Timestamps matching the lines
+ * @param {Set<number> | number[]} indices - Line indices to remove
+ * @returns {{ text: string, timestamps: string[], removed: number, index: number }}
+ *   `index` is the line that now sits where the first removed line was, or -1
+ *   when there is nothing to place a cursor on.
+ */
+export function deleteLyricLines(text, timestamps, indices) {
+  const lines = String(text ?? "").split("\n");
+  const selected =
+    indices instanceof Set ? indices : new Set(indices.map(Number));
+  const removedIndices = lines
+    .map((_line, index) => index)
+    .filter((index) => selected.has(index));
+
+  if (removedIndices.length === 0) {
+    return {
+      text: lines.join("\n"),
+      timestamps: [...timestamps],
+      removed: 0,
+      index: -1,
+    };
+  }
+
+  const kept = lines.filter((_line, index) => !selected.has(index));
+  const keptTimestamps = timestamps.filter(
+    (_ts, index) => !selected.has(index),
+  );
+
+  const first = removedIndices[0];
+  return {
+    text: kept.length > 0 ? kept.join("\n") : "",
+    timestamps:
+      kept.length > 0
+        ? keptTimestamps.slice(0, kept.length)
+        : [TIMESTAMP_PLACEHOLDER],
+    removed: removedIndices.length,
+    index: kept.length > 0 ? Math.min(first, kept.length - 1) : -1,
+  };
+}
+
+/**
  * Build an LRC string from editable lyrics and timestamps.
  *
  * Untimed lines are written as plain text (never as "[--:--.--]") and empty
