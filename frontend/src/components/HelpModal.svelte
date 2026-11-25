@@ -267,8 +267,8 @@
                 buttons act.
               </li>
               <li>
-                <strong>Edit a line</strong> - Double-click it, or press Enter while
-                one line is selected. Enter or clicking elsewhere saves, Escape cancels.
+                <strong>Edit a line</strong> - Double-click it. Enter or clicking
+                elsewhere saves, Escape cancels.
               </li>
               <li>
                 <strong>Shift −/+</strong> - Move the timestamps by the amount
