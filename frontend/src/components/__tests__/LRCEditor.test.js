@@ -618,3 +618,326 @@ describe("LRCEditor", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe("LRCEditor line selection", () => {
+  /**
+   * @param {number} index
+   */
+  function row(index) {
+    return /** @type {HTMLElement} */ (
+      document.querySelectorAll(".lyric-row")[index]
+    );
+  }
+
+  /**
+   * @param {number} index
+   */
+  function isSelected(index) {
+    return row(index).className.includes("selected");
+  }
+
+  /**
+   * Click a line the way a pointer does: its jump button for a timed line,
+   * the row's own control for an untimed one.
+   * @param {number} index
+   * @param {{ shiftKey?: boolean, ctrlKey?: boolean }} [modifiers]
+   */
+  async function clickLine(index, modifiers = {}) {
+    const cell = document.getElementById(`modal-line-${index}`);
+    const target = /** @type {HTMLElement} */ (
+      cell?.querySelector("button, [role=button]")
+    );
+    await fireEvent(
+      /** @type {HTMLElement} */ (target ?? cell),
+      new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        ...modifiers,
+      }),
+    );
+  }
+
+  /**
+   * Start editing a line with a double click, as a pointer would.
+   * @param {number} index
+   */
+  async function editLine(index) {
+    await clickLine(index);
+    await fireEvent.dblClick(
+      /** @type {HTMLElement} */ (
+        document
+          .getElementById(`modal-line-${index}`)
+          ?.querySelector("button, [role=button]")
+      ),
+    );
+  }
+
+  const threeLines = {
+    isOpen: true,
+    initialLyrics: "one\ntwo\nthree",
+    initialTimestamps: ["[00:10.00]", "[00:20.00]", "[00:30.00]"],
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn(() => 1),
+    );
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    delete (/** @type {any} */ (Element.prototype).scrollIntoView);
+    vi.unstubAllGlobals();
+    toast.clear();
+  });
+
+  it("selects one line at a time", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    await clickLine(0);
+    expect(isSelected(0)).toBe(true);
+    expect(isSelected(1)).toBe(false);
+
+    await clickLine(1);
+    expect(isSelected(0)).toBe(false);
+    expect(isSelected(1)).toBe(true);
+  });
+
+  it("keeps the active line and the selection apart", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    window.dispatchEvent(
+      new CustomEvent("player-time-update", { detail: { time: 21 } }),
+    );
+    await tick();
+    await clickLine(2);
+
+    // Playback highlights line 1; the user selected line 2.
+    expect(row(1).className).toContain("playing");
+    expect(isSelected(1)).toBe(false);
+    expect(isSelected(2)).toBe(true);
+    expect(row(2).className).not.toContain("playing");
+  });
+
+  it("extends the selection with Shift+click", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    await clickLine(0);
+    await clickLine(2, { shiftKey: true });
+
+    expect(isSelected(0)).toBe(true);
+    expect(isSelected(1)).toBe(true);
+    expect(isSelected(2)).toBe(true);
+    expect(screen.getByRole("button", { name: "Selected (3)" })).toBeTruthy();
+  });
+
+  it("toggles one line with Ctrl/Cmd+click", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    await clickLine(1);
+    await clickLine(2, { ctrlKey: true });
+    expect(isSelected(1)).toBe(true);
+    expect(isSelected(2)).toBe(true);
+
+    await clickLine(1, { ctrlKey: true });
+    expect(isSelected(1)).toBe(false);
+    expect(isSelected(2)).toBe(true);
+  });
+
+  it("edits a line in place and commits with Enter", async () => {
+    const onSave = vi.fn();
+    render(LRCEditor, { props: { ...threeLines, onSave } });
+
+    await editLine(1);
+    const input = /** @type {HTMLInputElement} */ (
+      screen.getByLabelText("Line 2 text")
+    );
+    expect(input.value).toBe("two");
+
+    await fireEvent.input(input, { target: { value: "changed" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await tick();
+
+    expect(screen.queryByLabelText("Line 2 text")).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Save to File" }));
+    expect(onSave).toHaveBeenCalledWith({
+      lyrics: "one\nchanged\nthree",
+      timestamps: ["[00:10.00]", "[00:20.00]", "[00:30.00]"],
+      synchronizedLyrics:
+        "[00:10.00] one\n[00:20.00] changed\n[00:30.00] three",
+      hasTimestamps: true,
+    });
+  });
+
+  it("cancels an in-place edit with Escape without closing the editor", async () => {
+    const onClose = vi.fn();
+    render(LRCEditor, { props: { ...threeLines, onClose } });
+
+    await editLine(1);
+    const input = /** @type {HTMLInputElement} */ (
+      screen.getByLabelText("Line 2 text")
+    );
+    await fireEvent.input(input, { target: { value: "dropped" } });
+    await fireEvent.keyDown(input, { key: "Escape" });
+    await tick();
+
+    expect(screen.queryByLabelText("Line 2 text")).toBeNull();
+    expect(screen.getAllByText("two").length).toBeGreaterThan(0);
+    expect(screen.queryByText("dropped")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("edits a line from the keyboard with Enter", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    const jump = /** @type {HTMLElement} */ (
+      document.querySelector("#modal-line-0 button")
+    );
+    await fireEvent.keyDown(jump, { key: "Enter" });
+
+    expect(
+      /** @type {HTMLInputElement} */ (screen.getByLabelText("Line 1 text"))
+        .value,
+    ).toBe("one");
+  });
+
+  it("shifts only the selected lines from the footer", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    await clickLine(1);
+    await clickLine(2, { shiftKey: true });
+    await fireEvent.click(screen.getByRole("button", { name: "Selected (2)" }));
+    await fireEvent.input(screen.getByLabelText("Shift amount in seconds"), {
+      target: { value: "1.5" },
+    });
+    await fireEvent.click(screen.getByLabelText("Shift all timestamps later"));
+
+    expect(screen.getAllByText("[00:10.00]").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("[00:21.50]").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("[00:31.50]").length).toBeGreaterThan(0);
+    expect(get(toast).at(-1)?.message).toBe("Shifted 2 timestamps by +1.50s");
+  });
+
+  it("only offers the selection scope once something is selected", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    expect(
+      /** @type {HTMLButtonElement} */ (
+        screen.getByRole("button", { name: "Selected" })
+      ).disabled,
+    ).toBe(true);
+
+    await clickLine(0);
+    const selected = /** @type {HTMLButtonElement} */ (
+      screen.getByRole("button", { name: "Selected (1)" })
+    );
+    expect(selected.disabled).toBe(false);
+
+    await fireEvent.click(selected);
+    expect(selected.getAttribute("aria-pressed")).toBe("true");
+    expect(
+      screen.getByLabelText("Shift all timestamps later").getAttribute("title"),
+    ).toBe("Shift timestamps later on 1 selected line");
+  });
+
+  it("shifts one line from its own row buttons", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    await fireEvent.input(screen.getByLabelText("Shift amount in seconds"), {
+      target: { value: "0.5" },
+    });
+    await fireEvent.click(screen.getByLabelText("Shift line 2 later"));
+
+    expect(screen.getAllByText("[00:20.50]").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("[00:10.00]").length).toBeGreaterThan(0);
+    expect(get(toast).at(-1)?.message).toBe(
+      "Shifted 1 timestamp by +0.50s on this line",
+    );
+  });
+
+  it("refuses a per-line shift that would cross its neighbour", async () => {
+    render(LRCEditor, {
+      props: {
+        isOpen: true,
+        initialLyrics: "one\ntwo",
+        initialTimestamps: ["[00:10.00]", "[00:15.00]"],
+      },
+    });
+
+    await fireEvent.input(screen.getByLabelText("Shift amount in seconds"), {
+      target: { value: "6" },
+    });
+    await fireEvent.click(screen.getByLabelText("Shift line 1 later"));
+
+    expect(get(toast).at(-1)?.message).toBe(
+      "Line 1 would move after [00:15.00] on the line below",
+    );
+    expect(screen.getAllByText("[00:10.00]").length).toBeGreaterThan(0);
+  });
+
+  it("adds a line below the selection and starts editing it", async () => {
+    const onSave = vi.fn();
+    render(LRCEditor, { props: { ...threeLines, onSave } });
+
+    await clickLine(0);
+    await fireEvent.click(screen.getByRole("button", { name: "+ Line" }));
+    await tick();
+
+    const input = /** @type {HTMLInputElement} */ (
+      screen.getByLabelText("Line 2 text")
+    );
+    expect(input.value).toBe("");
+    await fireEvent.input(input, { target: { value: "inserted" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await tick();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Save to File" }));
+    expect(onSave).toHaveBeenCalledWith({
+      lyrics: "one\ninserted\ntwo\nthree",
+      timestamps: ["[00:10.00]", "[--:--.--]", "[00:20.00]", "[00:30.00]"],
+      synchronizedLyrics:
+        "[00:10.00] one\ninserted\n[00:20.00] two\n[00:30.00] three",
+      hasTimestamps: true,
+    });
+  });
+
+  it("deletes the selected lines with their timestamps", async () => {
+    const onSave = vi.fn();
+    render(LRCEditor, { props: { ...threeLines, onSave } });
+
+    await clickLine(1);
+    await fireEvent.click(screen.getByRole("button", { name: "Delete (1)" }));
+    await tick();
+
+    expect(screen.queryByText("two")).toBeNull();
+    expect(get(toast).at(-1)?.message).toBe("Deleted 1 line");
+
+    await fireEvent.click(screen.getByRole("button", { name: "Save to File" }));
+    expect(onSave).toHaveBeenCalledWith({
+      lyrics: "one\nthree",
+      timestamps: ["[00:10.00]", "[00:30.00]"],
+      synchronizedLyrics: "[00:10.00] one\n[00:30.00] three",
+      hasTimestamps: true,
+    });
+  });
+
+  it("disables the add and delete buttons without a selection", () => {
+    render(LRCEditor, { props: threeLines });
+
+    expect(
+      /** @type {HTMLButtonElement} */ (
+        screen.getByRole("button", { name: "+ Line" })
+      ).disabled,
+    ).toBe(true);
+    expect(
+      /** @type {HTMLButtonElement} */ (
+        screen.getByRole("button", { name: "Delete" })
+      ).disabled,
+    ).toBe(true);
+  });
+});

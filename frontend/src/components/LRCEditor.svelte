@@ -1,6 +1,7 @@
 <!-- src/components/LRCEditor.svelte -->
 <script>
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import {
     parseTimestampToSeconds,
     secondsToTimestamp,
@@ -8,6 +9,9 @@
     processEditedLyrics,
     parseLrc,
     shiftTimestamps,
+    shiftTimestampSelection,
+    insertLyricLine,
+    deleteLyricLines,
     buildLrc,
     downloadTextFile,
     findActiveLine,
@@ -59,10 +63,26 @@
   let synchronizedLyricsText = $state("");
   let currentActiveLine = $state(-1);
 
+  // Lines the user picked to edit, by line index. Separate from
+  // `currentActiveLine`: the selection is where edits go, the active line is
+  // where playback is. Selections survive playback moving on.
+  /** @type {SvelteSet<number>} */
+  const selectedLines = new SvelteSet();
+  /** The line a range selection grows from, null when there is no anchor. */
+  let selectionAnchor = $state(/** @type {number | null} */ (null));
+
+  // In-place lyric line editing
+  let inlineEditIndex = $state(-1);
+  let inlineEditValue = $state("");
+  /** Whether the in-place editor had already committed (blur after Enter). */
+  let inlineEditDone = $state(false);
+
   let currentPlaybackTime = $state(0);
 
   // Bulk timestamp tools
   let shiftAmount = $state(/** @type {number | string} */ (0.5));
+  /** Which timestamps the footer shift applies to: everything or the selection. */
+  let shiftScope = $state(/** @type {"all" | "selected"} */ ("all"));
   let lrcFileInput = $state(/** @type {HTMLInputElement | null} */ (null));
 
   // For the old timestamp edit modal
@@ -163,6 +183,143 @@
   function updateSynchronizedLyricsText() {
     // Untimed lines are written as plain text so the result is valid LRC
     synchronizedLyricsText = buildLrc(lines, timestamps);
+  }
+
+  // ========== LINE SELECTION ==========
+  /**
+   * The row's state classes for the selection highlight.
+   * @param {number} index
+   */
+  function rowClassOf(index) {
+    return selectedLines.has(index) ? "selected" : "";
+  }
+
+  /**
+   * @param {number} index
+   * @param {boolean} toggle
+   */
+  function toggleLine(index, toggle) {
+    if (toggle) {
+      if (selectedLines.has(index)) selectedLines.delete(index);
+      else selectedLines.add(index);
+      selectionAnchor = index;
+      return;
+    }
+
+    // Clicking the line that is already the only selection keeps it, so the
+    // next click (or the second half of a double click) can start an edit
+    // instead of collapsing the selection first.
+    if (selectedLines.size === 1 && selectedLines.has(index)) return;
+
+    selectedLines.clear();
+    selectedLines.add(index);
+    selectionAnchor = index;
+  }
+
+  /**
+   * @param {number} index
+   * @param {{ shiftKey?: boolean, ctrlKey?: boolean, metaKey?: boolean }} modifiers
+   */
+  function selectLine(index, modifiers) {
+    const anchor = selectionAnchor;
+    const toggle = Boolean(modifiers.ctrlKey || modifiers.metaKey);
+
+    if (anchor === null || !modifiers.shiftKey) {
+      toggleLine(index, toggle);
+      return;
+    }
+
+    const from = Math.min(anchor, index);
+    const to = Math.max(anchor, index);
+    if (!toggle) selectedLines.clear();
+    for (let i = from; i <= to; i++) selectedLines.add(i);
+  }
+
+  function clearSelection() {
+    selectedLines.clear();
+    selectionAnchor = null;
+  }
+
+  /**
+   * Selected line indices in ascending order, as a plain array.
+   * @returns {number[]}
+   */
+  function sortedSelection() {
+    return [...selectedLines].sort((a, b) => a - b);
+  }
+
+  // ========== IN-PLACE LINE EDITING ==========
+  /**
+   * A lyric line clicked with the pointer: select it, and jump playback to it
+   * when it is timed.
+   * @param {number} index
+   * @param {MouseEvent} e
+   */
+  function handleLyricClick(index, e) {
+    selectLine(index, e);
+    handleLineClick(index);
+  }
+
+  /**
+   * Lines from the keyboard: select the line, and start editing it when the
+   * key was Enter/F2.
+   * @param {number} index
+   * @param {KeyboardEvent} e
+   */
+  function handleLineKeydown(index, e) {
+    if (e.key !== "Enter" && e.key !== "F2") return;
+    // The line's own jump button would otherwise fire on Enter as well.
+    e.preventDefault();
+    selectLine(index, e);
+    startInlineEdit(index);
+  }
+
+  /**
+   * Keep the text editor focused and select its content, for when a line edit
+   * starts without the pointer being where the new field appears.
+   * @param {HTMLInputElement} element
+   */
+  function focusInlineInput(element) {
+    element.focus();
+    element.select();
+  }
+
+  /**
+   * @param {number} index
+   */
+  function startInlineEdit(index) {
+    if (index < 0 || index >= lines.length) return;
+    inlineEditDone = false;
+    inlineEditValue = lines[index] ?? "";
+    inlineEditIndex = index;
+  }
+
+  /** Give up on the in-place edit without touching the text. */
+  function cancelInlineEdit() {
+    inlineEditDone = true;
+    inlineEditIndex = -1;
+    inlineEditValue = "";
+  }
+
+  /**
+   * Write the in-place edit back into the lyrics. Running it twice (Enter,
+   * then the blur that follows) is harmless.
+   */
+  function commitInlineEdit() {
+    if (inlineEditIndex === -1 || inlineEditDone) return;
+    inlineEditDone = true;
+
+    const index = inlineEditIndex;
+    const value = inlineEditValue.replace(/[\r\n]+/g, " ");
+    inlineEditIndex = -1;
+    inlineEditValue = "";
+
+    if (value === lines[index]) return;
+
+    const nextLines = [...lines];
+    nextLines[index] = value;
+    USLT = nextLines.join("\n");
+    updateSynchronizedLyricsText();
   }
 
   /**
@@ -295,6 +452,7 @@
 
       updateSynchronizedLyricsText();
       currentActiveLine = -1;
+      clearSelection();
     }
     closeEditModal();
   }
@@ -406,6 +564,8 @@
   // ========== BULK TIMESTAMP TOOLS ==========
   function refreshAfterBulkEdit({ resetActive = true } = {}) {
     updateSynchronizedLyricsText();
+    // Line indices only mean something for the text they were picked on.
+    clearSelection();
 
     if (resetActive) {
       currentActiveLine = -1;
@@ -415,24 +575,38 @@
   }
 
   /**
-   * @param {number} direction
+   * Shift the footer's amount onto the given lines.
+   *
+   * @param {number} direction - -1 earlier, 1 later
+   * @param {number[]} indices - The lines whose timestamps may move
+   * @param {"all" | "selected" | "line"} what
    */
-  function applyTimestampShift(direction) {
+  function shiftLines(direction, indices, what) {
     const amount = Math.abs(Number(shiftAmount));
     if (!Number.isFinite(amount) || amount === 0) {
       toast.info("Enter a non-zero shift amount");
       return;
     }
 
-    const delta = Math.abs(amount) * (direction < 0 ? -1 : 1);
-    const result = shiftTimestamps(timestamps, delta);
+    const delta = amount * (direction < 0 ? -1 : 1);
+    // `shiftTimestamps` moves every line and reports where its own range
+    // check applies; with a subset the moved lines are bounded by the lines
+    // left in place, which is what the selection helper checks.
+    const result =
+      indices.length === timestamps.length
+        ? shiftTimestamps(timestamps, delta)
+        : shiftTimestampSelection(timestamps, delta, indices);
 
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
     if (result.count === 0) {
-      toast.info("No timestamps to shift");
+      toast.info(
+        what === "line"
+          ? "This line has no timestamp to shift"
+          : "No timestamps to shift",
+      );
       return;
     }
 
@@ -443,7 +617,91 @@
     toast.success(
       `Shifted ${result.count} timestamp${
         result.count === 1 ? "" : "s"
-      } by ${label}`,
+      } by ${label}${what === "line" ? " on this line" : ""}`,
+    );
+  }
+
+  /**
+   * Tooltip for the footer shift buttons, naming what they will move.
+   * @param {string} base
+   */
+  function shiftTargetLabel(base) {
+    if (shiftScope === "selected" && selectedLines.size > 0) {
+      return `${base} on ${selectedLines.size} selected line${
+        selectedLines.size === 1 ? "" : "s"
+      }`;
+    }
+    return `${base} on every line`;
+  }
+
+  /**
+   * The footer shift buttons: the whole file or the selected lines.
+   * @param {number} direction
+   */
+  function applyTimestampShift(direction) {
+    if (shiftScope === "selected") {
+      const indices = sortedSelection();
+      if (indices.length === 0) {
+        toast.info("Select the lines to shift first");
+        return;
+      }
+      shiftLines(direction, indices, "selected");
+      return;
+    }
+
+    shiftLines(
+      direction,
+      timestamps.map((_timestamp, index) => index),
+      "all",
+    );
+  }
+
+  /**
+   * A row's −/+ buttons, which move that line only and leave the selection
+   * alone.
+   * @param {number} index
+   * @param {number} direction
+   */
+  function nudgeLine(index, direction) {
+    shiftLines(direction, [index], "line");
+  }
+
+  // ========== LINE STRUCTURE ==========
+  /**
+   * Add an empty line below the selection (or at the end), and start editing
+   * it so the text can be typed straight away.
+   */
+  async function addLineAfterSelection() {
+    const selection = sortedSelection();
+    const last = selection.at(-1);
+    const afterIndex = last === undefined ? -1 : last;
+    const result = insertLyricLine(USLT, timestamps, afterIndex);
+
+    USLT = result.text;
+    timestamps = result.timestamps;
+    refreshAfterBulkEdit({ resetActive: false });
+
+    selectedLines.add(result.index);
+    selectionAnchor = result.index;
+
+    await tick();
+    startInlineEdit(result.index);
+  }
+
+  /** Delete the selected lines and their timestamps. */
+  function deleteSelectedLines() {
+    const selection = sortedSelection();
+    if (selection.length === 0) return;
+
+    const result = deleteLyricLines(USLT, timestamps, selection);
+    if (result.removed === 0) return;
+
+    USLT = result.text;
+    timestamps = result.timestamps;
+    refreshAfterBulkEdit({ resetActive: false });
+
+    toast.success(
+      `Deleted ${result.removed} line${result.removed === 1 ? "" : "s"}`,
     );
   }
 
@@ -878,13 +1136,16 @@
 
             {#each lines as line, index (index)}
               <div
-                class="lyric-row {index === currentActiveLine ? 'playing' : ''}"
+                class="lyric-row {index === currentActiveLine ? 'playing' : ''}
+                  {rowClassOf(index)}"
                 role="row"
                 data-line-index={index}
+                aria-selected={selectedLines.has(index)}
               >
                 <div class="timestamp-cell" role="cell">
                   <button
                     class="timestamp-jump"
+                    type="button"
                     id="modal-timestamp-{index}"
                     onclick={() => handleLineClick(index)}
                     disabled={!isTimed(index)}
@@ -896,46 +1157,100 @@
                       {timestamps[index] || TIMESTAMP_PLACEHOLDER}
                     </span>
                   </button>
-                  <button
-                    class="timestamp-edit-btn"
-                    onclick={() => openTimestampEditor(index)}
-                    title="Edit timestamp"
-                    aria-label="Edit timestamp for line {index + 1}"
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
+                  <div class="line-actions">
+                    <button
+                      class="row-action"
+                      type="button"
+                      onclick={() => nudgeLine(index, -1)}
+                      title="Shift this line earlier"
+                      aria-label="Shift line {index + 1} earlier"
                     >
-                      <path
-                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                      />
-                      <path
-                        d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                      />
-                    </svg>
-                  </button>
+                      −
+                    </button>
+                    <button
+                      class="row-action"
+                      type="button"
+                      onclick={() => nudgeLine(index, 1)}
+                      title="Shift this line later"
+                      aria-label="Shift line {index + 1} later"
+                    >
+                      +
+                    </button>
+                    <button
+                      class="row-action timestamp-edit-btn"
+                      type="button"
+                      onclick={() => openTimestampEditor(index)}
+                      title="Edit timestamp"
+                      aria-label="Edit timestamp for line {index + 1}"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                        />
+                        <path
+                          d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <div class="lyric-cell" id="modal-line-{index}" role="cell">
-                  <!-- Untimed lines have nothing to seek to, so they stay plain
-                       text; a timed line is a button like its timestamp. -->
-                  {#if isTimed(index)}
+                  {#if inlineEditIndex === index}
+                    <input
+                      class="inline-edit-input"
+                      aria-label="Line {index + 1} text"
+                      bind:value={inlineEditValue}
+                      use:focusInlineInput
+                      onkeydown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitInlineEdit();
+                        } else if (e.key === "Escape") {
+                          // Close the edit, not the editor: Escape is handled
+                          // by the dialog stack otherwise.
+                          e.preventDefault();
+                          e.stopPropagation();
+                          cancelInlineEdit();
+                        }
+                      }}
+                      onblur={commitInlineEdit}
+                    />
+                  {:else if isTimed(index)}
                     <button
                       class="lyric-jump"
-                      onclick={() => handleLineClick(index)}
-                      title="Jump to {timestamps[index]}"
+                      type="button"
+                      onclick={(e) => handleLyricClick(index, e)}
+                      ondblclick={() => startInlineEdit(index)}
+                      onkeydown={(e) => handleLineKeydown(index, e)}
+                      title="Click to select, double-click or Enter to edit"
                     >
                       {#if line === ""}<span class="empty-line-placeholder"
                           >empty line</span
                         >{:else}{line}{/if}
                     </button>
-                  {:else if line === ""}
-                    <span class="empty-line-placeholder">empty line</span>
                   {:else}
-                    {line}
+                    <!-- Untimed lines have nothing to seek to, so they are not
+                         a jump button; the row itself selects and edits. -->
+                    <div
+                      class="lyric-plain"
+                      role="button"
+                      tabindex="0"
+                      onclick={(e) => handleLyricClick(index, e)}
+                      ondblclick={() => startInlineEdit(index)}
+                      onkeydown={(e) => handleLineKeydown(index, e)}
+                      title="Click to select, double-click or Enter to edit"
+                    >
+                      {#if line === ""}<span class="empty-line-placeholder"
+                          >empty line</span
+                        >{:else}{line}{/if}
+                    </div>
                   {/if}
                 </div>
               </div>
@@ -953,9 +1268,10 @@
             <span class="shift-label">Shift</span>
             <button
               class="shift-btn"
+              type="button"
               onclick={() => applyTimestampShift(-1)}
               disabled={USLT === ""}
-              title="Shift all timestamps earlier"
+              title={shiftTargetLabel("Shift timestamps earlier")}
               aria-label="Shift all timestamps earlier"
             >
               −
@@ -973,12 +1289,57 @@
             <span class="shift-unit">s</span>
             <button
               class="shift-btn"
+              type="button"
               onclick={() => applyTimestampShift(1)}
               disabled={USLT === ""}
-              title="Shift all timestamps later"
+              title={shiftTargetLabel("Shift timestamps later")}
               aria-label="Shift all timestamps later"
             >
               +
+            </button>
+            <div class="shift-scope" role="group" aria-label="Shift scope">
+              <button
+                type="button"
+                class="scope-btn"
+                class:active={shiftScope === "all"}
+                aria-pressed={shiftScope === "all"}
+                onclick={() => (shiftScope = "all")}
+                title="Shift every timestamp">All</button
+              >
+              <button
+                type="button"
+                class="scope-btn"
+                class:active={shiftScope === "selected"}
+                aria-pressed={shiftScope === "selected"}
+                onclick={() => (shiftScope = "selected")}
+                disabled={selectedLines.size === 0}
+                title="Shift only the selected lines"
+              >
+                Selected{selectedLines.size > 0
+                  ? ` (${selectedLines.size})`
+                  : ""}
+              </button>
+            </div>
+          </div>
+
+          <div class="line-controls">
+            <button
+              type="button"
+              class="line-action-btn"
+              onclick={addLineAfterSelection}
+              disabled={selectedLines.size === 0}
+              title="Add an empty line below the selection"
+            >
+              + Line
+            </button>
+            <button
+              type="button"
+              class="line-action-btn delete"
+              onclick={deleteSelectedLines}
+              disabled={selectedLines.size === 0}
+              title="Delete the selected lines"
+            >
+              Delete{selectedLines.size > 0 ? ` (${selectedLines.size})` : ""}
             </button>
           </div>
         </div>
@@ -1236,9 +1597,35 @@
     cursor: pointer;
   }
 
-  .lyric-jump:hover {
+  .lyric-jump:hover,
+  .lyric-plain:hover {
     text-decoration: underline;
     text-decoration-color: #bbb;
+  }
+
+  .lyric-plain {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .inline-edit-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--color-primary);
+    border-radius: 4px;
+    background: white;
+    color: inherit;
+    font: inherit;
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .inline-edit-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-primary-transparent);
   }
 
   .lyric-row:hover .lyric-cell,
@@ -1260,6 +1647,61 @@
 
   .lyric-row.playing .timestamp-cell {
     background-color: var(--color-lrc-playing-transparent);
+  }
+
+  /* Selected lines are where edits go; the active line keeps its own colour. */
+  .lyric-row.selected .lyric-cell,
+  .lyric-row.selected .timestamp-cell {
+    background-color: var(--color-primary-transparent);
+  }
+
+  .lyric-row.selected .lyric-cell {
+    box-shadow: inset 3px 0 0 var(--color-primary);
+  }
+
+  .line-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .lyric-row:hover .line-actions,
+  .line-actions:focus-within {
+    opacity: 1;
+  }
+
+  .row-action {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: 3px;
+    color: #666;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .row-action:hover {
+    color: var(--color-primary);
+    background-color: var(--color-primary-transparent);
+  }
+
+  .row-action.timestamp-edit-btn {
+    opacity: 0;
+    width: 18px;
+    height: 18px;
+  }
+
+  .lyric-row:hover .row-action.timestamp-edit-btn,
+  .row-action.timestamp-edit-btn:focus-visible {
+    opacity: 1;
   }
 
   .timestamp-value {
@@ -1473,6 +1915,76 @@
 
   .footer-left {
     justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .shift-scope {
+    display: flex;
+    margin-left: 6px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .scope-btn {
+    height: 32px;
+    padding: 0 10px;
+    border: none;
+    background: transparent;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .scope-btn + .scope-btn {
+    border-left: 1px solid #ddd;
+  }
+
+  .scope-btn.active {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .scope-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .line-controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .line-action-btn {
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: transparent;
+    color: #666;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .line-action-btn:hover:not(:disabled) {
+    background: var(--color-primary-transparent);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .line-action-btn.delete:hover:not(:disabled) {
+    background: rgba(255, 68, 68, 0.1);
+    border-color: #ff4444;
+    color: #ff4444;
+  }
+
+  .line-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .footer-right {
@@ -1596,6 +2108,63 @@
 
   :global(body.dark) .lyric-row.playing .timestamp-jump {
     color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .lyric-row.selected .lyric-cell,
+  :global(body.dark) .lyric-row.selected .timestamp-cell {
+    background-color: var(--color-primary-transparent-dark);
+  }
+
+  :global(body.dark) .lyric-row.selected .lyric-cell {
+    box-shadow: inset 3px 0 0 var(--color-primary-dark);
+  }
+
+  :global(body.dark) .row-action {
+    color: #b0b0b0;
+  }
+
+  :global(body.dark) .row-action:hover {
+    color: var(--color-primary-dark);
+    background-color: var(--color-primary-transparent-dark);
+  }
+
+  :global(body.dark) .inline-edit-input {
+    background: #2d2d2d;
+    color: #e0e0e0;
+  }
+
+  :global(body.dark) .shift-scope {
+    border-color: #555;
+  }
+
+  :global(body.dark) .scope-btn {
+    color: #b0b0b0;
+  }
+
+  :global(body.dark) .scope-btn + .scope-btn {
+    border-left-color: #555;
+  }
+
+  :global(body.dark) .scope-btn.active {
+    background: var(--color-primary-dark);
+    color: #1e1e1e;
+  }
+
+  :global(body.dark) .line-action-btn {
+    border-color: #555;
+    color: #aaa;
+  }
+
+  :global(body.dark) .line-action-btn:hover:not(:disabled) {
+    background: var(--color-primary-transparent-dark);
+    border-color: var(--color-primary-dark);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .line-action-btn.delete:hover:not(:disabled) {
+    background: rgba(255, 107, 107, 0.2);
+    border-color: #ff6b6b;
+    color: #ff6b6b;
   }
 
   :global(body.dark) .timestamp-edit-btn {
