@@ -246,7 +246,9 @@ describe("LRCEditor", () => {
     window.addEventListener("lyrics-seek", seek);
 
     await fireEvent.click(
-      /** @type {HTMLElement} */ (document.getElementById("modal-line-1")),
+      /** @type {HTMLElement} */ (
+        document.querySelector("#modal-line-1 [role=button]")
+      ),
     );
     expect(seek).not.toHaveBeenCalled();
 
@@ -637,16 +639,17 @@ describe("LRCEditor line selection", () => {
   }
 
   /**
-   * Click a line the way a pointer does: its jump button for a timed line,
-   * the row's own control for an untimed one.
+   * Click a line's lyric text, which is what selects a line.
    * @param {number} index
    * @param {{ shiftKey?: boolean, ctrlKey?: boolean }} [modifiers]
    */
   async function clickLine(index, modifiers = {}) {
+    const cell = document.getElementById(`modal-line-${index}`);
+    const target = /** @type {HTMLElement} */ (
+      cell?.querySelector("[role=button]")
+    );
     await fireEvent(
-      /** @type {HTMLElement} */ (
-        document.getElementById(`modal-line-${index}`)
-      ),
+      /** @type {HTMLElement} */ (target ?? cell),
       new MouseEvent("click", {
         bubbles: true,
         cancelable: true,
@@ -734,6 +737,19 @@ describe("LRCEditor line selection", () => {
     expect(screen.getByRole("button", { name: "Selected (3)" })).toBeTruthy();
   });
 
+  it("selects from the lyrics, not from the timestamps", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    await clickLine(1);
+    await fireEvent.click(
+      /** @type {HTMLElement} */ (document.getElementById("modal-timestamp-0")),
+    );
+
+    // The timestamp seeks; it does not add the line to the selection.
+    expect(isSelected(0)).toBe(false);
+    expect(isSelected(1)).toBe(true);
+  });
+
   it("toggles one line with Ctrl/Cmd+click", async () => {
     render(LRCEditor, { props: threeLines });
 
@@ -790,62 +806,6 @@ describe("LRCEditor line selection", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("edits the selected line with Enter after a mouse click", async () => {
-    render(LRCEditor, { props: threeLines });
-
-    await clickLine(1);
-    // Enter inside the lyrics (for example on the row's control, or on body
-    // after the click) edits the selected line.
-    await fireEvent.keyDown(
-      /** @type {HTMLElement} */ (document.getElementById("modal-line-1")),
-      { key: "Enter" },
-    );
-
-    expect(
-      /** @type {HTMLInputElement} */ (screen.getByLabelText("Line 2 text"))
-        .value,
-    ).toBe("two");
-  });
-
-  it("keeps Enter editing the same line when the editor reappears", async () => {
-    render(LRCEditor, { props: threeLines });
-
-    await clickLine(1);
-    await fireEvent.keyDown(
-      /** @type {HTMLElement} */ (document.getElementById("modal-line-1")),
-      { key: "Enter" },
-    );
-    const input = /** @type {HTMLInputElement} */ (
-      screen.getByLabelText("Line 2 text")
-    );
-    await fireEvent.keyDown(input, { key: "Enter" });
-    await tick();
-
-    // Enter saved the edit; the line is still selected, so Enter edits it
-    // again instead of doing nothing.
-    expect(isSelected(1)).toBe(true);
-    await fireEvent.keyDown(
-      /** @type {HTMLElement} */ (document.querySelector("#modal-line-1")),
-      { key: "Enter" },
-    );
-
-    expect(
-      /** @type {HTMLInputElement} */ (screen.getByLabelText("Line 2 text"))
-        .value,
-    ).toBe("two");
-  });
-
-  it("does not edit from Enter while several lines are selected", async () => {
-    render(LRCEditor, { props: threeLines });
-
-    await clickLine(0);
-    await clickLine(2, { shiftKey: true });
-    await fireEvent.keyDown(document.body, { key: "Enter" });
-
-    expect(screen.queryByLabelText("Line 2 text")).toBeNull();
-    expect(screen.queryByLabelText("Line 1 text")).toBeNull();
-  });
-
   it("shifts only the selected lines from the footer", async () => {
     render(LRCEditor, { props: threeLines });
 
@@ -880,6 +840,22 @@ describe("LRCEditor line selection", () => {
     await fireEvent.click(screen.getByLabelText("Shift all timestamps later"));
     expect(screen.getAllByText("[00:22.00]").length).toBeGreaterThan(0);
     expect(get(toast).at(-1)?.message).toBe("Shifted 2 timestamps by +1.00s");
+  });
+
+  it("does not select from the timestamp column", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    await fireEvent.click(
+      /** @type {HTMLElement} */ (document.getElementById("modal-timestamp-1")),
+    );
+    for (let i = 0; i < 3; i++) expect(isSelected(i)).toBe(false);
+
+    // A placeholder row has no jump target, but it is not part of the
+    // selection either, so clicking it does nothing at all.
+    await fireEvent.click(
+      /** @type {HTMLElement} */ (document.getElementById("modal-timestamp-0")),
+    );
+    for (let i = 0; i < 3; i++) expect(isSelected(i)).toBe(false);
   });
 
   it("marks the playing line in the timestamp column", async () => {

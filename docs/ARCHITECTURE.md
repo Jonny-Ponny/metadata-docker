@@ -415,23 +415,22 @@ Two states live on a row and they are deliberately separate. The **active**
 line is where playback is (`findActiveLine` in `utils/lyrics.utils.js`, which
 returns the last timed line at or before the current time and skips untimed
 lines; a gap made by a blank line used to pin the highlight, B-50). The
-**selection** is where edits go: plain click on the lyrics selects one line,
-Shift+click a range from the anchor, Ctrl/Cmd+click toggles one. Clicking the
-lyrics never moves playback, so a range can be picked while listening; only the
-timestamp cell seeks. Both states are marked on their own cell (the playing line
-gets the left-edge marker in the timestamp column, the selection in the lyrics
-column and its timestamp) so the playing line stays visible inside a multi-line
-selection.
+**selection** is where edits go, and only the lyrics column produces it: plain
+click selects one line, Shift+click a range from the anchor, Ctrl/Cmd+click
+toggles one. The timestamp cell never selects, it seeks (a placeholder line has
+nothing to seek to and is disabled), so one column has one job and every line
+behaves the same for selection. Both states are marked on their own cell (the
+playing line gets the left-edge marker in the timestamp column, the selection in
+the lyrics column and its timestamp) so the playing line stays visible inside a
+multi-line selection.
 
 Editing actions all act on the selection:
 
-- **In place** - double-click a line swaps its text for a single-line input;
+- **In place** - double-clicking a line swaps its text for a single-line input;
   Enter or blur commits, Escape cancels and is stopped so the editor underneath
-  stays open. Enter/F2 inside the lyrics does the same for the selected line
-  (`handleLyricsKeydown` on the table), which is why it acts on the selection
-  rather than on keyboard focus: selecting re-renders the row under a mouse
-  click, so the focused element can be replaced by the click that selected it.
-  With several lines selected Enter does nothing.
+  stays open. Editing is pointer-only until keyboard row navigation exists: a
+  click re-renders the row it selected, so there is no stable focused element
+  for Enter to act on.
 - **Footer shift** - the −/+ buttons move every timestamp, or only the
   selection when the `Selected (n)` scope is active. `shiftTimestampSelection`
   moves exactly those lines and refuses a move that would cross the nearest

@@ -250,27 +250,6 @@
 
   // ========== IN-PLACE LINE EDITING ==========
   /**
-   * Enter/F2 inside the lyrics starts editing the selected line, exactly as
-   * double-clicking it does. It acts on the selection, not on the line
-   * playback is on, and does nothing while several lines are selected or
-   * while a text field already has the keyboard.
-   * @param {KeyboardEvent} e
-   */
-  function handleLyricsKeydown(e) {
-    if (e.key !== "Enter" && e.key !== "F2") return;
-    if (inlineEditIndex !== -1) return;
-    if (e.target instanceof Element && e.target.closest("input, textarea")) {
-      return;
-    }
-    if (selectedLines.size !== 1) return;
-
-    const [index] = sortedSelection();
-    if (index === undefined) return;
-    e.preventDefault();
-    startInlineEdit(index);
-  }
-
-  /**
    * Keep the text editor focused and select its content, for when a line edit
    * starts without the pointer being where the new field appears.
    * @param {HTMLInputElement} element
@@ -1126,13 +1105,7 @@
              because they are cells of the same grid row, so the columns never
              need to be re-measured or re-equalised. -->
         <div class="lyric-table-wrapper">
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <div
-            class="lyric-table"
-            role="table"
-            aria-label="Lyrics"
-            onkeydown={handleLyricsKeydown}
-          >
+          <div class="lyric-table" role="table" aria-label="Lyrics">
             <div class="lyric-table-header" role="row">
               <div class="column-header timestamp-header" role="columnheader">
                 Timestamps
@@ -1150,7 +1123,6 @@
                 tabindex="-1"
                 data-line-index={index}
                 aria-selected={selectedLines.has(index)}
-                onclick={(e) => selectLine(index, e)}
               >
                 <div class="timestamp-cell" role="cell">
                   <button
@@ -1251,7 +1223,6 @@
                       tabindex="0"
                       onclick={(e) => selectLine(index, e)}
                       ondblclick={() => startInlineEdit(index)}
-                      onkeydown={() => (selectionAnchor = index)}
                       title="Click to select, double-click to edit"
                     >
                       {#if line === ""}<span class="empty-line-placeholder"
@@ -1603,8 +1574,8 @@
   .inline-edit-input {
     width: 100%;
     padding: 8px 12px;
-    border: 1px solid var(--color-primary);
-    border-radius: 4px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
     background: white;
     color: inherit;
     font: inherit;
@@ -1614,7 +1585,7 @@
 
   .inline-edit-input:focus {
     outline: none;
-    box-shadow: 0 0 0 2px var(--color-primary-transparent);
+    border-color: var(--color-primary);
   }
 
   .lyric-row:hover .lyric-cell,
@@ -1665,7 +1636,6 @@
     align-items: center;
     gap: 2px;
     padding-left: 4px;
-    background-color: #f5f5f5;
     border-radius: 3px;
     opacity: 0;
     pointer-events: none;
@@ -1678,6 +1648,28 @@
     pointer-events: auto;
   }
 
+  .lyric-row:hover .line-actions {
+    background-color: #f5f5f5;
+  }
+
+  /* The overlay covers the cell on hover; the playing and selected colours
+     are translucent, so it carries them on top of the plain cell colour. */
+  .lyric-row.playing .line-actions {
+    background-color: #f8f9fa;
+    background-image: linear-gradient(
+      var(--color-lrc-playing-transparent),
+      var(--color-lrc-playing-transparent)
+    );
+  }
+
+  .lyric-row.selected .line-actions {
+    background-color: #f8f9fa;
+    background-image: linear-gradient(
+      var(--color-primary-transparent),
+      var(--color-primary-transparent)
+    );
+  }
+
   .row-action {
     width: 18px;
     height: 18px;
@@ -1688,15 +1680,20 @@
     background: none;
     border: none;
     border-radius: 3px;
-    color: #666;
+    color: inherit;
     font-size: 13px;
     line-height: 1;
     cursor: pointer;
   }
 
-  .row-action:hover {
+  .lyric-row:not(.playing):not(.selected) .row-action:hover {
     color: var(--color-primary);
     background-color: var(--color-primary-transparent);
+  }
+
+  .lyric-row.playing .row-action,
+  .lyric-row.selected .row-action {
+    color: var(--color-primary);
   }
 
   .row-action.timestamp-edit-btn {
@@ -2120,8 +2117,32 @@
     box-shadow: inset 3px 0 0 var(--color-primary-dark);
   }
 
-  :global(body.dark) .line-actions {
+  :global(body.dark) .lyric-row:hover .line-actions {
     background-color: #3d3d3d;
+  }
+
+  :global(body.dark) .lyric-row.playing .line-actions,
+  :global(body.dark) .lyric-row.selected .line-actions {
+    background-color: #2d2d2d;
+  }
+
+  :global(body.dark) .lyric-row.playing .row-action,
+  :global(body.dark) .lyric-row.selected .row-action {
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .lyric-row.playing .line-actions {
+    background-image: linear-gradient(
+      var(--color-lrc-playing-transparent),
+      var(--color-lrc-playing-transparent)
+    );
+  }
+
+  :global(body.dark) .lyric-row.selected .line-actions {
+    background-image: linear-gradient(
+      var(--color-primary-transparent-dark),
+      var(--color-primary-transparent-dark)
+    );
   }
 
   :global(body.dark) .lyric-row.selected .lyric-cell,
