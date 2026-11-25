@@ -261,8 +261,26 @@
                 an .lrc file
               </li>
               <li>
-                <strong>Shift −/+</strong> - Move all timestamps earlier or later
-                by the amount in seconds
+                <strong>Select a line</strong> - Click its lyrics. Shift+click selects
+                a range, Ctrl/Cmd+click adds or removes one line. The selected lines
+                are where the editing buttons act.
+              </li>
+              <li>
+                <strong>Edit a line</strong> - Double-click it, or press Enter with
+                it focused. Enter or clicking elsewhere saves, Escape cancels.
+              </li>
+              <li>
+                <strong>Shift −/+</strong> - Move the timestamps by the amount
+                in seconds: every line, or only the selected lines when
+                <strong>Selected</strong> is active
+              </li>
+              <li>
+                <strong>Row −/+</strong> - Move a single line's timestamp earlier
+                or later by the same amount
+              </li>
+              <li>
+                <strong>+ Line / Delete</strong> - Add an empty line below the selection,
+                or remove the selected lines and their timestamps
               </li>
               <li>
                 <strong>Synchronize line</strong> - Insert current playback time as
@@ -270,8 +288,7 @@
               </li>
               <li>Click on timestamp values to edit them manually</li>
               <li>
-                Click on any lyric line with a timestamp to jump to that
-                position in the audio
+                Click on a timestamp to jump to that position in the audio
               </li>
               <li>
                 Use <strong>S</strong> to synchronize next line
