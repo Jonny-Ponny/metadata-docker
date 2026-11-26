@@ -247,7 +247,7 @@ describe("LRCEditor", () => {
 
     await fireEvent.click(
       /** @type {HTMLElement} */ (
-        document.querySelector("#modal-line-1 [role=button]")
+        document.querySelector("#modal-line-1 .lyric-plain")
       ),
     );
     expect(seek).not.toHaveBeenCalled();
@@ -646,7 +646,7 @@ describe("LRCEditor line selection", () => {
   async function clickLine(index, modifiers = {}) {
     const cell = document.getElementById(`modal-line-${index}`);
     const target = /** @type {HTMLElement} */ (
-      cell?.querySelector("[role=button]")
+      cell?.querySelector(".lyric-plain")
     );
     await fireEvent(
       /** @type {HTMLElement} */ (target ?? cell),
@@ -668,7 +668,7 @@ describe("LRCEditor line selection", () => {
       /** @type {HTMLElement} */ (
         document
           .getElementById(`modal-line-${index}`)
-          ?.querySelector("button, [role=button]")
+          ?.querySelector(".lyric-plain")
       ),
     );
   }
@@ -748,6 +748,26 @@ describe("LRCEditor line selection", () => {
     // The timestamp seeks; it does not add the line to the selection.
     expect(isSelected(0)).toBe(false);
     expect(isSelected(1)).toBe(true);
+  });
+
+  it("exposes the lyrics as a button so Enter can select a line", async () => {
+    render(LRCEditor, { props: threeLines });
+
+    const lyric = /** @type {HTMLButtonElement} */ (
+      document.querySelector("#modal-line-1 .lyric-plain")
+    );
+    expect(lyric).toBeInstanceOf(HTMLButtonElement);
+    expect(lyric.type).toBe("button");
+
+    // Enter is the browser's own button activation, so the element has to
+    // survive the re-render that selecting causes; otherwise focus (and the
+    // keypress being handled) would be lost underneath it.
+    lyric.focus();
+    await clickLine(1);
+    await tick();
+
+    expect(isSelected(1)).toBe(true);
+    expect(document.activeElement).toBe(lyric);
   });
 
   it("toggles one line with Ctrl/Cmd+click", async () => {

@@ -1216,11 +1216,13 @@
                   {:else}
                     <!-- Clicking the text only selects (the jump lives on the
                          timestamp), so a range can be picked without playback
-                         moving. -->
-                    <div
+                         moving. A real button makes that reachable from the
+                         keyboard too: Tab to a line and press Enter. Space
+                         stays the player key in this dialog (T-19), and ranges
+                         still need the pointer. -->
+                    <button
                       class="lyric-plain"
-                      role="button"
-                      tabindex="0"
+                      type="button"
                       onclick={(e) => selectLine(index, e)}
                       ondblclick={() => startInlineEdit(index)}
                       title="Click to select, double-click to edit"
@@ -1228,7 +1230,7 @@
                       {#if line === ""}<span class="empty-line-placeholder"
                           >empty line</span
                         >{:else}{line}{/if}
-                    </div>
+                    </button>
                   {/if}
                 </div>
               </div>
@@ -1567,6 +1569,10 @@
     display: block;
     width: 100%;
     padding: 10px 16px;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
     text-align: center;
     cursor: pointer;
   }
