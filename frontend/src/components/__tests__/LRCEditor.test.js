@@ -878,6 +878,30 @@ describe("LRCEditor line selection", () => {
     for (let i = 0; i < 3; i++) expect(isSelected(i)).toBe(false);
   });
 
+  it("starts with no selection when it is reopened", async () => {
+    const { rerender } = render(LRCEditor, { props: threeLines });
+
+    await clickLine(0);
+    await clickLine(2, { shiftKey: true });
+    expect(isSelected(0)).toBe(true);
+    expect(isSelected(2)).toBe(true);
+    await fireEvent.click(screen.getByRole("button", { name: "Selected (3)" }));
+
+    await rerender({ ...threeLines, isOpen: false });
+    await rerender({
+      ...threeLines,
+      initialLyrics: "uno\ndos\ntres",
+      initialTimestamps: ["[00:01.00]", "[00:02.00]", "[00:03.00]"],
+    });
+
+    // The old indices belonged to another file's lyrics.
+    for (let i = 0; i < 3; i++) expect(isSelected(i)).toBe(false);
+    expect(screen.getByText("uno")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
   it("marks the playing line in the timestamp column", async () => {
     render(LRCEditor, { props: threeLines });
 

@@ -448,7 +448,9 @@ Editing actions all act on the selection:
 Bulk operations (import, the whole-lyrics modal, clearing) call
 `refreshAfterBulkEdit()`, which also clears the selection because the indices
 only mean something for the text they were picked on; shifts pass
-`keepSelection` because they do not change the line count. Line indices are the
+`keepSelection` because they do not change the line count. Opening the editor
+clears it too (and moves the shift scope back to `All`): one component instance
+serves the next file, so a kept index would highlight an unrelated line. Line indices are the
 `{#each}` keys, so a reordered line rebuilds its row rather than reusing the
 wrong DOM.
 

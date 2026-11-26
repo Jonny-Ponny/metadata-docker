@@ -143,6 +143,14 @@
   $effect(() => {
     if (isOpen && !hasInitialized) {
       initializeFromLyrics();
+      // The selection is a set of line indices for the lyrics that were open
+      // when they were picked. Reopening (on another file, or with edited
+      // lyrics) must not carry those indices over, and the "Selected" shift
+      // scope has nothing to act on without them.
+      clearSelection();
+      shiftScope = "all";
+      inlineEditIndex = -1;
+      inlineEditValue = "";
       hasInitialized = true;
     }
 
