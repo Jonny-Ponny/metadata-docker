@@ -577,6 +577,30 @@ describe("LRCEditor", () => {
     );
   });
 
+  it("warns when there is no next line to synchronize", async () => {
+    stopTime = answerWithTime(7);
+    render(LRCEditor, {
+      props: {
+        isOpen: true,
+        initialLyrics: "one\ntwo",
+        initialTimestamps: ["[00:05.00]", "[00:10.00]"],
+      },
+    });
+
+    // Playback is in the last line, so there is nothing after it.
+    window.dispatchEvent(
+      new CustomEvent("player-time-update", { detail: { time: 11 } }),
+    );
+    await tick();
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Synchronize next line" }),
+    );
+    await tick();
+
+    expect(get(toast).at(-1)?.message).toBe("No next line to set timestamp");
+  });
+
   it("warns when there is no active line to synchronize", async () => {
     render(LRCEditor, {
       props: { isOpen: true, initialLyrics: "one\ntwo" },

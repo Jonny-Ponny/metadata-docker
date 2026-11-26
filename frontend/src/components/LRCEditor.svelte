@@ -471,7 +471,10 @@
           } else {
             targetIndex = currentActiveLine + 1;
           }
-          if (targetIndex >= lineCount) return;
+          if (targetIndex >= lineCount) {
+            toast.info("No next line to set timestamp");
+            return;
+          }
 
           // Store the target element for scrolling
           const targetElement = document.querySelector(
@@ -1370,7 +1373,7 @@
             class="insert-time-btn"
             onclick={insertCurrentTimeToNextLine}
             disabled={USLT === ""}
-            title="Insert current playback time to next line"
+            title="Stamp the next line with the current playback time. Follows the playing line, not the selection. Shortcut: S"
           >
             <svg
               width="16"
@@ -1383,7 +1386,7 @@
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            <span>Synchronize line</span>
+            <span>Synchronize next line</span>
           </button>
         </div>
 
@@ -1603,7 +1606,6 @@
     overflow-wrap: break-word;
     min-height: 44px;
     box-sizing: border-box;
-    transition: background-color 0.2s;
   }
 
   .lyric-plain {

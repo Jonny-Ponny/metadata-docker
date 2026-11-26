@@ -290,18 +290,19 @@
                 scrolled back; the playing line stays marked either way
               </li>
               <li>
-                <strong>Synchronize line</strong> - Insert current playback time as
-                timestamp for the next line
+                <strong>Synchronize next line</strong> - Stamp the line after the
+                playing one with the current playback time (the first line when nothing
+                is playing). It follows the playing line, not the selected line
               </li>
               <li>Click on timestamp values to edit them manually</li>
               <li>
                 Click on a timestamp to jump to that position in the audio
               </li>
               <li>
-                Use <strong>S</strong> to synchronize next line
+                Use <strong>S</strong> for the same action as Synchronize next line
               </li>
               <li>
-                Use <strong>C</strong> to insert current playback time to active line
+                Use <strong>C</strong> to re-stamp the line that is playing
               </li>
             </ul>
 

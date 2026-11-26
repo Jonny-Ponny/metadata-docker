@@ -453,14 +453,21 @@ Editing actions all act on the selection:
   and the timestamp array aligned; the new line starts untimed and opens for
   typing, and deleting everything leaves one empty line.
 
+**Synchronize next line** in the footer stamps the line after the playing one
+with the live playback time and moves the highlight there, so repeated `S`
+presses walk down the lyrics; `C` re-stamps the line that is playing. Both act
+on playback, never on the selection, which the button's hint says explicitly. At
+the last line `S` reports that there is no next line instead of silently doing
+nothing.
+
 Bulk operations (import, the whole-lyrics modal, clearing) call
 `refreshAfterBulkEdit()`, which also clears the selection because the indices
 only mean something for the text they were picked on; shifts pass
 `keepSelection` because they do not change the line count. Opening the editor
 clears it too (and moves the shift scope back to `All`): one component instance
-serves the next file, so a kept index would highlight an unrelated line. Line indices are the
-`{#each}` keys, so a reordered line rebuilds its row rather than reusing the
-wrong DOM.
+serves the next file, so a kept index would highlight an unrelated line. Line
+indices are the `{#each}` keys, so a reordered line rebuilds its row rather than
+reusing the wrong DOM.
 
 ## Tests
 
