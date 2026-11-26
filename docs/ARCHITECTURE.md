@@ -421,10 +421,18 @@ toggles one. The lyric text is a real `<button>`, so tabbing to a line and
 pressing Enter selects it as well; Space is the player key in this dialog
 (T-19), and Shift/Ctrl ranges still need the pointer. The timestamp cell never
 selects, it seeks (a placeholder line has nothing to seek to and is disabled),
-so one column has one job and every line behaves the same for selection. Both states are marked on their own cell (the
-playing line gets the left-edge marker in the timestamp column, the selection in
-the lyrics column and its timestamp) so the playing line stays visible inside a
-multi-line selection.
+so one column has one job and every line behaves the same for selection. Both
+states are marked on their own cell (the playing line gets the left-edge marker
+in the timestamp column, the selection in the lyrics column and its timestamp)
+so the playing line stays visible inside a multi-line selection.
+
+Playback scrolls the lyrics to keep the active line in view, but only while the
+footer's **Follow** toggle is on (the default). Turning it off lets the user read
+or edit another part of the file while the audio plays; the active line stays
+marked either way, and turning Follow back on scrolls to the current line
+immediately. It is a toggle button rather than a checkbox because Space is the
+player key in this dialog (T-19), so a native checkbox could not be toggled from
+the keyboard.
 
 Editing actions all act on the selection:
 

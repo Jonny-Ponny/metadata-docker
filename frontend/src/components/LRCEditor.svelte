@@ -62,6 +62,8 @@
   let timestamps = $state(/** @type {string[]} */ ([]));
   let synchronizedLyricsText = $state("");
   let currentActiveLine = $state(-1);
+  /** Whether playback scrolls the lyrics to keep the active line in view. */
+  let followPlayback = $state(true);
 
   // Lines the user picked to edit, by line index. Separate from
   // `currentActiveLine`: the selection is where edits go, the active line is
@@ -332,7 +334,7 @@
 
     if (activeLineIndex !== currentActiveLine) {
       currentActiveLine = activeLineIndex;
-      if (currentActiveLine !== -1) {
+      if (followPlayback && currentActiveLine !== -1) {
         requestAnimationFrame(() => scrollToCurrentLine());
       }
     }
@@ -346,6 +348,18 @@
     );
     if (activeLine) {
       activeLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+
+  /**
+   * Turn following playback on or off. Following an already playing line
+   * starts by bringing it back into view, because it may have been scrolled
+   * away while the toggle was off.
+   */
+  function toggleFollowPlayback() {
+    followPlayback = !followPlayback;
+    if (followPlayback && currentActiveLine !== -1) {
+      requestAnimationFrame(() => scrollToCurrentLine());
     }
   }
 
@@ -1330,6 +1344,25 @@
               Delete{selectedLines.size > 0 ? ` (${selectedLines.size})` : ""}
             </button>
           </div>
+
+          <!-- A toggle button, not a checkbox: Space is the play/pause key in
+               this dialog (T-19), so a native checkbox could not be toggled
+               from the keyboard. Enter works on a button. -->
+          <button
+            type="button"
+            class="follow-toggle"
+            class:active={followPlayback}
+            aria-pressed={followPlayback}
+            onclick={toggleFollowPlayback}
+            title={followPlayback
+              ? "Stop scrolling to the playing line"
+              : "Scroll the lyrics to the playing line"}
+          >
+            <span class="follow-check" aria-hidden="true"
+              >{followPlayback ? "✓" : ""}</span
+            >
+            Follow
+          </button>
         </div>
 
         <div class="footer-center">
@@ -1993,6 +2026,51 @@
     color: var(--color-primary);
   }
 
+  .follow-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: transparent;
+    color: #666;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .follow-toggle:hover {
+    background: var(--color-primary-transparent);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .follow-toggle.active {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .follow-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .follow-toggle.active .follow-check {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+  }
+
   .line-action-btn.delete:hover:not(:disabled) {
     background: rgba(255, 68, 68, 0.1);
     border-color: #ff4444;
@@ -2214,6 +2292,23 @@
     background: rgba(255, 107, 107, 0.2);
     border-color: #ff6b6b;
     color: #ff6b6b;
+  }
+
+  :global(body.dark) .follow-toggle {
+    border-color: #555;
+    color: #aaa;
+  }
+
+  :global(body.dark) .follow-toggle:hover,
+  :global(body.dark) .follow-toggle.active {
+    border-color: var(--color-primary-dark);
+    color: var(--color-primary-dark);
+  }
+
+  :global(body.dark) .follow-toggle.active .follow-check {
+    background-color: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    color: #1e1e1e;
   }
 
   :global(body.dark) .timestamp-edit-btn {

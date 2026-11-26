@@ -122,8 +122,9 @@ image build. What remains is optional hardening and new features.
   Ctrl/Cmd+click; the timestamp cell seeks), in-place line editing (double
   click), shifting the selection or a single line from the footer and its row,
   adding/deleting selected lines, selecting a line with Enter (the lyrics are
-  real buttons, so Tab reaches them), and a selection that resets whenever the
-  editor opens. Keyboard row navigation is not
+  real buttons, so Tab reaches them), a selection that resets whenever the
+  editor opens, and an optional Follow toggle for scrolling to the playing
+  line (on by default). Keyboard row navigation is not
   planned: the whole-lyrics modal covers keyboard editing. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#lyrics-editor).
 

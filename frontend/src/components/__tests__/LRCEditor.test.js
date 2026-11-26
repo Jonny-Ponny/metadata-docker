@@ -902,6 +902,85 @@ describe("LRCEditor line selection", () => {
     ).toBe("true");
   });
 
+  /**
+   * Make the queued animation frame run immediately, so the follow tests can
+   * assert the scroll that happens in its callback.
+   */
+  function runAnimationFramesImmediately() {
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback) => {
+        callback();
+        return 1;
+      }),
+    );
+  }
+
+  it("scrolls the playing line into view while follow is on", async () => {
+    runAnimationFramesImmediately();
+    render(LRCEditor, { props: threeLines });
+
+    window.dispatchEvent(
+      new CustomEvent("player-time-update", { detail: { time: 21 } }),
+    );
+    await tick();
+
+    const scrollIntoView = /** @type {any} */ (
+      Element.prototype.scrollIntoView
+    );
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(
+      document.querySelectorAll(".lyric-row")[1],
+    );
+  });
+
+  it("leaves the view alone when follow is turned off", async () => {
+    runAnimationFramesImmediately();
+    render(LRCEditor, { props: threeLines });
+
+    const follow = screen.getByRole("button", { name: "Follow" });
+    expect(follow.getAttribute("aria-pressed")).toBe("true");
+    await fireEvent.click(follow);
+    expect(follow.getAttribute("aria-pressed")).toBe("false");
+
+    window.dispatchEvent(
+      new CustomEvent("player-time-update", { detail: { time: 21 } }),
+    );
+    await tick();
+
+    const scrollIntoView = /** @type {any} */ (
+      Element.prototype.scrollIntoView
+    );
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    // The playing line stays marked, so playback position is still visible.
+    expect(
+      /** @type {HTMLElement} */ (document.querySelectorAll(".lyric-row")[1])
+        .className,
+    ).toContain("playing");
+  });
+
+  it("brings the playing line back when follow is turned on again", async () => {
+    runAnimationFramesImmediately();
+    render(LRCEditor, { props: threeLines });
+
+    window.dispatchEvent(
+      new CustomEvent("player-time-update", { detail: { time: 21 } }),
+    );
+    await tick();
+
+    const scrollIntoView = /** @type {any} */ (
+      Element.prototype.scrollIntoView
+    );
+    scrollIntoView.mockClear();
+
+    const follow = screen.getByRole("button", { name: "Follow" });
+    await fireEvent.click(follow);
+    await fireEvent.click(follow);
+    await tick();
+
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
   it("marks the playing line in the timestamp column", async () => {
     render(LRCEditor, { props: threeLines });
 

@@ -285,6 +285,11 @@
                 or remove the selected lines and their timestamps
               </li>
               <li>
+                <strong>Follow</strong> - Keep the playing line in view while the
+                audio advances. Turn it off to read or edit elsewhere without being
+                scrolled back; the playing line stays marked either way
+              </li>
+              <li>
                 <strong>Synchronize line</strong> - Insert current playback time as
                 timestamp for the next line
               </li>
