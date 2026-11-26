@@ -5,6 +5,7 @@ import time, so an offline install starts immediately (B-26).
 """
 
 import datetime
+import re
 import time
 
 import requests
@@ -32,12 +33,50 @@ _version_cache = {
 }
 
 
+# v1.2.3, optionally followed by a semver prerelease such as -rc.1. Build
+# metadata (+abc) is not used by this repository's tags.
+_VERSION_RE = re.compile(
+    r'^v?(?P<core>\d+(?:\.\d+)*)(?:-(?P<pre>[0-9A-Za-z.-]+))?$',
+    re.IGNORECASE,
+)
+
+
+def _prerelease_key(prerelease: str) -> tuple:
+    """Order dot-separated prerelease identifiers the way semver does."""
+    key = []
+    for identifier in prerelease.split('.'):
+        if identifier.isdigit():
+            # Numeric identifiers sort before alphanumeric ones.
+            key.append((0, int(identifier)))
+        else:
+            key.append((1, identifier.lower()))
+    return tuple(key)
+
+
+def _version_key(value: str) -> tuple:
+    """Turn a tag such as v1.2.3-rc.1 into a comparable version key."""
+    match = _VERSION_RE.match(value.strip())
+    if not match:
+        raise ValueError(f"Unparseable version: {value!r}")
+    core = tuple(int(part) for part in match.group('core').split('.'))
+    prerelease = match.group('pre')
+    # A final release sorts after every prerelease of the same core.
+    if prerelease is None:
+        return core, (1,)
+    return core, (0, _prerelease_key(prerelease))
+
+
 def _compare_versions(current: str, pulled: str) -> bool:
     """Return True if pulled version is newer than current."""
-    # Strip 'v' or 'V' and split by '.'
-    curr_parts = [int(x) for x in current.lower().lstrip('v').split('.')]
-    pull_parts = [int(x) for x in pulled.lower().lstrip('v').split('.')]
-    return pull_parts > curr_parts
+    curr_core, curr_pre = _version_key(current)
+    pull_core, pull_pre = _version_key(pulled)
+
+    # Pad the shorter core so 1.1 and 1.1.0 compare equal.
+    width = max(len(curr_core), len(pull_core))
+    curr_core += (0,) * (width - len(curr_core))
+    pull_core += (0,) * (width - len(pull_core))
+
+    return (pull_core, pull_pre) > (curr_core, curr_pre)
 
 
 def get_version_info():

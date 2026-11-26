@@ -234,6 +234,23 @@ continue` (and keep the directory-level `PermissionError` handling).
       **Test:** import with a patched `requests.get` that would fail; startup is
       immediate; the first request populates the cache once.
 
+- [x] **B-51 (P1) A prerelease `APP_VERSION` breaks the update check.**
+      `_compare_versions()` (`routes/system.py`) ran `int()` over every
+      dot-separated segment, so `v1.1.3-rc.1` raised
+      `ValueError: invalid literal for int() with base 10: '3-rc'`. The broad
+      `except` in `get_version_info()` swallowed it, so an rc image only logged
+      the error and never cached the latest release; the `v1.1.3-rc.1` container
+      build also failed its own tests and published no image.
+      **Fix:** parse `v<major>.<minor>.<patch>[-pre.release]` into a comparable
+      key: a numeric core padded so `1.1` equals `1.1.0`, plus semver
+      prerelease identifiers (a final release sorts after its prereleases,
+      numeric identifiers before alphanumeric, and `rc.10` after `rc.2`).
+      Unparseable values still raise `ValueError`, so the offline/error fallback
+      is unchanged.
+      **Test:** `test_version.py::test_compare_versions_table` covers rc vs
+      final and prerelease ordering; `test_a_prerelease_build_sees_the_final_release`
+      pins an rc `APP_VERSION` against a mocked final release.
+
 - [x] **B-27 (P2) Text writes are unbounded.**
       `/api/text/save` accepts up to the 4 GiB request limit for a `.lrc`.
       **Fix:** cap text content (e.g. 1 MiB) -> 413/400; mirror the read cap.
@@ -630,3 +647,4 @@ silently.
 | B-48 | `frontend/src/components/__tests__/LogViewer.test.js` - `leaves the dialog stack when it closes` |
 | B-49 | `frontend/src/__tests__/App.test.js` - `keeps the player usable and Space playing in the lyrics editor` |
 | B-50 | `frontend/src/utils/__tests__/lyrics.utils.test.js` - `moves past a placeholder to the next timed line`   |
+| B-51 | `test_version.py::test_a_prerelease_build_sees_the_final_release`                                                    |

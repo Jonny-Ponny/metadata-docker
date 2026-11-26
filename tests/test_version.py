@@ -80,6 +80,18 @@ def test_import_does_not_call_github_and_the_first_check_is_cached(app_module, t
         ("V1.0.5", "V2.0.0", True),
         ("v2.0.0", "v1.9.9", False),
         ("v1.10.0", "v1.9.0", False),
+        # Prereleases sort before their final release and by identifier.
+        ("v1.1.3-rc.1", "v1.1.3", True),
+        ("v1.1.3", "v1.1.3-rc.1", False),
+        ("v1.1.3-rc.1", "v1.1.3-rc.2", True),
+        ("v1.1.3-rc.2", "v1.1.3-rc.10", True),
+        ("v1.1.3-rc.1", "v1.1.4-rc.1", True),
+        ("v1.1.3-rc.1", "v1.1.2", False),
+        ("v1.1.3-alpha", "v1.1.3-beta", True),
+        ("v1.1.3-rc.1", "v1.1.3-alpha", False),
+        # A missing patch is the same release, not an older one.
+        ("v1.1", "v1.1.0", False),
+        ("v1.1.0", "v1.1", False),
     ],
 )
 def test_compare_versions_table(system_module, current, pulled, expected):
@@ -240,6 +252,33 @@ def test_the_version_route_reports_the_full_update_payload(
         "update_available": True,
         "git_sha": system_module.APP_GIT_SHA,
         "max_upload_bytes": system_module.MAX_UPLOAD_BYTES,
+    }
+
+
+def test_a_prerelease_build_sees_the_final_release(system_module, monkeypatch):
+    """An rc image must report the final release, not log a parse error (B-51)."""
+
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"tag_name": "v1.1.3"}
+
+    monkeypatch.setattr(system_module, "APP_VERSION", "v1.1.3-rc.1")
+    monkeypatch.setattr(system_module, "DISABLE_VERSION_CHECK", False)
+    monkeypatch.setattr(system_module, "CACHE_TTL_SECONDS", 3600)
+    monkeypatch.setattr(system_module.requests, "get", lambda *a, **k: Response())
+    system_module._version_cache.update(
+        {"latest": None, "update_available": False, "timestamp": 0}
+    )
+
+    info = system_module.get_version_info()
+
+    assert info == {
+        "current": "v1.1.3-rc.1",
+        "latest": "v1.1.3",
+        "update_available": True,
     }
 
 
