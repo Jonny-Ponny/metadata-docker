@@ -115,19 +115,18 @@ image build. What remains is optional hardening and new features.
   window and stays clear of the player bar. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#context-menu).
 
-## Planned
-
-### Lyrics editor
-
-- **T-20 (P3) - LRCEditor rework.** In progress on
-  `feature/lrc-editor-rework`. Done: one centred lyrics column beside the
-  timestamps (the redundant synchronized column is gone, and with it the row
+- **Lyrics editor rework (T-20).** Complete: one centred lyrics column beside
+  the timestamps (the redundant synchronized column is gone, and with it the row
   height equalisation), the active line following playback past blank lines
-  (B-50), line selection (click, Shift+click, Ctrl/Cmd+click), in-place line
-  editing (double click or Enter), shifting the selection or a single line from
-  the footer and its row, and adding/deleting selected lines. Remaining:
-  keyboard row navigation (arrow keys over the lines) once this is tested in a
-  real library.
+  (B-50), line selection from the lyrics only (click, Shift+click,
+  Ctrl/Cmd+click; the timestamp cell seeks), in-place line editing (double
+  click), shifting the selection or a single line from the footer and its row,
+  adding/deleting selected lines, and selecting a line with Enter (the lyrics
+  are real buttons, so Tab reaches them). Keyboard row navigation is not
+  planned: the whole-lyrics modal covers keyboard editing. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#lyrics-editor).
+
+## Planned
 
 ### Known issues and small fixes
 

@@ -261,10 +261,10 @@
                 an .lrc file
               </li>
               <li>
-                <strong>Select a line</strong> - Click its lyrics. Shift+click selects
-                a range, Ctrl/Cmd+click adds or removes one line. Clicking lyrics
-                never moves playback; only the selected lines are where the editing
-                buttons act.
+                <strong>Select a line</strong> - Click its lyrics, or Tab to a line
+                and press Enter. Shift+click selects a range, Ctrl/Cmd+click adds
+                or removes one line. Clicking lyrics never moves playback; only the
+                selected lines are where the editing buttons act.
               </li>
               <li>
                 <strong>Edit a line</strong> - Double-click it. Enter or clicking

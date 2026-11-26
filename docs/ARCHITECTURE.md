@@ -417,9 +417,11 @@ returns the last timed line at or before the current time and skips untimed
 lines; a gap made by a blank line used to pin the highlight, B-50). The
 **selection** is where edits go, and only the lyrics column produces it: plain
 click selects one line, Shift+click a range from the anchor, Ctrl/Cmd+click
-toggles one. The timestamp cell never selects, it seeks (a placeholder line has
-nothing to seek to and is disabled), so one column has one job and every line
-behaves the same for selection. Both states are marked on their own cell (the
+toggles one. The lyric text is a real `<button>`, so tabbing to a line and
+pressing Enter selects it as well; Space is the player key in this dialog
+(T-19), and Shift/Ctrl ranges still need the pointer. The timestamp cell never
+selects, it seeks (a placeholder line has nothing to seek to and is disabled),
+so one column has one job and every line behaves the same for selection. Both states are marked on their own cell (the
 playing line gets the left-edge marker in the timestamp column, the selection in
 the lyrics column and its timestamp) so the playing line stays visible inside a
 multi-line selection.
@@ -428,9 +430,9 @@ Editing actions all act on the selection:
 
 - **In place** - double-clicking a line swaps its text for a single-line input;
   Enter or blur commits, Escape cancels and is stopped so the editor underneath
-  stays open. Editing is pointer-only until keyboard row navigation exists: a
-  click re-renders the row it selected, so there is no stable focused element
-  for Enter to act on.
+  stays open. Editing is pointer-only: there is no keyboard row cursor, and
+  Enter on the focused lyric button selects rather than edits. The whole-lyrics
+  modal is the keyboard path.
 - **Footer shift** - the −/+ buttons move every timestamp, or only the
   selection when the `Selected (n)` scope is active. `shiftTimestampSelection`
   moves exactly those lines and refuses a move that would cross the nearest
