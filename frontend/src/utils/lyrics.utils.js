@@ -7,6 +7,55 @@ import {
 
 export const TIMESTAMP_PLACEHOLDER = "[--:--.--]";
 
+/**
+ * Whether a timestamp entry is a real, parseable timestamp.
+ *
+ * Blank lines and untimed lines are stored as a placeholder so the lyrics and
+ * timestamps arrays stay aligned; those entries must be skipped by anything
+ * that reasons about playback timing.
+ * @param {string | null | undefined} timestamp
+ * @returns {boolean}
+ */
+export function isRealTimestamp(timestamp) {
+  return (
+    typeof timestamp === "string" &&
+    timestamp !== "" &&
+    timestamp !== TIMESTAMP_PLACEHOLDER
+  );
+}
+
+/**
+ * Find the lyric line that should be highlighted at a playback position.
+ *
+ * This is the last timed line at or before `currentTime`, ignoring untimed
+ * lines. Untimed lines sit between timed ones (a blank line in the middle of
+ * an LRC file, for example), so the next timed line cannot be assumed to be
+ * the immediate neighbour; taking the placeholder as the end of the previous
+ * line's interval used to pin the highlight to that line forever.
+ *
+ * @param {string[]} timestamps - Timestamp strings (may contain placeholders)
+ * @param {number} currentTime - Playback position in seconds
+ * @returns {number} Index of the active line, or -1 before the first timestamp
+ */
+export function findActiveLine(timestamps, currentTime) {
+  let activeLine = -1;
+  let activeSeconds = Number.NEGATIVE_INFINITY;
+
+  for (let i = 0; i < timestamps.length; i++) {
+    if (!isRealTimestamp(timestamps[i])) continue;
+
+    const seconds = parseTimestampToSeconds(timestamps[i]);
+    // `>=` keeps the last line when several lines share a timestamp, which is
+    // how LRC repeats a chorus line at several times.
+    if (seconds <= currentTime && seconds >= activeSeconds) {
+      activeLine = i;
+      activeSeconds = seconds;
+    }
+  }
+
+  return activeLine;
+}
+
 // Standard LRC metadata tags. Any other bracketed line is treated as lyrics.
 const ID_TAG_KEYS = new Set([
   "ti",
@@ -199,6 +248,192 @@ export function shiftTimestamps(timestamps, offsetSeconds) {
         Math.round(parseTimestampToSeconds(timestamp) * 100) + delta;
       return secondsToTimestamp(centiseconds / 100);
     }),
+  };
+}
+
+/**
+ * Shift only the timestamps at the given line indices.
+ *
+ * Used for editing one part of a song (a second verse that is off by a second)
+ * or a single line, while the rest of the file keeps its timing. The moved
+ * timestamps must stay after the nearest unmoved timestamp before them and
+ * before the nearest unmoved timestamp after them, otherwise the LRC would no
+ * longer read top to bottom in time order.
+ *
+ * Works in centiseconds like `shiftTimestamps` so repeated shifts do not
+ * accumulate floating point drift.
+ *
+ * @param {string[]} timestamps - Timestamp strings (may contain placeholders)
+ * @param {number} offsetSeconds - Offset to apply, negative shifts earlier
+ * @param {Set<number> | number[]} indices - Line indices allowed to move
+ * @returns {{
+ *   ok: boolean,
+ *   timestamps: string[],
+ *   count: number,
+ *   error: string
+ * }}
+ */
+export function shiftTimestampSelection(timestamps, offsetSeconds, indices) {
+  const offset = Number(offsetSeconds);
+  if (!Number.isFinite(offset)) {
+    return {
+      ok: false,
+      timestamps: [...timestamps],
+      count: 0,
+      error: "Invalid shift amount",
+    };
+  }
+
+  const selected =
+    indices instanceof Set ? indices : new Set(indices.map(Number));
+  const delta = Math.round(offset * 100);
+
+  const movable = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    if (selected.has(i) && isRealTimestamp(timestamps[i])) movable.push(i);
+  }
+
+  if (movable.length === 0 || delta === 0) {
+    return { ok: true, timestamps: [...timestamps], count: 0, error: "" };
+  }
+
+  const toCentiseconds = (/** @type {string} */ value) =>
+    Math.round(parseTimestampToSeconds(value) * 100);
+
+  // The closest timed line on each side of the selection bounds it, whether
+  // or not it is selected: a whole selection moves rigidly, so its outermost
+  // timestamp must not cross its neighbour even when that neighbour moves too.
+  // A line that is left in place bounds it with its current time; a selected
+  // neighbour with where it is going.
+  const nearestTimed = (
+    /** @type {number} */ from,
+    /** @type {1 | -1} */ step,
+  ) => {
+    for (let i = from + step; i >= 0 && i < timestamps.length; i += step) {
+      if (!isRealTimestamp(timestamps[i])) continue;
+      return toCentiseconds(timestamps[i]) + (selected.has(i) ? delta : 0);
+    }
+    return null;
+  };
+
+  const first = movable[0];
+  const last = movable[movable.length - 1];
+  const moved = (/** @type {number} */ index) =>
+    toCentiseconds(timestamps[index]) + delta;
+
+  if (moved(first) < 0) {
+    const maxEarlier = (toCentiseconds(timestamps[first]) / 100).toFixed(2);
+    return {
+      ok: false,
+      timestamps: [...timestamps],
+      count: movable.length,
+      error: `Cannot shift line ${first + 1} earlier than 00:00.00 (max -${maxEarlier}s)`,
+    };
+  }
+
+  const previous = nearestTimed(first, -1);
+  if (previous !== null && moved(first) < previous) {
+    const label = secondsToTimestamp(previous / 100);
+    return {
+      ok: false,
+      timestamps: [...timestamps],
+      count: movable.length,
+      error: `Line ${first + 1} would move before ${label} on the line above`,
+    };
+  }
+
+  const next = nearestTimed(last, 1);
+  if (next !== null && moved(last) > next) {
+    const label = secondsToTimestamp(next / 100);
+    return {
+      ok: false,
+      timestamps: [...timestamps],
+      count: movable.length,
+      error: `Line ${last + 1} would move after ${label} on the line below`,
+    };
+  }
+
+  const shifted = [...timestamps];
+  for (const index of movable) {
+    shifted[index] = secondsToTimestamp(
+      (toCentiseconds(timestamps[index]) + delta) / 100,
+    );
+  }
+
+  return { ok: true, timestamps: shifted, count: movable.length, error: "" };
+}
+
+/**
+ * Insert an empty, untimed line into the lyrics.
+ *
+ * `afterIndex` is the line it goes below; -1 puts it at the very top. The
+ * timestamp for the new line is a placeholder, so it stays untimed until the
+ * user captures or types one.
+ *
+ * @param {string} text - Lyrics as stored (lines joined by "\n")
+ * @param {string[]} timestamps - Timestamps matching the lines
+ * @param {number} afterIndex - Index of the line above the new one
+ * @returns {{ text: string, timestamps: string[], index: number }}
+ */
+export function insertLyricLine(text, timestamps, afterIndex) {
+  const lines = String(text ?? "").split("\n");
+  const at = Math.min(Math.max(afterIndex + 1, 0), lines.length);
+  lines.splice(at, 0, "");
+
+  const nextTimestamps = [...timestamps];
+  nextTimestamps.splice(at, 0, TIMESTAMP_PLACEHOLDER);
+
+  return {
+    text: lines.join("\n"),
+    timestamps: nextTimestamps,
+    index: at,
+  };
+}
+
+/**
+ * Remove lines and their timestamps.
+ *
+ * The lyrics are never emptied: deleting everything leaves a single empty
+ * line, which is what an editor opens with for a file that has no lyrics.
+ *
+ * @param {string} text - Lyrics as stored (lines joined by "\n")
+ * @param {string[]} timestamps - Timestamps matching the lines
+ * @param {Set<number> | number[]} indices - Line indices to remove
+ * @returns {{ text: string, timestamps: string[], removed: number, index: number }}
+ *   `index` is the line that now sits where the first removed line was, or -1
+ *   when there is nothing to place a cursor on.
+ */
+export function deleteLyricLines(text, timestamps, indices) {
+  const lines = String(text ?? "").split("\n");
+  const selected =
+    indices instanceof Set ? indices : new Set(indices.map(Number));
+  const removedIndices = lines
+    .map((_line, index) => index)
+    .filter((index) => selected.has(index));
+
+  if (removedIndices.length === 0) {
+    return {
+      text: lines.join("\n"),
+      timestamps: [...timestamps],
+      removed: 0,
+      index: -1,
+    };
+  }
+
+  const kept = lines.filter((_line, index) => !selected.has(index));
+  const keptTimestamps = timestamps.filter(
+    (_ts, index) => !selected.has(index),
+  );
+
+  const first = removedIndices[0];
+  return {
+    text: kept.length > 0 ? kept.join("\n") : "",
+    timestamps:
+      kept.length > 0
+        ? keptTimestamps.slice(0, kept.length)
+        : [TIMESTAMP_PLACEHOLDER],
+    removed: removedIndices.length,
+    index: kept.length > 0 ? Math.min(first, kept.length - 1) : -1,
   };
 }
 

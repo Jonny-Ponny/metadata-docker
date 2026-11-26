@@ -402,6 +402,73 @@ gestures run on `createHold()` from `utils/hold2confirm.utils.js`, which owns
 the timing and progress; `holdToConfirm` is the pointer action on top of it.
 Releasing the key cancels, so a folder-wide change needs a deliberate hold.
 
+### Lyrics editor
+
+`LRCEditor.svelte` shows one row per lyric line: the timestamp in a narrow
+gutter on the left, the text centred in the column that takes the remaining
+width. Both cells are children of the same grid row (`grid-template-columns:
+subgrid`), so they can never drift apart and nothing needs to be re-measured
+after a line wraps; the resize-observer height equalisation the three-column
+layout needed is gone.
+
+Two states live on a row and they are deliberately separate. The **active**
+line is where playback is (`findActiveLine` in `utils/lyrics.utils.js`, which
+returns the last timed line at or before the current time and skips untimed
+lines; a gap made by a blank line used to pin the highlight, B-50). The
+**selection** is where edits go, and only the lyrics column produces it: plain
+click selects one line, Shift+click a range from the anchor, Ctrl/Cmd+click
+toggles one. The lyric text is a real `<button>`, so tabbing to a line and
+pressing Enter selects it as well; Space is the player key in this dialog
+(T-19), and Shift/Ctrl ranges still need the pointer. The timestamp cell never
+selects, it seeks (a placeholder line has nothing to seek to and is disabled),
+so one column has one job and every line behaves the same for selection. Both
+states are marked on their own cell (the playing line gets the left-edge marker
+in the timestamp column, the selection in the lyrics column and its timestamp)
+so the playing line stays visible inside a multi-line selection.
+
+Playback scrolls the lyrics to keep the active line in view, but only while the
+footer's **Follow** toggle is on (the default). Turning it off lets the user read
+or edit another part of the file while the audio plays; the active line stays
+marked either way, and turning Follow back on scrolls to the current line
+immediately. It is a toggle button rather than a checkbox because Space is the
+player key in this dialog (T-19), so a native checkbox could not be toggled from
+the keyboard.
+
+Editing actions all act on the selection:
+
+- **In place** - double-clicking a line swaps its text for a single-line input;
+  Enter or blur commits, Escape cancels and is stopped so the editor underneath
+  stays open. Editing is pointer-only: there is no keyboard row cursor, and
+  Enter on the focused lyric button selects rather than edits. The whole-lyrics
+  modal is the keyboard path.
+- **Footer shift** - the −/+ buttons move every timestamp, or only the
+  selection when the `Selected (n)` scope is active. `shiftTimestampSelection`
+  moves exactly those lines and refuses a move that would cross the nearest
+  timed line on either side, including a neighbour that moves with the
+  selection. The selection survives a shift, so one capture is rarely the
+  right amount and the buttons can be pressed repeatedly.
+- **Per-row −/+** - the same amount applied to one line, leaving the selection
+  alone.
+- **+ Line / Delete** - `insertLyricLine`/`deleteLyricLines` keep the lyrics
+  and the timestamp array aligned; the new line starts untimed and opens for
+  typing, and deleting everything leaves one empty line.
+
+**Synchronize next line** in the footer stamps the line after the playing one
+with the live playback time and moves the highlight there, so repeated `S`
+presses walk down the lyrics; `C` re-stamps the line that is playing. Both act
+on playback, never on the selection, which the button's hint says explicitly. At
+the last line `S` reports that there is no next line instead of silently doing
+nothing.
+
+Bulk operations (import, the whole-lyrics modal, clearing) call
+`refreshAfterBulkEdit()`, which also clears the selection because the indices
+only mean something for the text they were picked on; shifts pass
+`keepSelection` because they do not change the line count. Opening the editor
+clears it too (and moves the shift scope back to `All`): one component instance
+serves the next file, so a kept index would highlight an unrelated line. Line
+indices are the `{#each}` keys, so a reordered line rebuilds its row rather than
+reusing the wrong DOM.
+
 ## Tests
 
 The suite runs against a temporary music library and log directory created by

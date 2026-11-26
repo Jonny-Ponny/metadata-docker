@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   TIMESTAMP_PLACEHOLDER,
   buildLrc,
+  deleteLyricLines,
+  findActiveLine,
+  insertLyricLine,
+  isRealTimestamp,
   parseLrc,
   processEditedLyrics,
+  shiftTimestampSelection,
   shiftTimestamps,
 } from "../lyrics.utils.js";
 
@@ -199,6 +204,226 @@ describe("shiftTimestamps", () => {
 
     expect(result.ok).toBe(true);
     expect(result.timestamps).toEqual(["[00:00.00]"]);
+  });
+});
+
+describe("findActiveLine", () => {
+  const timestamps = [
+    TIMESTAMP_PLACEHOLDER,
+    "[00:10.00]",
+    TIMESTAMP_PLACEHOLDER,
+    "[00:20.00]",
+    TIMESTAMP_PLACEHOLDER,
+  ];
+
+  it("returns -1 before the first timed line", () => {
+    expect(findActiveLine(timestamps, 0)).toBe(-1);
+    expect(findActiveLine([], 5)).toBe(-1);
+    expect(findActiveLine([TIMESTAMP_PLACEHOLDER], 5)).toBe(-1);
+  });
+
+  it("keeps the line across a placeholder that follows it", () => {
+    expect(findActiveLine(timestamps, 10)).toBe(1);
+    expect(findActiveLine(timestamps, 19.99)).toBe(1);
+  });
+
+  it("moves past a placeholder to the next timed line", () => {
+    // The bug: the placeholder neighbour was treated as "no upper bound", so
+    // the highlight never reached line 3 once the blank line had passed.
+    expect(findActiveLine(timestamps, 20)).toBe(3);
+    expect(findActiveLine(timestamps, 25)).toBe(3);
+    expect(findActiveLine(timestamps, 1000)).toBe(3);
+  });
+
+  it("ignores a trailing placeholder after the last timed line", () => {
+    expect(findActiveLine(["[00:01.00]", TIMESTAMP_PLACEHOLDER], 5)).toBe(0);
+  });
+
+  it("keeps the last line when timestamps repeat", () => {
+    expect(findActiveLine(["[00:10.00]", "[00:10.00]", "[00:20.00]"], 10)).toBe(
+      1,
+    );
+  });
+});
+
+describe("isRealTimestamp", () => {
+  it("rejects empty values and the placeholder", () => {
+    expect(isRealTimestamp(TIMESTAMP_PLACEHOLDER)).toBe(false);
+    expect(isRealTimestamp("")).toBe(false);
+    expect(isRealTimestamp(null)).toBe(false);
+    expect(isRealTimestamp(undefined)).toBe(false);
+  });
+
+  it("accepts a timestamp", () => {
+    expect(isRealTimestamp("[00:01.00]")).toBe(true);
+  });
+});
+
+describe("shiftTimestampSelection", () => {
+  const timestamps = [
+    "[00:10.00]",
+    "[00:20.00]",
+    TIMESTAMP_PLACEHOLDER,
+    "[00:40.00]",
+    "[00:50.00]",
+  ];
+
+  it("moves only the selected lines", () => {
+    const result = shiftTimestampSelection(timestamps, 2, [3, 4]);
+
+    expect(result.ok).toBe(true);
+    expect(result.count).toBe(2);
+    expect(result.timestamps).toEqual([
+      "[00:10.00]",
+      "[00:20.00]",
+      TIMESTAMP_PLACEHOLDER,
+      "[00:42.00]",
+      "[00:52.00]",
+    ]);
+  });
+
+  it("accepts a Set and skips placeholders and untimed lines", () => {
+    const result = shiftTimestampSelection(timestamps, 1, new Set([2]));
+
+    expect(result.ok).toBe(true);
+    expect(result.count).toBe(0);
+    expect(result.timestamps).toEqual(timestamps);
+  });
+
+  it("leaves the input untouched on failure", () => {
+    const result = shiftTimestampSelection(timestamps, -25, [3]);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe(
+      "Line 4 would move before [00:20.00] on the line above",
+    );
+    expect(result.timestamps).toEqual(timestamps);
+  });
+
+  it("stops a selection from moving past the line below", () => {
+    const result = shiftTimestampSelection(timestamps, 25, [3]);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe(
+      "Line 4 would move after [00:50.00] on the line below",
+    );
+  });
+
+  it("bounds the selection by the nearest unmoved line, not the neighbour", () => {
+    // Line 1 may move anywhere before [00:40.00] (the untimed line between
+    // is skipped), and line 3 anywhere after [00:20.00] and before
+    // [00:50.00].
+    expect(shiftTimestampSelection(timestamps, 20, [1]).ok).toBe(true);
+    expect(shiftTimestampSelection(timestamps, 20.01, [1]).ok).toBe(false);
+    expect(shiftTimestampSelection(timestamps, 10, [3]).ok).toBe(true);
+    expect(shiftTimestampSelection(timestamps, 10.01, [3]).ok).toBe(false);
+  });
+
+  it("lets a selection move onto its neighbour, like everywhere else", () => {
+    const timestamps = ["[00:10.00]", "[00:20.00]", "[00:30.00]"];
+
+    expect(shiftTimestampSelection(timestamps, 10, [1]).ok).toBe(true);
+    expect(shiftTimestampSelection(timestamps, 10.01, [1]).ok).toBe(false);
+  });
+
+  it("also checks a moved selection against its neighbours", () => {
+    // Both lines move, but line 2 still cannot cross the line below.
+    const timestamps = ["[00:10.00]", "[00:20.00]", "[00:30.00]"];
+    const result = shiftTimestampSelection(timestamps, 10.01, [0, 1]);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe(
+      "Line 2 would move after [00:30.00] on the line below",
+    );
+    expect(shiftTimestampSelection(timestamps, 10, [0, 1]).ok).toBe(true);
+  });
+
+  it("rejects moving before the start of the song", () => {
+    const result = shiftTimestampSelection(["[00:01.00]"], -2, [0]);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Cannot shift line 1 earlier than 00:00.00");
+  });
+
+  it("rejects an invalid offset", () => {
+    expect(shiftTimestampSelection(timestamps, Number.NaN, [0]).error).toBe(
+      "Invalid shift amount",
+    );
+  });
+
+  it("returns a copy for a zero offset", () => {
+    const result = shiftTimestampSelection(timestamps, 0, [0]);
+
+    expect(result.ok).toBe(true);
+    expect(result.timestamps).not.toBe(timestamps);
+  });
+});
+
+describe("insertLyricLine", () => {
+  it("inserts an untimed line below the given line", () => {
+    expect(
+      insertLyricLine("one\ntwo", ["[00:01.00]", "[00:02.00]"], 0),
+    ).toEqual({
+      text: "one\n\ntwo",
+      timestamps: ["[00:01.00]", TIMESTAMP_PLACEHOLDER, "[00:02.00]"],
+      index: 1,
+    });
+  });
+
+  it("inserts above the first line", () => {
+    const result = insertLyricLine("one", ["[00:01.00]"], -1);
+
+    expect(result.text).toBe("\none");
+    expect(result.index).toBe(0);
+  });
+
+  it("appends after the last line", () => {
+    const result = insertLyricLine("one", ["[00:01.00]"], 5);
+
+    expect(result).toEqual({
+      text: "one\n",
+      timestamps: ["[00:01.00]", TIMESTAMP_PLACEHOLDER],
+      index: 1,
+    });
+  });
+});
+
+describe("deleteLyricLines", () => {
+  const timestamps = ["[00:01.00]", "[00:02.00]", "[00:03.00]"];
+
+  it("removes the selected lines and their timestamps", () => {
+    expect(deleteLyricLines("one\ntwo\nthree", timestamps, [1])).toEqual({
+      text: "one\nthree",
+      timestamps: ["[00:01.00]", "[00:03.00]"],
+      removed: 1,
+      index: 1,
+    });
+  });
+
+  it("removes a range and points at the line that moved up", () => {
+    expect(deleteLyricLines("one\ntwo\nthree", timestamps, [0, 1])).toEqual({
+      text: "three",
+      timestamps: ["[00:03.00]"],
+      removed: 2,
+      index: 0,
+    });
+  });
+
+  it("keeps one empty line when everything is deleted", () => {
+    expect(deleteLyricLines("one", ["[00:01.00]"], [0])).toEqual({
+      text: "",
+      timestamps: [TIMESTAMP_PLACEHOLDER],
+      removed: 1,
+      index: -1,
+    });
+  });
+
+  it("does nothing for an empty selection", () => {
+    const result = deleteLyricLines("one\ntwo", timestamps, []);
+
+    expect(result.removed).toBe(0);
+    expect(result.text).toBe("one\ntwo");
+    expect(result.timestamps).toEqual(timestamps);
   });
 });
 

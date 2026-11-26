@@ -261,23 +261,48 @@
                 an .lrc file
               </li>
               <li>
-                <strong>Shift −/+</strong> - Move all timestamps earlier or later
-                by the amount in seconds
+                <strong>Select a line</strong> - Click its lyrics, or Tab to a line
+                and press Enter. Shift+click selects a range, Ctrl/Cmd+click adds
+                or removes one line. Clicking lyrics never moves playback; only the
+                selected lines are where the editing buttons act.
               </li>
               <li>
-                <strong>Synchronize line</strong> - Insert current playback time as
-                timestamp for the next line
+                <strong>Edit a line</strong> - Double-click it. Enter or clicking
+                elsewhere saves, Escape cancels.
+              </li>
+              <li>
+                <strong>Shift −/+</strong> - Move the timestamps by the amount
+                in seconds: every line, or only the selected lines when
+                <strong>Selected</strong> is active. The selection is kept, so the
+                buttons can be pressed again
+              </li>
+              <li>
+                <strong>Row −/+</strong> - Move a single line's timestamp earlier
+                or later by the same amount
+              </li>
+              <li>
+                <strong>+ Line / Delete</strong> - Add an empty line below the selection,
+                or remove the selected lines and their timestamps
+              </li>
+              <li>
+                <strong>Follow</strong> - Keep the playing line in view while the
+                audio advances. Turn it off to read or edit elsewhere without being
+                scrolled back; the playing line stays marked either way
+              </li>
+              <li>
+                <strong>Synchronize next line</strong> - Stamp the line after the
+                playing one with the current playback time (the first line when nothing
+                is playing). It follows the playing line, not the selected line
               </li>
               <li>Click on timestamp values to edit them manually</li>
               <li>
-                Click on any lyric line with a timestamp to jump to that
-                position in the audio
+                Click on a timestamp to jump to that position in the audio
               </li>
               <li>
-                Use <strong>S</strong> to synchronize next line
+                Use <strong>S</strong> for the same action as Synchronize next line
               </li>
               <li>
-                Use <strong>C</strong> to insert current playback time to active line
+                Use <strong>C</strong> to re-stamp the line that is playing
               </li>
             </ul>
 

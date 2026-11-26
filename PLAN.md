@@ -10,8 +10,8 @@ image build. What remains is optional hardening and new features.
   regression test.
 - `T-xx (P2/P3)` - non-bug tasks, small fixes, polish and technical debt
   listed below. `P2` is user-visible or recurring; `P3` is low-impact.
-- IDs are permanent and never reused. Last used: `T-21`, `B-49`. Next:
-  `T-22`, `B-50`.
+- IDs are permanent and never reused. Last used: `T-21`, `B-50`. Next:
+  `T-22`, `B-51`.
 - Larger feature bullets are not numbered until work starts; split them into
   `T-xx` items then.
 
@@ -115,13 +115,20 @@ image build. What remains is optional hardening and new features.
   window and stays clear of the player bar. Details:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#context-menu).
 
+- **Lyrics editor rework (T-20).** Complete: one centred lyrics column beside
+  the timestamps (the redundant synchronized column is gone, and with it the row
+  height equalisation), the active line following playback past blank lines
+  (B-50), line selection from the lyrics only (click, Shift+click,
+  Ctrl/Cmd+click; the timestamp cell seeks), in-place line editing (double
+  click), shifting the selection or a single line from the footer and its row,
+  adding/deleting selected lines, selecting a line with Enter (the lyrics are
+  real buttons, so Tab reaches them), a selection that resets whenever the
+  editor opens, and an optional Follow toggle for scrolling to the playing
+  line (on by default). Keyboard row navigation is not
+  planned: the whole-lyrics modal covers keyboard editing. Details:
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#lyrics-editor).
+
 ## Planned
-
-### Lyrics editor
-
-- **T-20 (P3) - LRCEditor rework.** Interface rework and quality-of-life
-  improvements to the synced-lyrics editor. Scope to be defined when the work
-  starts.
 
 ### Known issues and small fixes
 
